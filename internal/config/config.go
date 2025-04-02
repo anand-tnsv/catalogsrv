@@ -12,6 +12,7 @@ import (
 type ConfigParam struct {
 	ServerPort               string `toml:"server_port"`
 	EndpointPort             string `toml:"endpoint_port"`
+	HandleCORS               bool   `toml:"handle_cors"`
 	ClientConfig             string `toml:"client_config"`
 	InternalCA               string `toml:"internal_ca"`
 	InternalServerCert       string `toml:"internal_server_cert"`
@@ -30,14 +31,12 @@ func Config() *ConfigParam {
 
 func LoadConfig(filename string) error {
 	if filename == "" {
-		if IsTest {
-			cfg = &ConfigParam{
-				ServerPort:   "8194",
-				EndpointPort: "9002",
-			}
-			return nil
+		cfg = &ConfigParam{
+			ServerPort:   "8194",
+			EndpointPort: "9002",
+			HandleCORS:   true,
 		}
-		return fmt.Errorf("empty filename")
+		return nil
 	}
 	// Read the config file
 	content, err := os.ReadFile(filename)
@@ -86,4 +85,9 @@ func ParseTokenDuration(input string) (time.Duration, error) {
 	return duration, nil
 }
 
-var IsTest = true
+func init() {
+	err := LoadConfig("")
+	if err != nil {
+		panic(err)
+	}
+}

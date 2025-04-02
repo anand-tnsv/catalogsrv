@@ -8,7 +8,8 @@ import (
 	"github.com/mugiliam/common/hatchservicemiddleware"
 	"github.com/mugiliam/common/httpx"
 	"github.com/mugiliam/common/logtrace"
-	"github.com/mugiliam/hatchsrv/pkg/api"
+	"github.com/mugiliam/hatchcatalogsrv/internal/config"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/api"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,9 +25,10 @@ func CreateNewServer() (*HatchCatalogServer, error) {
 
 func (s *HatchCatalogServer) MountHandlers() {
 	s.Router.Use(hatchservicemiddleware.RequestLogger)
-	s.Router.Use(s.HandleCORS)
-	s.Router.Get("/version", s.getVersion)
-	s.Router.Group(mountResourceHandlers)
+	if config.Config().HandleCORS {
+		s.Router.Use(s.HandleCORS)
+	}
+	s.Router.Route("/tenant/{tenantId}/project/{projectId}/catalogs", s.mountResourceHandlers)
 	if logtrace.IsTraceEnabled() {
 		//print all the routes in the router by transversing the tree and printing the patterns
 		fmt.Println("Routes in tenant router")
@@ -40,21 +42,19 @@ func (s *HatchCatalogServer) MountHandlers() {
 	}
 }
 
-func mountResourceHandlers(r chi.Router) {
+func (s *HatchCatalogServer) mountResourceHandlers(r chi.Router) {
 	/*
 		r.Use(middleware.LoadScopedDB)
 		r.Mount("/node", node.NodeOnboardingRouter())
 		r.Mount("/tenant", tenant.Router())
 	*/
-}
-
-type VersionResponse struct {
-	Version string `json:"version"`
+	r.Get("/version", s.getVersion)
 }
 
 func (s *HatchCatalogServer) getVersion(w http.ResponseWriter, r *http.Request) {
-	rsp := &api.VersionResponse{
-		ServerVersion: "1.0.0", //TODO - Implement server versioning
+	log.Ctx(r.Context()).Debug().Msg("GetVersion")
+	rsp := &api.GetVersionRsp{
+		ServerVersion: "CatalogSrv: 1.0.0", //TODO - Implement server versioning
 		ApiVersion:    api.ApiVersion_1_0,
 	}
 	httpx.SendJsonRsp(r.Context(), w, http.StatusOK, rsp)
