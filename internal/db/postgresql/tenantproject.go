@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/internal/types"
@@ -77,5 +78,87 @@ func (h *hatchCatalogDb) DeleteTenant(ctx context.Context, tenantID types.Tenant
 		log.Ctx(ctx).Error().Err(err).Str("tenant_id", string(tenantID)).Msg("failed to delete tenant")
 		return dberror.ErrDatabase.Err(err)
 	}
+	return nil
+}
+
+// CreateProject inserts a new project into the database.
+func (h *hatchCatalogDb) CreateProject(ctx context.Context, projectID types.ProjectId) error {
+	tenantID := common.TenantIdFromContext(ctx)
+
+	query := `
+		INSERT INTO projects (project_id, tenant_id)
+		VALUES ($1, $2)
+		ON CONFLICT (project_id, tenant_id) DO NOTHING;
+	`
+
+	// Execute the query directly using h.conn().ExecContext
+	result, err := h.conn().ExecContext(ctx, query, string(projectID), string(tenantID))
+	if err != nil {
+		log.Ctx(ctx).Info().Str("project_id", string(projectID)).Msg("failed to insert project")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Ctx(ctx).Info().Str("project_id", string(projectID)).Msg("failed to retrieve rows affected")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	if rowsAffected == 0 {
+		log.Ctx(ctx).Info().Str("project_id", string(projectID)).Msg("project already exists")
+		return dberror.ErrAlreadyExists.Msg("project already exists")
+	}
+
+	return nil
+}
+
+// GetProject retrieves a project from the database.
+func (h *hatchCatalogDb) GetProject(ctx context.Context, projectID types.ProjectId) (*models.Project, error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	query := `
+		SELECT project_id, tenant_id
+		FROM projects
+		WHERE project_id = $1 AND tenant_id = $2;
+	`
+
+	// Query the project data
+	row := h.conn().QueryRowContext(ctx, query, string(projectID), string(tenantID))
+
+	var project models.Project
+	err := row.Scan(&project.ProjectID, &project.TenantID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Ctx(ctx).Info().
+				Str("project_id", string(projectID)).
+				Msg("project not found")
+			return nil, dberror.ErrNotFound.Msg("project not found")
+		}
+		log.Ctx(ctx).Error().
+			Str("project_id", string(projectID)).
+			Msg("failed to retrieve project")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+
+	return &project, nil
+}
+
+// DeleteProject deletes a project from the database.
+func (h *hatchCatalogDb) DeleteProject(ctx context.Context, projectID types.ProjectId) error {
+	tenantID := common.TenantIdFromContext(ctx)
+	query := `
+		DELETE FROM projects
+		WHERE project_id = $1 AND tenant_id = $2;
+	`
+
+	// Execute the delete operation
+	_, err := h.conn().ExecContext(ctx, query, string(projectID), string(tenantID))
+	if err != nil {
+		log.Ctx(ctx).Error().
+			Str("project_id", string(projectID)).
+			Msg("failed to delete project")
+		return dberror.ErrDatabase.Err(err)
+	}
+
 	return nil
 }

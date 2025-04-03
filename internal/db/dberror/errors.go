@@ -58,7 +58,7 @@ func (e *dbError) Err(err ...error) apperrors.Error {
 	f = strings.TrimRight(f, " ")
 	return &dbError{
 		msg: e.msg,
-		err: fmt.Errorf(f, e.Err, err),
+		err: fmt.Errorf(f, e, err),
 	}
 }
 

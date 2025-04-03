@@ -14,10 +14,13 @@ import (
 // DB_ is an interface for the database connection. It wraps the underlying sql.Conn interface while
 // adding the ability to manage scopes.
 type DB_ interface {
-	// Tenant
+	// Tenant and Project
 	CreateTenant(ctx context.Context, tenantID types.TenantId) error
 	GetTenant(ctx context.Context, tenantID types.TenantId) (*models.Tenant, error)
 	DeleteTenant(ctx context.Context, tenantID types.TenantId) error
+	CreateProject(ctx context.Context, projectID types.ProjectId) error
+	GetProject(ctx context.Context, projectID types.ProjectId) (*models.Project, error)
+	DeleteProject(ctx context.Context, projectID types.ProjectId) error
 
 	// Scope Management
 	// AddScopes adds the given scopes to the connection.
