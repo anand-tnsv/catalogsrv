@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	_ "github.com/jackc/pgx/v4/stdlib"
+
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/config"
 	"github.com/rs/zerolog/log"
 )
@@ -97,7 +99,7 @@ func (p *postgresPool) Stats() (requests, returns uint64) {
 	return p.connRequests, p.connReturns
 }
 
-// Close closes the PostgresConn connection and releases the resources.
+// Close cleans up the scopes and returns the connection back to the pool.
 func (h *postgresConn) Close(ctx context.Context) {
 	h.DropAllScopes(ctx)
 	if h.cancel != nil {
@@ -197,6 +199,6 @@ func (h *postgresConn) DropAllScopes(ctx context.Context) error {
 }
 
 // Conn returns the underlying connection of the PostgresConn.
-func (h *postgresConn) Conn() any {
+func (h *postgresConn) Conn() *sql.Conn {
 	return h.conn
 }

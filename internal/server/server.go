@@ -44,8 +44,10 @@ func (s *HatchCatalogServer) MountHandlers() {
 }
 
 func (s *HatchCatalogServer) mountResourceHandlers(r chi.Router) {
-	r.Use(middleware.LoadScopedDB)
-	//	r.Mount("/node", node.NodeOnboardingRouter())
+	r.Use(
+		middleware.LoadScopedDB, // Load the scoped db connection
+		middleware.LoadContext,  // Load the context variables
+	)
 	r.Get("/version", s.getVersion)
 }
 

@@ -2,6 +2,7 @@ package dbmanager
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/rs/zerolog/log"
 )
@@ -15,12 +16,19 @@ type ScopedDb interface {
 }
 
 type ScopedConn interface {
+	// AddScopes adds the given scopes to the connection.
 	AddScopes(ctx context.Context, scopes map[string]string)
+	// DropScopes drops the given scopes from the connection.
 	DropScopes(ctx context.Context, scopes []string) error
+	// AddScope adds the given scope with the given value to the connection.
 	AddScope(ctx context.Context, scope, value string)
+	// DropScope drops the given scope from the connection.
 	DropScope(ctx context.Context, scope string) error
+	// DropAllScopes drops all scopes from the connection.
 	DropAllScopes(ctx context.Context) error
-	Conn() any
+	// Conn returns the underlying connection of the ScopedConn.
+	Conn() *sql.Conn
+	// Close drops all scopes and returns the connection back to the pool.
 	Close(ctx context.Context)
 }
 
