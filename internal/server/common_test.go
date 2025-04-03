@@ -14,9 +14,12 @@ import (
 func executeTestRequest(t *testing.T, req *http.Request, apiKey *string) *httptest.ResponseRecorder {
 	s, err := CreateNewServer()
 	assert.NoError(t, err, "create new server")
-	if apiKey != nil { // TODO
+
+	if apiKey != nil {
+		_ = apiKey
 		//auth.SignApiRequest(req, apiKey.KeyId, apiKey.PrivKey)
 	}
+
 	// Mount Handlers
 	s.MountHandlers()
 

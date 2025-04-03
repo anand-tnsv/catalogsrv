@@ -10,7 +10,7 @@ import (
 
 func TestGetVersion(t *testing.T) {
 	// Create a New Request
-	req, _ := http.NewRequest("GET", "/tenant/TABCDE/catalogs/version", nil)
+	req, _ := http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/version", nil)
 
 	// Execute Request
 	response := executeTestRequest(t, req, nil)

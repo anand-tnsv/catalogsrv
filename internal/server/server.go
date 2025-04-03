@@ -9,6 +9,7 @@ import (
 	"github.com/mugiliam/common/httpx"
 	"github.com/mugiliam/common/logtrace"
 	"github.com/mugiliam/hatchcatalogsrv/internal/config"
+	"github.com/mugiliam/hatchcatalogsrv/internal/server/middleware"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api"
 	"github.com/rs/zerolog/log"
 )
@@ -43,11 +44,8 @@ func (s *HatchCatalogServer) MountHandlers() {
 }
 
 func (s *HatchCatalogServer) mountResourceHandlers(r chi.Router) {
-	/*
-		r.Use(middleware.LoadScopedDB)
-		r.Mount("/node", node.NodeOnboardingRouter())
-		r.Mount("/tenant", tenant.Router())
-	*/
+	r.Use(middleware.LoadScopedDB)
+	//	r.Mount("/node", node.NodeOnboardingRouter())
 	r.Get("/version", s.getVersion)
 }
 
