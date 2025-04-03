@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/google/uuid"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dbmanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/postgresql"
@@ -21,6 +22,12 @@ type DB_ interface {
 	CreateProject(ctx context.Context, projectID types.ProjectId) error
 	GetProject(ctx context.Context, projectID types.ProjectId) (*models.Project, error)
 	DeleteProject(ctx context.Context, projectID types.ProjectId) error
+
+	// Catalog
+	CreateCatalog(ctx context.Context, catalog *models.Catalog) error
+	GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, error)
+	UpdateCatalog(ctx context.Context, catalog models.Catalog) error
+	DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) error
 
 	// Scope Management
 	// AddScopes adds the given scopes to the connection.

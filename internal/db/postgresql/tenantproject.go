@@ -18,25 +18,21 @@ func (h *hatchCatalogDb) CreateTenant(ctx context.Context, tenantID types.Tenant
 	query := `
 		INSERT INTO tenants (tenant_id)
 		VALUES ($1)
-		ON CONFLICT (tenant_id) DO NOTHING;
+		ON CONFLICT (tenant_id) DO NOTHING
+		RETURNING tenant_id;
 	`
 
-	// Execute the query directly using h.conn().ExecContext
-	result, err := h.conn().ExecContext(ctx, query, string(tenantID))
+	// Execute the query directly using h.conn().QueryRowContext
+	row := h.conn().QueryRowContext(ctx, query, string(tenantID))
+	var insertedTenantID string
+	err := row.Scan(&insertedTenantID)
 	if err != nil {
-		log.Ctx(ctx).Info().Str("tenant_id", string(tenantID)).Msgf("failed to insert tenant")
+		if err == sql.ErrNoRows {
+			log.Ctx(ctx).Info().Str("tenant_id", string(tenantID)).Msg("tenant already exists")
+			return dberror.ErrAlreadyExists.Msg("tenant already exists")
+		}
+		log.Ctx(ctx).Error().Str("tenant_id", string(tenantID)).Msg("failed to insert tenant")
 		return dberror.ErrDatabase.Err(err)
-	}
-	// Check if any rows were affected
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		log.Ctx(ctx).Info().Str("tenant_id", string(tenantID)).Msgf("failed to retrieve rows affected")
-		return dberror.ErrDatabase.Err(err)
-	}
-
-	if rowsAffected == 0 {
-		log.Ctx(ctx).Info().Str("tenant_id", string(tenantID)).Msgf("tenant already exists")
-		return dberror.ErrAlreadyExists.Msg("tenant already exists")
 	}
 
 	return nil
@@ -60,7 +56,7 @@ func (h *hatchCatalogDb) GetTenant(ctx context.Context, tenantID types.TenantId)
 			log.Ctx(ctx).Info().Str("tenant_id", string(tenantID)).Msg("tenant not found")
 			return nil, dberror.ErrNotFound.Msg("tenant not found")
 		}
-		log.Ctx(ctx).Info().Str("tenant_id", string(tenantID)).Msgf("failed to retrieve tenant")
+		log.Ctx(ctx).Error().Str("tenant_id", string(tenantID)).Msg("failed to retrieve tenant")
 		return nil, dberror.ErrDatabase.Err(err)
 	}
 
@@ -85,29 +81,30 @@ func (h *hatchCatalogDb) DeleteTenant(ctx context.Context, tenantID types.Tenant
 func (h *hatchCatalogDb) CreateProject(ctx context.Context, projectID types.ProjectId) error {
 	tenantID := common.TenantIdFromContext(ctx)
 
+	// Validate tenantID to ensure it is not empty
+	if tenantID == "" {
+		log.Ctx(ctx).Error().Msg("tenant ID is missing from context")
+		return dberror.ErrInvalidInput.Msg("tenant ID is required")
+	}
+
 	query := `
 		INSERT INTO projects (project_id, tenant_id)
 		VALUES ($1, $2)
-		ON CONFLICT (project_id, tenant_id) DO NOTHING;
+		ON CONFLICT (project_id, tenant_id) DO NOTHING
+		RETURNING project_id;
 	`
 
-	// Execute the query directly using h.conn().ExecContext
-	result, err := h.conn().ExecContext(ctx, query, string(projectID), string(tenantID))
+	// Execute the query directly using h.conn().QueryRowContext
+	row := h.conn().QueryRowContext(ctx, query, string(projectID), string(tenantID))
+	var insertedProjectID string
+	err := row.Scan(&insertedProjectID)
 	if err != nil {
-		log.Ctx(ctx).Info().Str("project_id", string(projectID)).Msg("failed to insert project")
+		if err == sql.ErrNoRows {
+			log.Ctx(ctx).Info().Str("project_id", string(projectID)).Msg("project already exists")
+			return dberror.ErrAlreadyExists.Msg("project already exists")
+		}
+		log.Ctx(ctx).Error().Str("project_id", string(projectID)).Msg("failed to insert project")
 		return dberror.ErrDatabase.Err(err)
-	}
-
-	// Check if any rows were affected
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		log.Ctx(ctx).Info().Str("project_id", string(projectID)).Msg("failed to retrieve rows affected")
-		return dberror.ErrDatabase.Err(err)
-	}
-
-	if rowsAffected == 0 {
-		log.Ctx(ctx).Info().Str("project_id", string(projectID)).Msg("project already exists")
-		return dberror.ErrAlreadyExists.Msg("project already exists")
 	}
 
 	return nil
@@ -116,6 +113,13 @@ func (h *hatchCatalogDb) CreateProject(ctx context.Context, projectID types.Proj
 // GetProject retrieves a project from the database.
 func (h *hatchCatalogDb) GetProject(ctx context.Context, projectID types.ProjectId) (*models.Project, error) {
 	tenantID := common.TenantIdFromContext(ctx)
+
+	// Validate tenantID to ensure it is not empty
+	if tenantID == "" {
+		log.Ctx(ctx).Error().Msg("tenant ID is missing from context")
+		return nil, dberror.ErrInvalidInput.Msg("tenant ID is required")
+	}
+
 	query := `
 		SELECT project_id, tenant_id
 		FROM projects
@@ -143,18 +147,24 @@ func (h *hatchCatalogDb) GetProject(ctx context.Context, projectID types.Project
 	return &project, nil
 }
 
-// DeleteProject deletes a project from the database.
+// DeleteProject deletes a project from the database. If the project does not exist, it does nothing.
 func (h *hatchCatalogDb) DeleteProject(ctx context.Context, projectID types.ProjectId) error {
 	tenantID := common.TenantIdFromContext(ctx)
+
+	// Validate tenantID to ensure it is not empty
+	if tenantID == "" {
+		log.Ctx(ctx).Error().Msg("tenant ID is missing from context")
+		return dberror.ErrInvalidInput.Msg("tenant ID is required")
+	}
+
 	query := `
 		DELETE FROM projects
 		WHERE project_id = $1 AND tenant_id = $2;
 	`
-
-	// Execute the delete operation
 	_, err := h.conn().ExecContext(ctx, query, string(projectID), string(tenantID))
 	if err != nil {
 		log.Ctx(ctx).Error().
+			Err(err).
 			Str("project_id", string(projectID)).
 			Msg("failed to delete project")
 		return dberror.ErrDatabase.Err(err)

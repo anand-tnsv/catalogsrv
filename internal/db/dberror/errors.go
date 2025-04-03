@@ -73,4 +73,5 @@ var (
 	ErrDatabase      apperrors.Error = New("db error")
 	ErrAlreadyExists apperrors.Error = ErrDatabase.Msg("already exists")
 	ErrNotFound      apperrors.Error = ErrDatabase.Msg("not found")
+	ErrInvalidInput  apperrors.Error = ErrDatabase.Msg("invalid input")
 )
