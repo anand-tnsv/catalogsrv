@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dbmanager"
@@ -29,29 +28,19 @@ type DB_ interface {
 	UpdateCatalog(ctx context.Context, catalog models.Catalog) error
 	DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) error
 
+	// Variant
+	CreateVariant(ctx context.Context, variant *models.Variant) error
+	GetVariant(ctx context.Context, variantID uuid.UUID, name string) (*models.Variant, error)
+	UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error
+	DeleteVariant(ctx context.Context, variantID uuid.UUID, name string) error
+
 	// Scope Management
-	// AddScopes adds the given scopes to the connection.
 	AddScopes(ctx context.Context, scopes map[string]string)
-	// DropScopes drops the given scopes from the connection.
 	DropScopes(ctx context.Context, scopes []string) error
-	// AddScope adds the given scope with the given value to the connection.
 	AddScope(ctx context.Context, scope, value string)
-	// DropScope drops the given scope from the connection.
 	DropScope(ctx context.Context, scope string) error
-	// DropAllScopes drops all scopes from the connection.
 	DropAllScopes(ctx context.Context) error
-	// PingContext verifies a connection to the database is still alive,
-	PingContext(ctx context.Context) error
-	// ExecContext executes a query without returning any rows.
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	// QueryContext executes a query that returns rows, typically a SELECT.
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	// QueryRowContext executes a query that is expected to return at most one row.
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-	// PrepareContext creates a prepared statement for later queries or executions.
-	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
-	// BeginTx starts a transaction.
-	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+
 	// Close the connection to the database.
 	Close(ctx context.Context)
 }
@@ -83,6 +72,7 @@ func Conn(ctx context.Context) dbmanager.ScopedConn {
 		if err == nil {
 			return conn
 		}
+		log.Ctx(ctx).Error().Err(err).Msg("unable to get db connection")
 	}
 	return nil
 }
@@ -101,5 +91,6 @@ func DB(ctx context.Context) DB_ {
 		hatchCatalogDb := postgresql.NewHatchCatalogDb(conn)
 		return hatchCatalogDb
 	}
+	log.Ctx(ctx).Error().Msg("unable to get db connection from context")
 	return nil
 }
