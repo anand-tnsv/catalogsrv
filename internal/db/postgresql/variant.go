@@ -11,6 +11,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// CreateVariant creates a new variant in the database.
+// It generates a new UUID for the variant ID and sets the project ID based on the context.
+// If a variant with the same name and catalog ID already exists, the insertion is skipped.
+// Returns an error if the variant already exists, the variant name format is invalid,
+// the catalog ID is invalid, or there is a database error.
 func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) error {
 	// Generate a new UUID for the variant ID
 	variant.VariantID = uuid.New()
@@ -57,6 +62,7 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 
 // GetVariant retrieves a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
+// Returns the variant if found, or an error if the variant is not found or there is a database error.
 func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, error) {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
@@ -102,6 +108,8 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, va
 // UpdateVariant updates an existing variant in the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
 // The VariantID and CatalogID fields cannot be updated.
+// Returns an error if the variant is not found, the variant name already exists for the given catalog ID,
+// the variant name format is invalid, or there is a database error.
 func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
@@ -158,6 +166,7 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 
 // DeleteVariant deletes a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
+// Returns an error if the variant is not found or there is a database error.
 func (h *hatchCatalogDb) DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) error {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
