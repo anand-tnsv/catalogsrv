@@ -59,10 +59,10 @@ func TestCreateVariant(t *testing.T) {
 	}
 	err = DB(ctx).CreateVariant(ctx, &variant)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVariant(ctx, variant.VariantID, "")
+	defer DB(ctx).DeleteVariant(ctx, catalog.CatalogID, variant.VariantID, "")
 
 	// Verify that the variant was created successfully
-	retrievedVariant, err := DB(ctx).GetVariant(ctx, variant.VariantID, "")
+	retrievedVariant, err := DB(ctx).GetVariant(ctx, catalog.CatalogID, variant.VariantID, "")
 	assert.NoError(t, err)
 	assert.NotNil(t, retrievedVariant)
 	assert.Equal(t, "test_variant", retrievedVariant.Name)
@@ -159,36 +159,36 @@ func TestGetVariant(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test case: Successfully retrieve a variant by ID
-	retrievedVariant, err := DB(ctx).GetVariant(ctx, variant.VariantID, "")
+	retrievedVariant, err := DB(ctx).GetVariant(ctx, catalog.CatalogID, variant.VariantID, "")
 	assert.NoError(t, err)
 	assert.NotNil(t, retrievedVariant)
 	assert.Equal(t, "test_variant", retrievedVariant.Name)
 
 	// Test case: Successfully retrieve a variant by name
-	retrievedVariantByName, err := DB(ctx).GetVariant(ctx, uuid.Nil, "test_variant")
+	retrievedVariantByName, err := DB(ctx).GetVariant(ctx, catalog.CatalogID, uuid.Nil, "test_variant")
 	assert.NoError(t, err)
 	assert.NotNil(t, retrievedVariantByName)
 	assert.Equal(t, "test_variant", retrievedVariantByName.Name)
 
 	// Test case: Retrieve a non-existent variant (should return ErrNotFound)
 	nonExistentVariantID := uuid.New()
-	_, err = DB(ctx).GetVariant(ctx, nonExistentVariantID, "")
+	_, err = DB(ctx).GetVariant(ctx, catalog.CatalogID, nonExistentVariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Test case: Missing tenant ID or project ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	_, err = DB(ctx).GetVariant(ctxWithoutTenant, variant.VariantID, "")
+	_, err = DB(ctx).GetVariant(ctxWithoutTenant, catalog.CatalogID, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	_, err = DB(ctx).GetVariant(ctxWithoutProject, variant.VariantID, "")
+	_, err = DB(ctx).GetVariant(ctxWithoutProject, catalog.CatalogID, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	// Test case: Neither variant ID nor name provided (should fail)
-	_, err = DB(ctx).GetVariant(ctx, uuid.Nil, "")
+	_, err = DB(ctx).GetVariant(ctx, catalog.CatalogID, uuid.Nil, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -260,7 +260,7 @@ func TestUpdateVariant(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify that the variant was updated successfully
-	retrievedVariant, err := DB(ctx).GetVariant(ctx, variant.VariantID, "")
+	retrievedVariant, err := DB(ctx).GetVariant(ctx, catalog.CatalogID, variant.VariantID, "")
 	assert.NoError(t, err)
 	assert.NotNil(t, retrievedVariant)
 	assert.Equal(t, "updated_test_variant", retrievedVariant.Name)
@@ -302,6 +302,17 @@ func TestUpdateVariant(t *testing.T) {
 	err = DB(ctx).UpdateVariant(ctx, variant.VariantID, "", &updatedVariantWithConflict)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrAlreadyExists)
+
+	// Test case: Update variant with incorrect catalog ID (should return ErrInvalidCatalog)
+	updatedVariantWithInvalidCatalog := models.Variant{
+		Name:        "updated_test_variant",
+		Description: "An updated variant with an invalid catalog ID",
+		CatalogID:   uuid.New(),
+		Info:        info,
+	}
+	err = DB(ctx).UpdateVariant(ctx, variant.VariantID, "", &updatedVariantWithInvalidCatalog)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
 func TestDeleteVariant(t *testing.T) {
@@ -353,11 +364,11 @@ func TestDeleteVariant(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test case: Successfully delete a variant by ID
-	err = DB(ctx).DeleteVariant(ctx, variant.VariantID, "")
+	err = DB(ctx).DeleteVariant(ctx, catalog.CatalogID, variant.VariantID, "")
 	assert.NoError(t, err)
 
 	// Verify that the variant was deleted successfully
-	_, err = DB(ctx).GetVariant(ctx, variant.VariantID, "")
+	_, err = DB(ctx).GetVariant(ctx, catalog.CatalogID, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
@@ -372,32 +383,32 @@ func TestDeleteVariant(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test case: Successfully delete a variant by name
-	err = DB(ctx).DeleteVariant(ctx, uuid.Nil, "test_variant_to_delete")
+	err = DB(ctx).DeleteVariant(ctx, catalog.CatalogID, uuid.Nil, "test_variant_to_delete")
 	assert.NoError(t, err)
 
 	// Verify that the variant was deleted successfully
-	_, err = DB(ctx).GetVariant(ctx, uuid.Nil, "test_variant_to_delete")
+	_, err = DB(ctx).GetVariant(ctx, catalog.CatalogID, uuid.Nil, "test_variant_to_delete")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Test case: Delete a non-existent variant (should return no error as DELETE is idempotent)
 	nonExistentVariantID := uuid.New()
-	err = DB(ctx).DeleteVariant(ctx, nonExistentVariantID, "")
+	err = DB(ctx).DeleteVariant(ctx, catalog.CatalogID, nonExistentVariantID, "")
 	assert.NoError(t, err)
 
 	// Test case: Missing tenant ID or project ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	err = DB(ctx).DeleteVariant(ctxWithoutTenant, variant.VariantID, "")
+	err = DB(ctx).DeleteVariant(ctxWithoutTenant, catalog.CatalogID, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).DeleteVariant(ctxWithoutProject, variant.VariantID, "")
+	err = DB(ctx).DeleteVariant(ctxWithoutProject, catalog.CatalogID, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	// Test case: Neither variant ID nor name provided (should fail)
-	err = DB(ctx).DeleteVariant(ctx, uuid.Nil, "")
+	err = DB(ctx).DeleteVariant(ctx, catalog.CatalogID, uuid.Nil, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }

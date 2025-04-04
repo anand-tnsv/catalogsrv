@@ -5,7 +5,11 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dbmanager"
+	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/rs/zerolog/log"
 )
 
 type hatchCatalogDb struct {
@@ -66,4 +70,17 @@ func (h *hatchCatalogDb) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql
 
 func (h *hatchCatalogDb) Close(ctx context.Context) {
 	h.c.Close(ctx)
+}
+
+func getTenantAndProjectFromContext(ctx context.Context) (tenantID types.TenantId, projectID types.ProjectId, err error) {
+	err = nil
+	tenantID = common.TenantIdFromContext(ctx)
+	projectID = common.ProjectIdFromContext(ctx)
+
+	// Validate tenantID and projectID to ensure they are not empty
+	if tenantID == "" || projectID == "" {
+		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
+		err = dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+	}
+	return
 }

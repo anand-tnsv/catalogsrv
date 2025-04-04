@@ -30,9 +30,9 @@ type DB_ interface {
 
 	// Variant
 	CreateVariant(ctx context.Context, variant *models.Variant) error
-	GetVariant(ctx context.Context, variantID uuid.UUID, name string) (*models.Variant, error)
+	GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, error)
 	UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error
-	DeleteVariant(ctx context.Context, variantID uuid.UUID, name string) error
+	DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) error
 
 	// Scope Management
 	AddScopes(ctx context.Context, scopes map[string]string)

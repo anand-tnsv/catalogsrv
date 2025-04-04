@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgconn"
-	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/rs/zerolog/log"
@@ -16,14 +15,9 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 	// Generate a new UUID for the variant ID
 	variant.VariantID = uuid.New()
 
-	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate tenantID and projectID to ensure they are not empty
-	if tenantID == "" || projectID == "" {
-		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
-		return dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return err
 	}
 	variant.ProjectID = projectID
 
@@ -38,7 +32,7 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 	row := h.conn().QueryRowContext(ctx, query, variant.VariantID, variant.Name, variant.Description, variant.Info, variant.CatalogID, variant.ProjectID, tenantID)
 	var insertedVariantID uuid.UUID
 	var insertedName string
-	err := row.Scan(&insertedVariantID, &insertedName)
+	err = row.Scan(&insertedVariantID, &insertedName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", variant.Name).Str("variant_id", variant.VariantID.String()).Msg("variant already exists")
@@ -63,15 +57,10 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 
 // GetVariant retrieves a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
-func (h *hatchCatalogDb) GetVariant(ctx context.Context, variantID uuid.UUID, name string) (*models.Variant, error) {
-	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate tenantID and projectID to ensure they are not empty
-	if tenantID == "" || projectID == "" {
-		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
-		return nil, dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, error) {
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	var query string
@@ -81,23 +70,23 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, variantID uuid.UUID, na
 		query = `
 			SELECT variant_id, name, description, info, catalog_id, project_id
 			FROM variants
-			WHERE variant_id = $1 AND tenant_id = $2 AND project_id = $3;
+			WHERE variant_id = $1 AND tenant_id = $2 AND project_id = $3 AND catalog_id = $4;
 		`
-		row = h.conn().QueryRowContext(ctx, query, variantID, tenantID, projectID)
+		row = h.conn().QueryRowContext(ctx, query, variantID, tenantID, projectID, catalogID)
 	} else if name != "" {
 		query = `
 			SELECT variant_id, name, description, info, catalog_id, project_id
 			FROM variants
-			WHERE name = $1 AND tenant_id = $2 AND project_id = $3;
+			WHERE name = $1 AND tenant_id = $2 AND project_id = $3 AND catalog_id = $4;
 		`
-		row = h.conn().QueryRowContext(ctx, query, name, tenantID, projectID)
+		row = h.conn().QueryRowContext(ctx, query, name, tenantID, projectID, catalogID)
 	} else {
 		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
 		return nil, dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")
 	}
 
 	variant := &models.Variant{}
-	err := row.Scan(&variant.VariantID, &variant.Name, &variant.Description, &variant.Info, &variant.CatalogID, &variant.ProjectID)
+	err = row.Scan(&variant.VariantID, &variant.Name, &variant.Description, &variant.Info, &variant.CatalogID, &variant.ProjectID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Msg("variant not found")
@@ -112,15 +101,11 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, variantID uuid.UUID, na
 
 // UpdateVariant updates an existing variant in the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
+// The VariantID and CatalogID fields cannot be updated.
 func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error {
-	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate tenantID and projectID to ensure they are not empty
-	if tenantID == "" || projectID == "" {
-		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
-		return dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return err
 	}
 
 	var query string
@@ -129,26 +114,26 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 	if variantID != uuid.Nil {
 		query = `
 			UPDATE variants
-			SET name = $1, description = $2, info = $3, catalog_id = $4
-			WHERE variant_id = $5 AND tenant_id = $6 AND project_id = $7
+			SET name = $1, description = $2, info = $3
+			WHERE variant_id = $4 AND tenant_id = $5 AND project_id = $6 AND catalog_id = $7
 			RETURNING variant_id;
 		`
-		row = h.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, updatedVariant.CatalogID, variantID, tenantID, projectID)
+		row = h.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, variantID, tenantID, projectID, updatedVariant.CatalogID)
 	} else if name != "" {
 		query = `
 			UPDATE variants
-			SET name = $1, description = $2, info = $3, catalog_id = $4
-			WHERE name = $5 AND tenant_id = $6 AND project_id = $7
+			SET name = $1, description = $2, info = $3
+			WHERE name = $4 AND tenant_id = $5 AND project_id = $6 AND catalog_id = $7
 			RETURNING variant_id;
 		`
-		row = h.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, updatedVariant.CatalogID, name, tenantID, projectID)
+		row = h.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, name, tenantID, projectID, updatedVariant.CatalogID)
 	} else {
 		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
 		return dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")
 	}
 
 	var returnedVariantID uuid.UUID
-	err := row.Scan(&returnedVariantID)
+	err = row.Scan(&returnedVariantID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Msg("variant not found or no changes made")
@@ -173,32 +158,30 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 
 // DeleteVariant deletes a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
-func (h *hatchCatalogDb) DeleteVariant(ctx context.Context, variantID uuid.UUID, name string) error {
-	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate tenantID and projectID to ensure they are not empty
-	if tenantID == "" || projectID == "" {
-		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
-		return dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+func (h *hatchCatalogDb) DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) error {
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if catalogID == uuid.Nil {
+		log.Ctx(ctx).Error().Msg("catalog ID is required")
+		return dberror.ErrInvalidInput.Msg("catalog ID is required")
 	}
 
 	var query string
-	var err error
 
 	if variantID != uuid.Nil {
 		query = `
 			DELETE FROM variants
-			WHERE variant_id = $1 AND tenant_id = $2 AND project_id = $3;
+			WHERE variant_id = $1 AND tenant_id = $2 AND project_id = $3 AND catalog_id = $4;
 		`
-		_, err = h.conn().ExecContext(ctx, query, variantID, tenantID, projectID)
+		_, err = h.conn().ExecContext(ctx, query, variantID, tenantID, projectID, catalogID)
 	} else if name != "" {
 		query = `
 			DELETE FROM variants
-			WHERE name = $1 AND tenant_id = $2 AND project_id = $3;
+			WHERE name = $1 AND tenant_id = $2 AND project_id = $3 AND catalog_id = $4;
 		`
-		_, err = h.conn().ExecContext(ctx, query, name, tenantID, projectID)
+		_, err = h.conn().ExecContext(ctx, query, name, tenantID, projectID, catalogID)
 	} else {
 		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
 		return dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")

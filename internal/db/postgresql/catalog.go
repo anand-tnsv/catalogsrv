@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
-	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/rs/zerolog/log"
@@ -14,17 +13,9 @@ import (
 // CreateCatalog inserts a new catalog into the database.
 // If the catalog name already exists for the project and tenant, it returns an error.
 func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Catalog) error {
-	// Generate a new UUID for the catalog ID
-	catalog.CatalogID = uuid.New()
-
-	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate tenantID and projectID to ensure they are not empty
-	if tenantID == "" || projectID == "" {
-		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
-		return dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return err
 	}
 	catalog.ProjectID = projectID
 
@@ -38,7 +29,7 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 	// Execute the query directly using h.conn().QueryRowContext
 	row := h.conn().QueryRowContext(ctx, query, catalog.CatalogID, catalog.Name, catalog.Description, catalog.Info, tenantID, projectID)
 	var insertedCatalogID, insertedName string
-	err := row.Scan(&insertedCatalogID, &insertedName)
+	err = row.Scan(&insertedCatalogID, &insertedName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("catalog already exists")
@@ -54,14 +45,9 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 // GetCatalog retrieves a catalog from the database.
 // If both catalogID and name are provided, catalogID takes precedence.
 func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, error) {
-	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate inputs to ensure that at least one is provided
-	if catalogID == uuid.Nil && name == "" {
-		log.Ctx(ctx).Error().Msg("catalogID or name must be provided")
-		return nil, dberror.ErrInvalidInput.Msg("catalogID or name must be provided")
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Construct the query based on input
@@ -81,7 +67,7 @@ func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, na
 
 	// Scan the result into the catalog model
 	var catalog models.Catalog
-	err := row.Scan(&catalog.CatalogID, &catalog.Name, &catalog.Description, &catalog.Info, &catalog.ProjectID)
+	err = row.Scan(&catalog.CatalogID, &catalog.Name, &catalog.Description, &catalog.Info, &catalog.ProjectID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", name).Str("catalog_id", catalogID.String()).Msg("catalog not found")
@@ -98,13 +84,9 @@ func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, na
 // If both catalogID and name are provided, catalogID takes precedence.
 func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catalog) error {
 	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate tenantID and projectID to ensure they are not empty
-	if tenantID == "" || projectID == "" {
-		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
-		return dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return err
 	}
 
 	// Validate input to ensure either catalogID or name is provided
@@ -130,7 +112,7 @@ func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catal
 
 	// Scan the updated values
 	var updatedCatalogID, updatedName string
-	err := row.Scan(&updatedCatalogID, &updatedName)
+	err = row.Scan(&updatedCatalogID, &updatedName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("catalog not found for update")
@@ -147,13 +129,9 @@ func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catal
 // If both catalogID and name are provided, catalogID takes precedence.
 func (h *hatchCatalogDb) DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) error {
 	// Retrieve tenant and project IDs from context
-	tenantID := common.TenantIdFromContext(ctx)
-	projectID := common.ProjectIdFromContext(ctx)
-
-	// Validate tenantID and projectID to ensure they are not empty
-	if tenantID == "" || projectID == "" {
-		log.Ctx(ctx).Error().Msg("tenant ID or project ID is missing from context")
-		return dberror.ErrInvalidInput.Msg("tenant ID and project ID are required")
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return err
 	}
 
 	// Validate input to ensure either catalogID or name is provided
