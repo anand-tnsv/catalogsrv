@@ -3,6 +3,7 @@ package postgresql
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
@@ -11,6 +12,27 @@ import (
 
 	"github.com/rs/zerolog/log"
 )
+
+// CreateProjectAndTenant creates a new project and tenant in the database.
+func (h *hatchCatalogDb) CreateProjectAndTenant(ctx context.Context, projectID types.ProjectId, tenantID types.TenantId) error {
+	// Create the tenant
+	err := h.CreateTenant(ctx, tenantID)
+	if err != nil {
+		if errors.Is(err, dberror.ErrAlreadyExists) {
+			return nil
+		}
+		return err
+	}
+	// Create the project
+	err = h.CreateProject(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, dberror.ErrAlreadyExists) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
 
 // CreateTenant inserts a new tenant into the database.
 // If the tenant already exists, it does nothing.
