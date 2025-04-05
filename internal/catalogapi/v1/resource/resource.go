@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/mugiliam/common/apperrors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/schemavalidator"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/customvalidators" // Register custom validators
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/schema/schemavalidator"
 )
 
 type ResourceHeader struct {
@@ -55,21 +57,12 @@ func (rh *ResourceHeader) Validate() schemaerr.ValidationErrors {
 	for _, e := range ve {
 		switch e.Tag() {
 		case "required":
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "missing required attribute",
-			})
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
 		case "kindValidator":
 			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "invalid kind " + schemaerr.InQuotes(val),
-			})
+			ves = append(ves, schemaerr.ErrUnsupportedKind(e.Field(), val))
 		default:
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "validation failed for attribute",
-			})
+			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
 		}
 	}
 	return ves
@@ -88,24 +81,25 @@ func (rs *ResourceSchema) Validate() schemaerr.ValidationErrors {
 	for _, e := range ve {
 		switch e.Tag() {
 		case "required":
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "missing required attribute",
-			})
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
 		case "kindValidator":
 			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "invalid kind " + schemaerr.InQuotes(val),
-			})
+			ves = append(ves, schemaerr.ErrUnsupportedKind(e.Field(), val))
 		default:
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "validation failed for attribute",
-			})
+			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
 		}
 	}
 	return ves
+}
+
+// Read a json string in to a ResourceSchema struct
+func ReadResourceSchema(jsonStr string) (*ResourceSchema, apperrors.Error) {
+	rs := &ResourceSchema{}
+	err := json.Unmarshal([]byte(jsonStr), rs)
+	if err != nil {
+		return nil, apierrors.ErrSchemaValidation.Msg("failed to read resource schema")
+	}
+	return rs, nil
 }
 
 func init() {

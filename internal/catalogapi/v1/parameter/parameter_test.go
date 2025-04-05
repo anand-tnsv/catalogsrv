@@ -3,7 +3,7 @@ package parameter
 import (
 	"testing"
 
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +29,7 @@ func TestParameterMetadata_Validate(t *testing.T) {
 				Path:    "/valid_path",
 			},
 			expected: schemaerr.ValidationErrors{
-				{Field: "Name", ErrStr: "missing required attribute"},
+				schemaerr.ErrMissingRequiredAttribute("Name"),
 			},
 		},
 		{
@@ -40,7 +40,7 @@ func TestParameterMetadata_Validate(t *testing.T) {
 				Path:    "/valid_path",
 			},
 			expected: schemaerr.ValidationErrors{
-				{Field: "Name", ErrStr: "invalid name format \"Invalid Name!\"; allowed characters: [A-Za-z0-9_-]"},
+				schemaerr.ErrInvalidNameFormat("Name", "Invalid Name!"),
 			},
 		},
 		{
@@ -51,7 +51,7 @@ func TestParameterMetadata_Validate(t *testing.T) {
 				Path:    "invalid_path",
 			},
 			expected: schemaerr.ValidationErrors{
-				{Field: "Path", ErrStr: "invalid resource path; must start with '/' and contain only alphanumeric characters, underscores, and hyphens"},
+				schemaerr.ErrInvalidResourcePath("Path"),
 			},
 		},
 	}
@@ -81,16 +81,7 @@ func TestParameterSpec_Validate(t *testing.T) {
 			name:  "missing required data type",
 			input: ParameterSpec{},
 			expected: schemaerr.ValidationErrors{
-				{Field: "DataType", ErrStr: "missing required attribute"},
-			},
-		},
-		{
-			name: "invalid data type",
-			input: ParameterSpec{
-				DataType: "InvalidType",
-			},
-			expected: schemaerr.ValidationErrors{
-				{Field: "DataType", ErrStr: "validation failed for attribute"},
+				schemaerr.ErrMissingRequiredAttribute("DataType"),
 			},
 		},
 	}

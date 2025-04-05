@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
 )
 
 func TestIntegerSpec(t *testing.T) {
@@ -19,12 +20,56 @@ func TestIntegerSpec(t *testing.T) {
 				"dataType": "Integer",
 				"validation": {
 					"minValue": 1,
-					"maxValue": 10,
+					"maxValue": 11,
 					"step": 2
 				},
-				"default": 4
+				"default": 5
 			}`,
 			expected: nil,
+		},
+		{
+			name: "default value above maxValue",
+			jsonInput: `{
+				"dataType": "Integer",
+				"validation": {
+					"minValue": 1,
+					"maxValue": 11,
+					"step": 2
+				},
+				"default": 13
+			}`,
+			expected: schemaerr.ValidationErrors{
+				{Field: "default", ErrStr: apierrors.ErrValueAboveMax.Error()},
+			},
+		},
+		{
+			name: "default value below minValue",
+			jsonInput: `{
+				"dataType": "Integer",
+				"validation": {
+					"minValue": 3,
+					"maxValue": 10
+				},
+				"default": 1
+			}`,
+			expected: schemaerr.ValidationErrors{
+				{Field: "default", ErrStr: apierrors.ErrValueBelowMin.Error()},
+			},
+		},
+		{
+			name: "default value not in step",
+			jsonInput: `{
+				"dataType": "Integer",
+				"validation": {
+					"minValue": 2,
+					"maxValue": 10,
+					"step": -2
+				},
+				"default": 7
+			}`,
+			expected: schemaerr.ValidationErrors{
+				{Field: "default", ErrStr: apierrors.ErrValueNotInStep.Error()},
+			},
 		},
 		{
 			name: "minValue greater than maxValue",
@@ -36,7 +81,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				{Field: "MaxValue", ErrStr: "maxValue must be greater than minValue"},
+				schemaerr.ErrMaxValueLessThanMinValue("MaxValue"),
 			},
 		},
 		{
@@ -48,7 +93,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				{Field: "Step", ErrStr: "step value is invalid: must be non-zero and valid, and if positive, minValue must be present; if negative, maxValue must be present"},
+				schemaerr.ErrInvalidStepValue("Step"),
 			},
 		},
 		{
@@ -62,7 +107,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				{Field: "Step", ErrStr: "step value is invalid: must be non-zero and valid, and if positive, minValue must be present; if negative, maxValue must be present"},
+				schemaerr.ErrInvalidStepValue("Step"),
 			},
 		},
 		{
@@ -76,7 +121,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				{Field: "Step", ErrStr: "step value is invalid: must be non-zero and valid, and if positive, minValue must be present; if negative, maxValue must be present"},
+				schemaerr.ErrInvalidStepValue("Step"),
 			},
 		},
 		{
@@ -90,7 +135,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				{Field: "Step", ErrStr: "step value is invalid: must be non-zero and valid, and if positive, minValue must be present; if negative, maxValue must be present"},
+				schemaerr.ErrInvalidStepValue("Step"),
 			},
 		},
 		{
@@ -103,7 +148,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				{Field: "Step", ErrStr: "step value is invalid: must be non-zero and valid, and if positive, minValue must be present; if negative, maxValue must be present"},
+				schemaerr.ErrInvalidStepValue("Step"),
 			},
 		},
 		{
@@ -115,7 +160,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				{Field: "Step", ErrStr: "step value is invalid: must be non-zero and valid, and if positive, minValue must be present; if negative, maxValue must be present"},
+				schemaerr.ErrInvalidStepValue("Step"),
 			},
 		},
 		{
@@ -150,7 +195,7 @@ func TestIntegerSpec(t *testing.T) {
 				t.Fatalf("failed to unmarshal JSON input: %v", err)
 			}
 
-			result := input.Validate()
+			result := input.ValidateSpec()
 			if len(result) != len(tt.expected) {
 				t.Errorf("expected %v errors, got %v errors", len(tt.expected), len(result))
 				t.Errorf("Expected: %v", tt.expected)

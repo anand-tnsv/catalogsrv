@@ -9,13 +9,17 @@ import (
 // ValidationError represents an error that occurs during validation.
 type ValidationError struct {
 	Field  string // The field that caused the validation error.
-	Value  string // The value that caused the validation error.
+	Value  any    // The value that caused the validation error.
 	ErrStr string // The error message.
 }
 
 // Error allows ValidationError to satisfy the error interface.
-func (ve *ValidationError) Error() string {
-	return ve.Field + ": " + ve.ErrStr
+func (ve ValidationError) Error() string {
+	if ve.Value != nil {
+		return ve.Field + ": " + ve.ErrStr
+	} else {
+		return ve.ErrStr
+	}
 }
 
 // ErrInvalidSchema is an error indicating that the schema is invalid.

@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/resource"
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/schema/schemavalidator"
+	"github.com/mugiliam/common/apperrors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/schemavalidator"
 )
 
 type ParameterSchema struct {
-	resource.ResourceHeader
 	Metadata ParameterMetadata `json:"metadata" validate:"required"`
 	Spec     ParameterSpec     `json:"spec" validate:"required"`
 }
@@ -22,29 +22,9 @@ type ParameterMetadata struct {
 }
 
 type ParameterSpec struct {
-	DataType   string          `json:"dataType" validate:"required,dataTypeValidator"`
+	DataType   string          `json:"dataType" validate:"required"`
 	Validation json.RawMessage `json:"validation"`
 	Default    json.RawMessage `json:"default"`
-}
-
-var validDataTypes = []string{
-	"Integer",
-	"String",
-	"Boolean",
-	"Float",
-	"Array",
-	"Dictionary",
-	"Object",
-}
-
-func dataTypeValidator(fl validator.FieldLevel) bool {
-	dataType := fl.Field().String()
-	for _, validType := range validDataTypes {
-		if dataType == validType {
-			return true
-		}
-	}
-	return false
 }
 
 func (ps *ParameterMetadata) Validate() schemaerr.ValidationErrors {
@@ -60,26 +40,14 @@ func (ps *ParameterMetadata) Validate() schemaerr.ValidationErrors {
 	for _, e := range ve {
 		switch e.Tag() {
 		case "required":
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "missing required attribute",
-			})
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
 		case "nameFormatValidator":
 			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "invalid name format " + schemaerr.InQuotes(val) + "; allowed characters: [A-Za-z0-9_-]",
-			})
+			ves = append(ves, schemaerr.ErrInvalidNameFormat(e.Field(), val))
 		case "resourcePathValidator":
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "invalid resource path; must start with '/' and contain only alphanumeric characters, underscores, and hyphens",
-			})
+			ves = append(ves, schemaerr.ErrInvalidResourcePath(e.Field()))
 		default:
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "validation failed for attribute",
-			})
+			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
 		}
 	}
 	return ves
@@ -98,15 +66,9 @@ func (ps *ParameterSpec) Validate() schemaerr.ValidationErrors {
 	for _, e := range ve {
 		switch e.Tag() {
 		case "required":
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "missing required attribute",
-			})
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
 		default:
-			ves = append(ves, schemaerr.ValidationError{
-				Field:  e.Field(),
-				ErrStr: "validation failed for attribute",
-			})
+			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
 		}
 	}
 	return ves
@@ -114,10 +76,22 @@ func (ps *ParameterSpec) Validate() schemaerr.ValidationErrors {
 
 func (ps *ParameterSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
-	ves = append(ves, ps.ResourceHeader.Validate()...)
+	ves = append(ves, ps.Metadata.Validate()...)
+	if len(ves) == 0 {
+		ves = append(ves, ps.Spec.Validate()...)
+	}
 	return ves
 }
 
-func init() {
-	schemavalidator.V().RegisterValidation("dataTypeValidator", dataTypeValidator)
+func ReadParameterSchema(version string, metadata, spec []byte) (*ParameterSchema, apperrors.Error) {
+	ps := ParameterSchema{}
+	err := json.Unmarshal(metadata, &ps.Metadata)
+	if err != nil {
+		return nil, apierrors.ErrSchemaValidation.Msg("failed to read parameter metadata")
+	}
+	err = json.Unmarshal(spec, &ps.Spec)
+	if err != nil {
+		return nil, apierrors.ErrSchemaValidation.Msg("failed to read parameter spec")
+	}
+	return &ps, nil
 }

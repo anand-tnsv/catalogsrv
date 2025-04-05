@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/schema/schemavalidator"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/schemavalidator"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,7 +37,7 @@ func TestResourceSchema_Validate(t *testing.T) {
 				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
-				{Field: "Version", ErrStr: "missing required attribute"},
+				schemaerr.ErrMissingRequiredAttribute("Version"),
 			},
 		},
 		{
@@ -51,7 +51,7 @@ func TestResourceSchema_Validate(t *testing.T) {
 				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
-				{Field: "Kind", ErrStr: "invalid kind \"InvalidKind\""},
+				schemaerr.ErrUnsupportedKind("Kind", "InvalidKind"),
 			},
 		},
 		{
@@ -64,7 +64,7 @@ func TestResourceSchema_Validate(t *testing.T) {
 				Spec: json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
-				{Field: "Metadata", ErrStr: "missing required attribute"},
+				schemaerr.ErrMissingRequiredAttribute("Metadata"),
 			},
 		},
 	}

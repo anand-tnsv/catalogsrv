@@ -3,7 +3,7 @@ package schemavalidator
 import (
 	"fmt"
 
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
 	"github.com/xeipuuv/gojsonschema"
 )
 
