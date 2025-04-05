@@ -1,9 +1,11 @@
-package schemas
+package resource
 
 import (
+	"encoding/json"
 	"testing"
 
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/pkg/schemas/errors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/schema/schemavalidator"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,8 +22,8 @@ func TestResourceSchema_Validate(t *testing.T) {
 					Version: "v1",
 					Kind:    "Parameter",
 				},
-				Metadata: map[string]string{"name": "example"},
-				Spec:     map[string]string{"description": "example spec"},
+				Metadata: json.RawMessage(`{"name": "example"}`),
+				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: nil,
 		},
@@ -31,8 +33,8 @@ func TestResourceSchema_Validate(t *testing.T) {
 				ResourceHeader: ResourceHeader{
 					Kind: "Parameter",
 				},
-				Metadata: map[string]string{"name": "example"},
-				Spec:     map[string]string{"description": "example spec"},
+				Metadata: json.RawMessage(`{"name": "example"}`),
+				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
 				{Field: "Version", ErrStr: "missing required attribute"},
@@ -45,8 +47,8 @@ func TestResourceSchema_Validate(t *testing.T) {
 					Version: "v1",
 					Kind:    "InvalidKind",
 				},
-				Metadata: map[string]string{"name": "example"},
-				Spec:     map[string]string{"description": "example spec"},
+				Metadata: json.RawMessage(`{"name": "example"}`),
+				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
 				{Field: "Kind", ErrStr: "invalid kind \"InvalidKind\""},
@@ -59,7 +61,7 @@ func TestResourceSchema_Validate(t *testing.T) {
 					Version: "v1",
 					Kind:    "Parameter",
 				},
-				Spec: map[string]string{"description": "example spec"},
+				Spec: json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
 				{Field: "Metadata", ErrStr: "missing required attribute"},
@@ -165,7 +167,7 @@ func TestValidateJsonSchema(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := ValidateJsonSchema(ResourceSchemaJsonSchema, tt.input)
+			actual := schemavalidator.ValidateJsonSchema(ResourceSchemaJsonSchema, tt.input)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

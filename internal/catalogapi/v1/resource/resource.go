@@ -1,9 +1,12 @@
-package schemas
+package resource
 
 import (
+	"encoding/json"
+
 	"github.com/go-playground/validator/v10"
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/pkg/schemas/errors"
-	"github.com/mugiliam/hatchcatalogsrv/pkg/schemas/schemavalidator"
+	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/customvalidators" // Register custom validators
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/schema/schemavalidator"
 )
 
 type ResourceHeader struct {
@@ -14,8 +17,8 @@ type ResourceHeader struct {
 // ResourceSchema represents a schema for a resource.
 type ResourceSchema struct {
 	ResourceHeader
-	Metadata any `json:"metadata" validate:"required"`
-	Spec     any `json:"spec" validate:"required"`
+	Metadata json.RawMessage `json:"metadata" validate:"required"`
+	Spec     json.RawMessage `json:"spec" validate:"required"`
 }
 
 const (

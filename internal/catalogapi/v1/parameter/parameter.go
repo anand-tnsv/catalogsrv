@@ -1,13 +1,16 @@
-package schemas
+package parameter
 
 import (
+	"encoding/json"
+
 	"github.com/go-playground/validator/v10"
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/pkg/schemas/errors"
-	"github.com/mugiliam/hatchcatalogsrv/pkg/schemas/schemavalidator"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/resource"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/schema/schemavalidator"
 )
 
 type ParameterSchema struct {
-	ResourceHeader
+	resource.ResourceHeader
 	Metadata ParameterMetadata `json:"metadata" validate:"required"`
 	Spec     ParameterSpec     `json:"spec" validate:"required"`
 }
@@ -19,8 +22,9 @@ type ParameterMetadata struct {
 }
 
 type ParameterSpec struct {
-	DataType   string `json:"dataType" validate:"required,dataTypeValidator"`
-	Validation any    `json:"validation"`
+	DataType   string          `json:"dataType" validate:"required,dataTypeValidator"`
+	Validation json.RawMessage `json:"validation"`
+	Default    json.RawMessage `json:"default"`
 }
 
 var validDataTypes = []string{

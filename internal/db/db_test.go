@@ -300,7 +300,7 @@ func TestGetCatalog(t *testing.T) {
 	retrievedCatalog, err = DB(ctx).GetCatalog(ctx, uuid.Nil, "")
 	assert.Error(t, err)
 	assert.Nil(t, retrievedCatalog)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
+	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
 func TestUpdateCatalog(t *testing.T) {

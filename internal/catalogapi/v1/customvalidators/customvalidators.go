@@ -1,11 +1,11 @@
-package schemas
+package customvalidators
 
 import (
 	"regexp"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/mugiliam/hatchcatalogsrv/pkg/schemas/schemavalidator"
+	"github.com/mugiliam/hatchcatalogsrv/internal/schema/schemavalidator"
 )
 
 const nameRegex = `^[A-Za-z0-9_-]+$`

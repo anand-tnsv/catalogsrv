@@ -1,9 +1,9 @@
-package schemas
+package schemavalidator
 
 import (
 	"fmt"
 
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/pkg/schemas/errors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/schema/errors"
 	"github.com/xeipuuv/gojsonschema"
 )
 

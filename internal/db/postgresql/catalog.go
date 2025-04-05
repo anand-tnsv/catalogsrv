@@ -18,6 +18,7 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 		return err
 	}
 	catalog.ProjectID = projectID
+	catalog.CatalogID = uuid.New()
 
 	query := `
 		INSERT INTO catalogs (catalog_id, name, description, info, tenant_id, project_id)
