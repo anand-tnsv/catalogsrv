@@ -1,6 +1,6 @@
 package models
 
-import "github.com/mugiliam/hatchcatalogsrv/internal/types"
+import "github.com/mugiliam/hatchcatalogsrv/pkg/types"
 
 /*
      Column   |         Type          | Collation | Nullable | Default

@@ -4,7 +4,7 @@ package common
 import (
 	"context"
 
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 // ctxTenantIdKeyType represents the key type for the tenant ID in the context.

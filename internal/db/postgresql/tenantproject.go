@@ -8,7 +8,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 
 	"github.com/rs/zerolog/log"
 )

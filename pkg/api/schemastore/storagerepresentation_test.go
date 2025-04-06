@@ -3,7 +3,7 @@ package schemastore
 import (
 	"testing"
 
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 

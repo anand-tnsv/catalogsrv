@@ -3,7 +3,7 @@ package models
 import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 /*

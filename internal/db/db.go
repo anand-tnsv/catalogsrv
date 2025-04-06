@@ -7,7 +7,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dbmanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/postgresql"
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 

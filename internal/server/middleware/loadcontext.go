@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 func LoadContext(next http.Handler) http.Handler {

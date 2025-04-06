@@ -9,7 +9,7 @@ import (
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager/datatyperegistry"
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
 )
 

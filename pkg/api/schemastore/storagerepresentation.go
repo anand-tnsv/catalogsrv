@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
-	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 type SchemaStorageRepresentation struct {
