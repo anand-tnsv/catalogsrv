@@ -2,7 +2,7 @@ package schemamanager
 
 import (
 	"github.com/mugiliam/common/apperrors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
 )
 
 type ParameterManager interface {

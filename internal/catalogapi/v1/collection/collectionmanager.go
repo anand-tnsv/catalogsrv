@@ -7,8 +7,8 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager/schemastore"
 	"github.com/mugiliam/hatchcatalogsrv/internal/types"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
 )
 
 type V1CollectionManager struct {

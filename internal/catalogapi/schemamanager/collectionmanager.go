@@ -1,6 +1,6 @@
 package schemamanager
 
-import "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager/schemastore"
+import "github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
 
 type CollectionManager interface {
 	Name() string
