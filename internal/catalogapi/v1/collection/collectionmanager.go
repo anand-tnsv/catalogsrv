@@ -7,6 +7,8 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/internal/types"
 )
 
 type V1CollectionManager struct {
@@ -41,4 +43,25 @@ func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte
 		version:          version,
 		collectionSchema: *cs,
 	}, nil
+}
+
+func (cm *V1CollectionManager) Name() string {
+	return cm.collectionSchema.Metadata.Name
+}
+
+func (cm *V1CollectionManager) Catalog() string {
+	return cm.collectionSchema.Metadata.Catalog
+}
+
+func (cm *V1CollectionManager) Path() string {
+	return cm.collectionSchema.Metadata.Path
+}
+
+func (cm *V1CollectionManager) StorageRepresentation() schemastore.SchemaStorageRepresentation {
+	s := schemastore.SchemaStorageRepresentation{
+		Version: cm.version,
+		Type:    types.CatalogObjectTypeCollectionSchema,
+	}
+	s.Schema, _ = json.Marshal(cm.collectionSchema.Spec)
+	return s
 }

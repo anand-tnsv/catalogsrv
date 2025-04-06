@@ -161,8 +161,137 @@ spec:
 			expected: schemaerr.ErrMaxValueLessThanMinValue("validation.maxValue").Error(),
 		},
 	}
+	// Run tests
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			ctx = log.Logger.WithContext(ctx)
+			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
+			if assert.NoError(t, err) {
+				_, err := NewResource(ctx, jsonData)
+				errStr := ""
+				if err != nil {
+					errStr = err.Error()
+				}
+				if errStr != tt.expected {
+					t.Errorf("got %v, want %v", err, tt.expected)
+				}
+			}
+		})
+	}
+}
 
-	// TODO: Add tests for collection schema
+func TestNewCollectionSchema(t *testing.T) {
+	tests := []struct {
+		name     string
+		yamlData string
+		expected string
+	}{
+		{
+			name: "valid collection schema with schema",
+			yamlData: `
+version: v1
+kind: Collection
+metadata:
+  name: AppConfigCollection
+  catalog: myCatalog
+  path: /valid/path
+spec:
+  parameters:
+    maxRetries:
+      schema: IntegerParamSchema
+      default: 5
+  collections:
+    databaseConfig:
+      schema: DatabaseConfigCollection
+`,
+			expected: "",
+		},
+		{
+			name: "valid collection schema with dataType",
+			yamlData: `
+version: v1
+kind: Collection
+metadata:
+  name: AppConfigCollection
+  catalog: myCatalog
+  path: /valid/path
+spec:
+  parameters:
+    maxRetries:
+      dataType: Integer
+      default: 5
+  collections:
+    databaseConfig:
+      schema: DatabaseConfigCollection
+`,
+			expected: "",
+		},
+		{
+			name: "missing required version",
+			yamlData: `
+kind: Collection
+metadata:
+  name: AppConfigCollection
+  catalog: myCatalog
+  path: /valid/path
+spec:
+  parameters:
+    maxRetries:
+      dataType: Integer
+      default: 5
+  collections:
+    databaseConfig:
+      schema: DatabaseConfigCollection
+`,
+			expected: schemaerr.ErrMissingRequiredAttribute("version").Error(),
+		},
+		{
+			name: "missing both schema and dataType",
+			yamlData: `
+version: v1
+kind: Collection
+metadata:
+  name: AppConfigCollection
+  catalog: myCatalog
+  path: /valid/path
+spec:
+  parameters:
+    maxRetries:
+      default: 5
+  collections:
+    databaseConfig:
+      schema: DatabaseConfigCollection
+`,
+			expected: schemaerr.ValidationErrors{
+				schemaerr.ErrMissingSchemaOrType("spec.parameters.maxRetries.schema"),
+				schemaerr.ErrMissingSchemaOrType("spec.parameters.maxRetries.dataType"),
+			}.Error(),
+		},
+		{
+			name: "invalid name format in metadata",
+			yamlData: `
+version: v1
+kind: Collection
+metadata:
+  name: Invalid Name!
+  catalog: myCatalog
+  path: /valid/path
+spec:
+  parameters:
+    maxRetries:
+      schema: IntegerParamSchema
+      default: 5
+  collections:
+    databaseConfig:
+      schema: DatabaseConfigCollection
+`,
+			expected: schemaerr.ValidationErrors{
+				schemaerr.ErrInvalidNameFormat("metadata.name", "Invalid Name!"),
+			}.Error(),
+		},
+	}
+	// Run tests
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()

@@ -9,6 +9,8 @@ import (
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager/datatyperegistry"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/internal/types"
 )
 
 type V1ParameterManager struct {
@@ -92,4 +94,13 @@ func (pm *V1ParameterManager) Default() interface{} {
 
 func (pm *V1ParameterManager) Validate(value any) apperrors.Error {
 	return pm.parameter.ValidateValue(value)
+}
+
+func (pm *V1ParameterManager) StorageRepresentation() schemastore.SchemaStorageRepresentation {
+	s := schemastore.SchemaStorageRepresentation{
+		Version: pm.version,
+		Type:    types.CatalogObjecTypeParameterSchema,
+	}
+	s.Schema, _ = json.Marshal(pm.parameterSchema.Spec)
+	return s
 }

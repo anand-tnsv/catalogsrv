@@ -6,13 +6,15 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/collection"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/customvalidators"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/parameter"
 )
 
 type V1ResourceManager struct {
-	resourceSchema   ResourceSchema
-	parameterManager parameter.V1ParameterManager
+	resourceSchema    *ResourceSchema
+	parameterManager  *parameter.V1ParameterManager
+	collectionManager *collection.V1CollectionManager
 }
 
 var _ schemamanager.ResourceManager = &V1ResourceManager{} // Ensure V1ResourceManager implements schemamanager.ResourceManager
@@ -37,17 +39,24 @@ func NewV1ResourceManager(ctx context.Context, rsrcJson []byte, options ...schem
 			return nil, apierrors.ErrSchemaValidation.Msg(ves.Error())
 		}
 	}
-	if rs.Kind == "Parameter" {
-		pm, err := parameter.NewV1ParameterManager(ctx, rs.Version, rsrcJson, options...)
-		if err != nil {
+	rm := &V1ResourceManager{
+		resourceSchema: rs,
+	}
+	// Initialize the appropriate manager based on the kind
+	switch rs.Kind {
+	case "Parameter":
+		if rm.parameterManager, err = parameter.NewV1ParameterManager(ctx, rs.Version, rsrcJson, options...); err != nil {
 			return nil, err
 		}
-		return &V1ResourceManager{
-			resourceSchema:   *rs,
-			parameterManager: *pm,
-		}, nil
+	case "Collection":
+		if rm.collectionManager, err = collection.NewV1CollectionManager(ctx, rs.Version, rsrcJson, options...); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, apierrors.ErrInvalidKind
 	}
-	return nil, apierrors.ErrInvalidKind
+
+	return rm, nil
 }
 
 func (rm *V1ResourceManager) Version() string {
@@ -59,9 +68,9 @@ func (rm *V1ResourceManager) Kind() string {
 }
 
 func (rm *V1ResourceManager) ParameterManager() schemamanager.ParameterManager {
-	return &rm.parameterManager
+	return rm.parameterManager
 }
 
 func (rm *V1ResourceManager) CollectionManager() schemamanager.CollectionManager {
-	return nil
+	return rm.collectionManager
 }

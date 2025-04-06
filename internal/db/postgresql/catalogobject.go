@@ -20,17 +20,20 @@ func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.Ca
 	if obj.Type == "" {
 		return dberror.ErrInvalidInput.Msg("type cannot be empty")
 	}
+	if obj.Version == "" {
+		return dberror.ErrInvalidInput.Msg("version cannot be empty")
+	}
 	if len(obj.Data) == 0 {
 		return dberror.ErrInvalidInput.Msg("data cannot be nil")
 	}
 
 	// Insert the catalog object into the database
 	query := `
-		INSERT INTO catalog_objects (hash, type, tenant_id, data)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO catalog_objects (hash, type, version, tenant_id, data)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (hash, tenant_id) DO NOTHING;
 	`
-	result, err := h.conn().ExecContext(ctx, query, obj.Hash, obj.Type, tenantID, obj.Data)
+	result, err := h.conn().ExecContext(ctx, query, obj.Hash, obj.Type, obj.Version, tenantID, obj.Data)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}

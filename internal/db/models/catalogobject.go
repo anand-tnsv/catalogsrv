@@ -14,6 +14,7 @@ import "github.com/mugiliam/hatchcatalogsrv/internal/types"
 type CatalogObject struct {
 	Hash     string                  `db:"hash"`
 	Type     types.CatalogObjectType `db:"type"`
+	Version  string                  `db:"version"`
 	TenantID types.TenantId          `db:"tenant_id"`
 	Data     []byte                  `db:"data"`
 }
