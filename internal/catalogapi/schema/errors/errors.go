@@ -17,6 +17,21 @@ func ErrInvalidStepValue(attr string, value ...any) ValidationError {
 	}
 }
 
+func ErrMissingSchemaOrType(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "should contain either schema or dataType",
+	}
+}
+
+func ErrShouldContainSchemaOrType(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "should contain either schema or dataType",
+	}
+}
 func ErrMaxValueLessThanMinValue(attr string, value ...any) ValidationError {
 	return ValidationError{
 		Field:  attr,
@@ -60,6 +75,14 @@ func ErrInvalidResourcePath(attr string, value ...any) ValidationError {
 		Field:  attr,
 		Value:  value,
 		ErrStr: "invalid resource path; must start with '/' and contain only alphanumeric characters, underscores, and hyphens",
+	}
+}
+
+func ErrInvalidAnnotation(attr string, value ...string) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "annotation keys and values cannot contain spaces",
 	}
 }
 

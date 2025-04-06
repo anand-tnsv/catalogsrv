@@ -32,3 +32,31 @@ func TestResourcePathValidator(t *testing.T) {
 		}
 	}
 }
+
+func TestNoSpacesValidator(t *testing.T) {
+	validate := validator.New()
+	validate.RegisterValidation("noSpaces", noSpacesValidator)
+
+	// Test cases
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{"ValidString", true},        // No spaces, valid string
+		{"Invalid String", false},    // Contains spaces
+		{"Invalid\tTab", false},      // Contains tab
+		{"Invalid\nNewline", false},  // Contains newline
+		{"AnotherValidString", true}, // No spaces
+		{"", false},                  // Empty string, should fail
+		{"Multiple   Spaces", false}, // Multiple spaces
+	}
+
+	for _, test := range tests {
+		err := validate.Var(test.input, "noSpaces")
+		result := err == nil
+
+		if result != test.expected {
+			t.Errorf("Expected %v for input '%s', got %v", test.expected, test.input, result)
+		}
+	}
+}

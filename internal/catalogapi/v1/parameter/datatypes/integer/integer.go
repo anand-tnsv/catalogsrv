@@ -2,6 +2,7 @@ package integer
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mugiliam/common/apperrors"
@@ -55,16 +56,21 @@ func (is *Spec) ValidateSpec() schemaerr.ValidationErrors {
 		return ves
 	}
 
+	value := reflect.ValueOf(is).Elem()
+	typeOfCS := value.Type()
+
 	for _, e := range ve {
+		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
+
 		switch e.Tag() {
 		case "required":
-			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
 		case "stepValidator":
-			ves = append(ves, schemaerr.ErrInvalidStepValue(e.Field()))
+			ves = append(ves, schemaerr.ErrInvalidStepValue(jsonFieldName))
 		case "integerBoundsValidator":
-			ves = append(ves, schemaerr.ErrMaxValueLessThanMinValue(e.Field()))
+			ves = append(ves, schemaerr.ErrMaxValueLessThanMinValue(jsonFieldName))
 		default:
-			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
+			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}
 	}
 

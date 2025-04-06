@@ -16,6 +16,11 @@ func nameFormatValidator(fl validator.FieldLevel) bool {
 	return re.MatchString(fl.Field().String())
 }
 
+func noSpacesValidator(fl validator.FieldLevel) bool {
+	re := regexp.MustCompile(`^[^\s]+$`)
+	return re.MatchString(fl.Field().String())
+}
+
 // resourcePathValidator checks if the given path is a valid resource path.
 func resourcePathValidator(fl validator.FieldLevel) bool {
 	path := fl.Field().String()
@@ -46,4 +51,5 @@ func resourcePathValidator(fl validator.FieldLevel) bool {
 func init() {
 	schemavalidator.V().RegisterValidation("nameFormatValidator", nameFormatValidator)
 	schemavalidator.V().RegisterValidation("resourcePathValidator", resourcePathValidator)
+	schemavalidator.V().RegisterValidation("noSpaces", noSpacesValidator)
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schemamanager"
+	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/customvalidators"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/parameter"
 )
 

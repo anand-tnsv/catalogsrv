@@ -18,10 +18,9 @@ func TestResourceSchema_Validate(t *testing.T) {
 		{
 			name: "valid resource schema",
 			input: ResourceSchema{
-				ResourceHeader: ResourceHeader{
-					Version: "v1",
-					Kind:    "Parameter",
-				},
+
+				Version:  "v1",
+				Kind:     "Parameter",
 				Metadata: json.RawMessage(`{"name": "example"}`),
 				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
@@ -30,41 +29,35 @@ func TestResourceSchema_Validate(t *testing.T) {
 		{
 			name: "missing required version",
 			input: ResourceSchema{
-				ResourceHeader: ResourceHeader{
-					Kind: "Parameter",
-				},
+				Kind:     "Parameter",
 				Metadata: json.RawMessage(`{"name": "example"}`),
 				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMissingRequiredAttribute("Version"),
+				schemaerr.ErrMissingRequiredAttribute("version"),
 			},
 		},
 		{
 			name: "invalid kind",
 			input: ResourceSchema{
-				ResourceHeader: ResourceHeader{
-					Version: "v1",
-					Kind:    "InvalidKind",
-				},
+				Version:  "v1",
+				Kind:     "InvalidKind",
 				Metadata: json.RawMessage(`{"name": "example"}`),
 				Spec:     json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrUnsupportedKind("Kind", "InvalidKind"),
+				schemaerr.ErrUnsupportedKind("kind", "InvalidKind"),
 			},
 		},
 		{
 			name: "missing required metadata",
 			input: ResourceSchema{
-				ResourceHeader: ResourceHeader{
-					Version: "v1",
-					Kind:    "Parameter",
-				},
-				Spec: json.RawMessage(`{"description": "example spec"}`),
+				Version: "v1",
+				Kind:    "Parameter",
+				Spec:    json.RawMessage(`{"description": "example spec"}`),
 			},
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMissingRequiredAttribute("Metadata"),
+				schemaerr.ErrMissingRequiredAttribute("metadata"),
 			},
 		},
 	}

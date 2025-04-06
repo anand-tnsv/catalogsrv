@@ -1,94 +1,108 @@
 package parameter
 
 import (
+	"encoding/json"
 	"testing"
 
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
+	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/customvalidators"
 	"github.com/stretchr/testify/assert"
+	"sigs.k8s.io/yaml"
 )
 
-func TestParameterMetadata_Validate(t *testing.T) {
+func TestParameterSchema_Validate(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ParameterMetadata
-		expected schemaerr.ValidationErrors
+		name      string
+		yamlInput string
+		expected  schemaerr.ValidationErrors
 	}{
 		{
-			name: "valid parameter metadata",
-			input: ParameterMetadata{
-				Name:    "validName",
-				Catalog: "validCatalog",
-				Path:    "/valid_path",
-			},
+			name: "valid parameter schema",
+			yamlInput: `
+metadata:
+  name: validName
+  catalog: validCatalog
+  path: /valid_path
+spec:
+  dataType: Integer
+`,
 			expected: nil,
 		},
 		{
-			name: "missing required name",
-			input: ParameterMetadata{
-				Catalog: "validCatalog",
-				Path:    "/valid_path",
-			},
+			name: "missing required name in metadata",
+			yamlInput: `
+metadata:
+  catalog: validCatalog
+  path: /valid_path
+spec:
+  dataType: Integer
+`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMissingRequiredAttribute("Name"),
+				schemaerr.ErrMissingRequiredAttribute("metadata.name"),
 			},
 		},
 		{
-			name: "invalid name format",
-			input: ParameterMetadata{
-				Name:    "Invalid Name!",
-				Catalog: "validCatalog",
-				Path:    "/valid_path",
-			},
+			name: "invalid name format in metadata",
+			yamlInput: `
+metadata:
+  name: Invalid Name!
+  catalog: validCatalog
+  path: /valid_path
+spec:
+  dataType: Integer
+`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidNameFormat("Name", "Invalid Name!"),
+				schemaerr.ErrInvalidNameFormat("metadata.name", "Invalid Name!"),
 			},
 		},
 		{
-			name: "invalid resource path",
-			input: ParameterMetadata{
-				Name:    "validName",
-				Catalog: "validCatalog",
-				Path:    "invalid_path",
-			},
+			name: "invalid resource path in metadata",
+			yamlInput: `
+metadata:
+  name: validName
+  catalog: validCatalog
+  path: invalid_path
+spec:
+  dataType: Integer
+`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidResourcePath("Path"),
+				schemaerr.ErrInvalidResourcePath("metadata.path"),
+			},
+		},
+		{
+			name: "missing required data type in spec",
+			yamlInput: `
+metadata:
+  name: validName
+  catalog: validCatalog
+  path: /valid_path
+spec:
+  validation: {}
+  default: {}
+`,
+			expected: schemaerr.ValidationErrors{
+				schemaerr.ErrMissingRequiredAttribute("spec.dataType"),
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := tt.input.Validate()
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
+			// Convert YAML input to JSON for unmarshaling into struct
+			var input ParameterSchema
+			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlInput))
+			if err != nil {
+				t.Fatalf("failed to convert YAML to JSON: %v", err)
+			}
 
-func TestParameterSpec_Validate(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    ParameterSpec
-		expected schemaerr.ValidationErrors
-	}{
-		{
-			name: "valid parameter spec",
-			input: ParameterSpec{
-				DataType: "Integer",
-			},
-			expected: nil,
-		},
-		{
-			name:  "missing required data type",
-			input: ParameterSpec{},
-			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMissingRequiredAttribute("DataType"),
-			},
-		},
-	}
+			// Unmarshal JSON into the CollectionSchema struct
+			err = json.Unmarshal(jsonData, &input)
+			if err != nil {
+				t.Fatalf("failed to unmarshal JSON input: %v", err)
+			}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := tt.input.Validate()
+			// Validate the schema
+			actual := input.Validate()
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

@@ -81,7 +81,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMaxValueLessThanMinValue("MaxValue"),
+				schemaerr.ErrMaxValueLessThanMinValue("validation.maxValue"),
 			},
 		},
 		{
@@ -93,7 +93,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidStepValue("Step"),
+				schemaerr.ErrInvalidStepValue("validation.step"),
 			},
 		},
 		{
@@ -107,7 +107,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidStepValue("Step"),
+				schemaerr.ErrInvalidStepValue("validation.step"),
 			},
 		},
 		{
@@ -121,7 +121,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidStepValue("Step"),
+				schemaerr.ErrInvalidStepValue("validation.step"),
 			},
 		},
 		{
@@ -135,7 +135,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidStepValue("Step"),
+				schemaerr.ErrInvalidStepValue("validation.step"),
 			},
 		},
 		{
@@ -148,7 +148,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidStepValue("Step"),
+				schemaerr.ErrInvalidStepValue("validation.step"),
 			},
 		},
 		{
@@ -160,7 +160,7 @@ func TestIntegerSpec(t *testing.T) {
 				}
 			}`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidStepValue("Step"),
+				schemaerr.ErrInvalidStepValue("validation.step"),
 			},
 		},
 		{

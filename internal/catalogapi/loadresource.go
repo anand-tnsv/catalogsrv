@@ -28,7 +28,7 @@ func NewResource(ctx context.Context, rsrcJson []byte) (schemamanager.ResourceMa
 		return nil, apierrors.ErrSchemaValidation
 	}
 	if version.Version == "" {
-		return nil, apierrors.ErrSchemaValidation.Msg(schemaerr.ErrMissingRequiredAttribute("Version").Error())
+		return nil, apierrors.ErrSchemaValidation.Msg(schemaerr.ErrMissingRequiredAttribute("version").Error())
 	}
 	// validate the version
 	if version.Version != "v1" {

@@ -2,12 +2,15 @@ package parameter
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/apierrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/schema/schemavalidator"
+	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/customvalidators"
+	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/parameter/datatypes"
 )
 
 type ParameterSchema struct {
@@ -27,58 +30,34 @@ type ParameterSpec struct {
 	Default    json.RawMessage `json:"default"`
 }
 
-func (ps *ParameterMetadata) Validate() schemaerr.ValidationErrors {
-	var ves schemaerr.ValidationErrors
-	err := schemavalidator.V().Struct(ps)
-	if err == nil {
-		return nil
-	}
-	ve, ok := err.(validator.ValidationErrors)
-	if !ok {
-		return append(ves, schemaerr.ErrInvalidSchema)
-	}
-	for _, e := range ve {
-		switch e.Tag() {
-		case "required":
-			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
-		case "nameFormatValidator":
-			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ErrInvalidNameFormat(e.Field(), val))
-		case "resourcePathValidator":
-			ves = append(ves, schemaerr.ErrInvalidResourcePath(e.Field()))
-		default:
-			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
-		}
-	}
-	return ves
-}
-
-func (ps *ParameterSpec) Validate() schemaerr.ValidationErrors {
-	var ves schemaerr.ValidationErrors
-	err := schemavalidator.V().Struct(ps)
-	if err == nil {
-		return nil
-	}
-	ve, ok := err.(validator.ValidationErrors)
-	if !ok {
-		return append(ves, schemaerr.ErrInvalidSchema)
-	}
-	for _, e := range ve {
-		switch e.Tag() {
-		case "required":
-			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
-		default:
-			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
-		}
-	}
-	return ves
-}
-
 func (ps *ParameterSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
-	ves = append(ves, ps.Metadata.Validate()...)
-	if len(ves) == 0 {
-		ves = append(ves, ps.Spec.Validate()...)
+	err := schemavalidator.V().Struct(ps)
+	if err == nil {
+		return nil
+	}
+	ve, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return append(ves, schemaerr.ErrInvalidSchema)
+	}
+
+	value := reflect.ValueOf(ps).Elem()
+	typeOfCS := value.Type()
+
+	for _, e := range ve {
+		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
+
+		switch e.Tag() {
+		case "required":
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
+		case "nameFormatValidator":
+			val, _ := e.Value().(string)
+			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
+		case "resourcePathValidator":
+			ves = append(ves, schemaerr.ErrInvalidResourcePath(jsonFieldName))
+		default:
+			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
+		}
 	}
 	return ves
 }

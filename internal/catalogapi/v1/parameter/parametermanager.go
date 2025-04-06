@@ -45,7 +45,7 @@ func NewV1ParameterManager(ctx context.Context, version string, rsrcJson []byte,
 	})
 
 	if loader == nil {
-		return nil, apierrors.ErrSchemaValidation.Msg(schemaerr.ErrUnsupportedDataType("dataType", ps.Spec.DataType).Error())
+		return nil, apierrors.ErrSchemaValidation.Msg(schemaerr.ErrUnsupportedDataType("spec.dataType", ps.Spec.DataType).Error())
 	}
 
 	js, err := json.Marshal(ps.Spec)

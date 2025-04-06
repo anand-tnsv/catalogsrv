@@ -83,7 +83,7 @@ spec:
     maxValue: 10
   default: 5
 `,
-			expected: schemaerr.ErrMissingRequiredAttribute("Version").Error(),
+			expected: schemaerr.ErrMissingRequiredAttribute("version").Error(),
 		},
 		{
 			name: "bad name format",
@@ -101,7 +101,7 @@ spec:
     maxValue: 10
   default: 5
 `,
-			expected: schemaerr.ErrInvalidNameFormat("Name", "Invalid Name!").Error(),
+			expected: schemaerr.ErrInvalidNameFormat("metadata.name", "Invalid Name!").Error(),
 		},
 		{
 			name: "bad dataType",
@@ -119,7 +119,7 @@ spec:
     maxValue: 10
   default: 5
 `,
-			expected: schemaerr.ErrUnsupportedDataType("dataType", "InvalidType").Error(),
+			expected: schemaerr.ErrUnsupportedDataType("spec.dataType", "InvalidType").Error(),
 		},
 		{
 			name: "bad default value",
@@ -158,7 +158,7 @@ spec:
     maxValue: -1
   default: 5
 `,
-			expected: schemaerr.ErrMaxValueLessThanMinValue("MaxValue").Error(),
+			expected: schemaerr.ErrMaxValueLessThanMinValue("validation.maxValue").Error(),
 		},
 	}
 	for _, tt := range tests {

@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mugiliam/common/apperrors"
@@ -11,14 +12,16 @@ import (
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogapi/v1/customvalidators" // Register custom validators
 )
 
+/*
 type ResourceHeader struct {
 	Version string `json:"version" validate:"required"`
 	Kind    string `json:"kind" validate:"required,kindValidator"`
 }
-
+*/
 // ResourceSchema represents a schema for a resource.
 type ResourceSchema struct {
-	ResourceHeader
+	Version  string          `json:"version" validate:"required"`
+	Kind     string          `json:"kind" validate:"required,kindValidator"`
 	Metadata json.RawMessage `json:"metadata" validate:"required"`
 	Spec     json.RawMessage `json:"spec" validate:"required"`
 }
@@ -44,30 +47,6 @@ func kindValidator(fl validator.FieldLevel) bool {
 	return false
 }
 
-func (rh *ResourceHeader) Validate() schemaerr.ValidationErrors {
-	var ves schemaerr.ValidationErrors
-	err := schemavalidator.V().Struct(rh)
-	if err == nil {
-		return nil
-	}
-	ve, ok := err.(validator.ValidationErrors)
-	if !ok {
-		return append(ves, schemaerr.ErrInvalidSchema)
-	}
-	for _, e := range ve {
-		switch e.Tag() {
-		case "required":
-			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
-		case "kindValidator":
-			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ErrUnsupportedKind(e.Field(), val))
-		default:
-			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
-		}
-	}
-	return ves
-}
-
 func (rs *ResourceSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 	err := schemavalidator.V().Struct(rs)
@@ -78,15 +57,21 @@ func (rs *ResourceSchema) Validate() schemaerr.ValidationErrors {
 	if !ok {
 		return append(ves, schemaerr.ErrInvalidSchema)
 	}
+
+	value := reflect.ValueOf(rs).Elem()
+	typeOfCS := value.Type()
+
 	for _, e := range ve {
+		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
+
 		switch e.Tag() {
 		case "required":
-			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(e.Field()))
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
 		case "kindValidator":
 			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ErrUnsupportedKind(e.Field(), val))
+			ves = append(ves, schemaerr.ErrUnsupportedKind(jsonFieldName, val))
 		default:
-			ves = append(ves, schemaerr.ErrValidationFailed(e.Field()))
+			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}
 	}
 	return ves
