@@ -13,3 +13,11 @@ func (u CatalogId) String() string {
 func (u CatalogId) IsNil() bool {
 	return u == CatalogId(uuid.Nil)
 }
+
+type CatalogObjectType string
+
+const (
+	CatalogObjecTypeParameterSchema         CatalogObjectType = "parameter_schema"
+	CatalogObjectTypeCollectionSchema       CatalogObjectType = "collection_schema"
+	CatalogObjectTypeCatalogCollectionValue CatalogObjectType = "collection_value"
+)
