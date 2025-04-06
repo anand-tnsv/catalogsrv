@@ -161,6 +161,8 @@ spec:
 			expected: schemaerr.ErrMaxValueLessThanMinValue("validation.maxValue").Error(),
 		},
 	}
+
+	// TODO: Add tests for collection schema
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
