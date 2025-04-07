@@ -325,7 +325,7 @@ func TestSchemaStorageRepresentation(t *testing.T) {
 	var baseHash, equivalentHash string
 	s := SchemaStorageRepresentation{
 		Version: "v1",
-		Type:    types.CatalogObjecTypeParameterSchema,
+		Type:    types.CatalogObjectTypeParameterSchema,
 		Schema:  []byte(baseJson),
 	}
 	baseHash = s.GetHash()

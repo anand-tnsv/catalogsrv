@@ -12,5 +12,5 @@ type ParameterManager interface {
 	DataType() string
 	Default() any
 	Validate(any) apperrors.Error
-	StorageRepresentation() schemastore.SchemaStorageRepresentation
+	StorageRepresentation() *schemastore.SchemaStorageRepresentation
 }

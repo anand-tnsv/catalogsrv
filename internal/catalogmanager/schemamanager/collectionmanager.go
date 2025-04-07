@@ -6,5 +6,5 @@ type CollectionManager interface {
 	Name() string
 	Catalog() string
 	Path() string
-	StorageRepresentation() schemastore.SchemaStorageRepresentation
+	StorageRepresentation() *schemastore.SchemaStorageRepresentation
 }

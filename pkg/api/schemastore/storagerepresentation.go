@@ -3,7 +3,6 @@ package schemastore
 import (
 	"encoding/json"
 
-	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
@@ -25,11 +24,11 @@ func (s *SchemaStorageRepresentation) GetHash() string {
 		return ""
 	}
 	// Normalize the JSON, so 2 equivalent representations yield the same hash
-	nsz, err := common.NormalizeJSON(sz)
+	nsz, err := NormalizeJSON(sz)
 	if err != nil {
 		return ""
 	}
-	hash := common.HexEncodedSHA512(nsz)
+	hash := HexEncodedSHA512(nsz)
 	return hash
 }
 

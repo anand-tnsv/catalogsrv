@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 
 	"github.com/mugiliam/common/apperrors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager/datatyperegistry"
-	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 type V1ParameterManager struct {
@@ -96,11 +96,11 @@ func (pm *V1ParameterManager) Validate(value any) apperrors.Error {
 	return pm.parameter.ValidateValue(value)
 }
 
-func (pm *V1ParameterManager) StorageRepresentation() schemastore.SchemaStorageRepresentation {
+func (pm *V1ParameterManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	s := schemastore.SchemaStorageRepresentation{
 		Version: pm.version,
-		Type:    types.CatalogObjecTypeParameterSchema,
+		Type:    types.CatalogObjectTypeParameterSchema,
 	}
 	s.Schema, _ = json.Marshal(pm.parameterSchema.Spec)
-	return s
+	return &s
 }

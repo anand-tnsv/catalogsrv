@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dbmanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/postgresql"
@@ -33,6 +34,10 @@ type DB_ interface {
 	GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, error)
 	UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error
 	DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) error
+
+	// Catalog Object
+	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error
+	GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error)
 
 	// Scope Management
 	AddScopes(ctx context.Context, scopes map[string]string)

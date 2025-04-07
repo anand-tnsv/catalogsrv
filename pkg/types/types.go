@@ -17,7 +17,7 @@ func (u CatalogId) IsNil() bool {
 type CatalogObjectType string
 
 const (
-	CatalogObjecTypeParameterSchema         CatalogObjectType = "parameter_schema"
+	CatalogObjectTypeParameterSchema        CatalogObjectType = "parameter_schema"
 	CatalogObjectTypeCollectionSchema       CatalogObjectType = "collection_schema"
 	CatalogObjectTypeCatalogCollectionValue CatalogObjectType = "collection_value"
 )

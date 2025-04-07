@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 
 	"github.com/mugiliam/common/apperrors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
-	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 type V1CollectionManager struct {
@@ -57,11 +57,11 @@ func (cm *V1CollectionManager) Path() string {
 	return cm.collectionSchema.Metadata.Path
 }
 
-func (cm *V1CollectionManager) StorageRepresentation() schemastore.SchemaStorageRepresentation {
+func (cm *V1CollectionManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	s := schemastore.SchemaStorageRepresentation{
 		Version: cm.version,
 		Type:    types.CatalogObjectTypeCollectionSchema,
 	}
 	s.Schema, _ = json.Marshal(cm.collectionSchema.Spec)
-	return s
+	return &s
 }

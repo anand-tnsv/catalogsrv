@@ -3,9 +3,10 @@ package validationerrors
 import "github.com/mugiliam/common/apperrors"
 
 var (
-	ErrSchemaValidation apperrors.Error = apperrors.New("error validating schema")
-	ErrEmptySchema      apperrors.Error = ErrSchemaValidation.Msg("empty schema")
-	ErrInvalidVersion   apperrors.Error = ErrSchemaValidation.Msg("invalid version")
+	ErrSchemaValidation    apperrors.Error = apperrors.New("error validating schema")
+	ErrEmptySchema         apperrors.Error = ErrSchemaValidation.Msg("empty schema")
+	ErrInvalidVersion      apperrors.Error = ErrSchemaValidation.Msg("invalid version")
+	ErrSchemaSerialization apperrors.Error = ErrSchemaValidation.Msg("error serializing schema")
 
 	ErrValueValidation apperrors.Error = apperrors.New("error validating value")
 	ErrInvalidType     apperrors.Error = ErrValueValidation.Msg("invalid type")

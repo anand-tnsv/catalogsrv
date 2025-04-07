@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 )
 
-func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) error {
+func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -52,7 +53,7 @@ func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.Ca
 	return nil
 }
 
-func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, error) {
+func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -63,7 +64,7 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 
 	// Query to select catalog object based on composite key (hash, tenant_id)
 	query := `
-		SELECT hash, type, tenant_id, data
+		SELECT hash, type, version, tenant_id, data
 		FROM catalog_objects
 		WHERE hash = $1 AND tenant_id = $2
 	`
@@ -71,7 +72,7 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 
 	var obj models.CatalogObject
 	// Scan the result into obj fields
-	err := row.Scan(&obj.Hash, &obj.Type, &obj.TenantID, &obj.Data)
+	err := row.Scan(&obj.Hash, &obj.Type, &obj.Version, &obj.TenantID, &obj.Data)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("catalog object not found")

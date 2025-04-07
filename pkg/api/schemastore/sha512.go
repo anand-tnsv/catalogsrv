@@ -1,4 +1,4 @@
-package common
+package schemastore
 
 import (
 	"crypto/sha512"

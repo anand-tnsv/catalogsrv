@@ -2,13 +2,16 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/mugiliam/common/apperrors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/collection"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/customvalidators"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/parameter"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 type V1ResourceManager struct {
@@ -39,10 +42,42 @@ func NewV1ResourceManager(ctx context.Context, rsrcJson []byte, options ...schem
 			return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 		}
 	}
+	return buildResourceManager(ctx, rs, rsrcJson, options...)
+}
+
+func LoadV1ResourceManager(ctx context.Context, s *schemastore.SchemaStorageRepresentation, m *schemamanager.ResourceMetadata) (*V1ResourceManager, apperrors.Error) {
+	rs := &ResourceSchema{}
+	rs.Version = s.Version
+	switch s.Type {
+	case types.CatalogObjectTypeParameterSchema:
+		rs.Kind = "Parameter"
+	case types.CatalogObjectTypeCollectionSchema:
+		rs.Kind = "Collection"
+	}
+	rs.Metadata, _ = json.Marshal(m)
+	rs.Spec, _ = json.Marshal(s.Schema)
+
+	ves := rs.Validate()
+	if ves != nil {
+		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
+	}
+
+	return buildResourceManager(ctx, rs, nil)
+}
+
+func buildResourceManager(ctx context.Context, rs *ResourceSchema, rsrcJson []byte, options ...schemamanager.Options) (*V1ResourceManager, apperrors.Error) {
+	if rs == nil {
+		return nil, validationerrors.ErrEmptySchema
+	}
+	if rsrcJson == nil {
+		rsrcJson, _ = json.Marshal(rs)
+	}
 	rm := &V1ResourceManager{
 		resourceSchema: rs,
 	}
+
 	// Initialize the appropriate manager based on the kind
+	var err apperrors.Error
 	switch rs.Kind {
 	case "Parameter":
 		if rm.parameterManager, err = parameter.NewV1ParameterManager(ctx, rs.Version, rsrcJson, options...); err != nil {
@@ -57,6 +92,7 @@ func NewV1ResourceManager(ctx context.Context, rsrcJson []byte, options ...schem
 	}
 
 	return rm, nil
+
 }
 
 func (rm *V1ResourceManager) Version() string {
@@ -73,4 +109,19 @@ func (rm *V1ResourceManager) ParameterManager() schemamanager.ParameterManager {
 
 func (rm *V1ResourceManager) CollectionManager() schemamanager.CollectionManager {
 	return rm.collectionManager
+}
+
+func (rm *V1ResourceManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
+	var s *schemastore.SchemaStorageRepresentation = nil
+	switch rm.Kind() {
+	case "Parameter":
+		if rm.parameterManager != nil {
+			s = rm.parameterManager.StorageRepresentation()
+		}
+	case "Collection":
+		if rm.collectionManager != nil {
+			s = rm.collectionManager.StorageRepresentation()
+		}
+	}
+	return s
 }
