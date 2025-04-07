@@ -35,6 +35,16 @@ type DB_ interface {
 	UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error
 	DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) error
 
+	// Version
+	CreateVersion(ctx context.Context, version *models.Version) error
+	GetVersion(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID) (*models.Version, error)
+	GetVersionByLabel(ctx context.Context, label string, catalogID, variantID uuid.UUID) (*models.Version, error)
+	SetVersionLabel(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID, newLabel string) error
+	UpdateVersionDescription(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID, newDescription string) error
+	DeleteVersion(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID) error
+	CountVersionsInCatalogAndVariant(ctx context.Context, catalogID, variantID uuid.UUID) (int, error)
+	GetNamedVersions(ctx context.Context, catalogID, variantID uuid.UUID) ([]models.Version, error)
+
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error
 	GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error)

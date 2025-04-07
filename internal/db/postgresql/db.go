@@ -79,9 +79,9 @@ func getTenantAndProjectFromContext(ctx context.Context) (tenantID types.TenantI
 
 	// Validate tenantID and projectID to ensure they are not empty
 	if tenantID == "" {
-		err = dberror.ErrMissingTenantID
+		err = dberror.ErrMissingTenantID.Err(dberror.ErrInvalidInput)
 	} else if projectID == "" {
-		err = dberror.ErrMissingProjecID
+		err = dberror.ErrMissingProjecID.Err(dberror.ErrInvalidInput)
 	}
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve tenant and project IDs from context")

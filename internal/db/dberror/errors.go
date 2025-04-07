@@ -74,6 +74,6 @@ var (
 	ErrNotFound        apperrors.Error = ErrDatabase.Msg("not found")
 	ErrInvalidInput    apperrors.Error = ErrDatabase.Msg("invalid input")
 	ErrInvalidCatalog  apperrors.Error = ErrDatabase.Msg("invalid catalog")
-	ErrMissingTenantID apperrors.Error = ErrDatabase.Msg("missing tenant ID")
-	ErrMissingProjecID apperrors.Error = ErrDatabase.Msg("missing project ID")
+	ErrMissingTenantID apperrors.Error = ErrInvalidInput.Msg("missing tenant ID")
+	ErrMissingProjecID apperrors.Error = ErrInvalidInput.Msg("missing project ID")
 )
