@@ -141,14 +141,9 @@ func TestCreateVersion(t *testing.T) {
 	assert.NoError(t, err)
 	defer DB(ctx).DeleteVersion(ctx, emptyLabelVersion.VersionNum, variant.VariantID, catalog.CatalogID)
 
-	// Test case: Missing tenant ID or project ID in context (should fail)
+	// Test case: Missing tenant ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	err = DB(ctx).CreateVersion(ctxWithoutTenant, &version)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).CreateVersion(ctxWithoutProject, &version)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -222,7 +217,6 @@ func TestGetVersion(t *testing.T) {
 	assert.Equal(t, info, retrievedVersion.Info)
 	assert.Equal(t, variant.VariantID, retrievedVersion.VariantID)
 	assert.Equal(t, catalog.CatalogID, retrievedVersion.CatalogID)
-	assert.Equal(t, projectID, retrievedVersion.ProjectID)
 	assert.Equal(t, tenantID, retrievedVersion.TenantID)
 
 	// Test case: Retrieve a non-existent version (should return an error)
@@ -234,12 +228,6 @@ func TestGetVersion(t *testing.T) {
 	// Test case: Retrieve with missing tenant ID in context (should return an error)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	_, err = DB(ctx).GetVersion(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	// Test case: Retrieve with missing project ID in context (should return an error)
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	_, err = DB(ctx).GetVersion(ctxWithoutProject, version.VersionNum, variant.VariantID, catalog.CatalogID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -320,12 +308,6 @@ func TestDeleteVersion(t *testing.T) {
 	// Test case: Delete with missing tenant ID in context (should return an error)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	err = DB(ctx).DeleteVersion(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	// Test case: Delete with missing project ID in context (should return an error)
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).DeleteVersion(ctxWithoutProject, version.VersionNum, variant.VariantID, catalog.CatalogID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -432,12 +414,6 @@ func TestSetVersionLabel(t *testing.T) {
 	err = DB(ctx).SetVersionLabel(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID, "new_label_with_missing_tenant")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	// Test case: Set label with missing project ID in context (should return an error)
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).SetVersionLabel(ctxWithoutProject, version.VersionNum, variant.VariantID, catalog.CatalogID, "new_label_with_missing_project")
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
 
 func TestUpdateVersionDescription(t *testing.T) {
@@ -529,12 +505,6 @@ func TestUpdateVersionDescription(t *testing.T) {
 	// Test case: Update description with missing tenant ID in context (should return an error)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	err = DB(ctx).UpdateVersionDescription(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID, "Description with missing tenant")
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	// Test case: Update description with missing project ID in context (should return an error)
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).UpdateVersionDescription(ctxWithoutProject, version.VersionNum, variant.VariantID, catalog.CatalogID, "Description with missing project")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }

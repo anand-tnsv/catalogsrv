@@ -23,15 +23,16 @@ func TestCreateVariant(t *testing.T) {
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("P12345")
 
-	// Set the tenant ID and project ID in the context
+	// Set the tenant ID in the context
 	ctx = common.SetTenantIdInContext(ctx, tenantID)
 	ctx = common.SetProjectIdInContext(ctx, projectID)
 
-	// Create the tenant and project for testing
+	// Create the tenant for testing
 	err := DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
 	defer DB(ctx).DeleteTenant(ctx, tenantID)
 
+	// Create the project for testing
 	err = DB(ctx).CreateProject(ctx, projectID)
 	assert.NoError(t, err)
 	defer DB(ctx).DeleteProject(ctx, projectID)
@@ -100,14 +101,9 @@ func TestCreateVariant(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrAlreadyExists)
 
-	// Test case: Missing tenant ID or project ID in context (should fail)
+	// Test case: Missing tenant ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	err = DB(ctx).CreateVariant(ctxWithoutTenant, &variant)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).CreateVariant(ctxWithoutProject, &variant)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -179,11 +175,6 @@ func TestGetVariant(t *testing.T) {
 	// Test case: Missing tenant ID or project ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	_, err = DB(ctx).GetVariant(ctxWithoutTenant, catalog.CatalogID, variant.VariantID, "")
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	_, err = DB(ctx).GetVariant(ctxWithoutProject, catalog.CatalogID, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
@@ -276,14 +267,9 @@ func TestUpdateVariant(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
-	// Test case: Missing tenant ID or project ID in context (should fail)
+	// Test case: Missing tenant ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	err = DB(ctx).UpdateVariant(ctxWithoutTenant, variant.VariantID, "", &updatedVariant)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).UpdateVariant(ctxWithoutProject, variant.VariantID, "", &updatedVariant)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
@@ -396,14 +382,9 @@ func TestDeleteVariant(t *testing.T) {
 	err = DB(ctx).DeleteVariant(ctx, catalog.CatalogID, nonExistentVariantID, "")
 	assert.NoError(t, err)
 
-	// Test case: Missing tenant ID or project ID in context (should fail)
+	// Test case: Missing tenant ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
 	err = DB(ctx).DeleteVariant(ctxWithoutTenant, catalog.CatalogID, variant.VariantID, "")
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	ctxWithoutProject := common.SetProjectIdInContext(ctx, "")
-	err = DB(ctx).DeleteVariant(ctxWithoutProject, catalog.CatalogID, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
