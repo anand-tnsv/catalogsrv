@@ -6,6 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.4.0
 	github.com/go-chi/chi v1.5.5
 	github.com/go-playground/validator/v10 v10.22.1
+	github.com/golang/snappy v0.0.4
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgconn v1.9.1-0.20210724152538-d89c8390a530
 	github.com/jackc/pgtype v1.14.0

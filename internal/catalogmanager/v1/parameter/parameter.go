@@ -6,22 +6,15 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mugiliam/common/apperrors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/customvalidators"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/parameter/datatypes"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 )
 
 type ParameterSchema struct {
-	Metadata ParameterMetadata `json:"metadata" validate:"required"`
-	Spec     ParameterSpec     `json:"spec" validate:"required"`
-}
-
-type ParameterMetadata struct {
-	Name    string `json:"name" validate:"required,nameFormatValidator"`
-	Catalog string `json:"catalog" validate:"required,nameFormatValidator"`
-	Path    string `json:"path" validate:"resourcePathValidator"`
+	Spec ParameterSpec `json:"spec" validate:"required"`
 }
 
 type ParameterSpec struct {
@@ -64,11 +57,7 @@ func (ps *ParameterSchema) Validate() schemaerr.ValidationErrors {
 
 func ReadParameterSchema(version string, metadata, spec []byte) (*ParameterSchema, apperrors.Error) {
 	ps := ParameterSchema{}
-	err := json.Unmarshal(metadata, &ps.Metadata)
-	if err != nil {
-		return nil, validationerrors.ErrSchemaValidation.Msg("failed to read parameter metadata")
-	}
-	err = json.Unmarshal(spec, &ps.Spec)
+	err := json.Unmarshal(spec, &ps.Spec)
 	if err != nil {
 		return nil, validationerrors.ErrSchemaValidation.Msg("failed to read parameter spec")
 	}

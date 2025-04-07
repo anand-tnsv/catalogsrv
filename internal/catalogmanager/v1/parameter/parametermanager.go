@@ -72,18 +72,6 @@ func NewV1ParameterManager(ctx context.Context, version string, rsrcJson []byte,
 	}, nil
 }
 
-func (pm *V1ParameterManager) Name() string {
-	return pm.parameterSchema.Metadata.Name
-}
-
-func (pm *V1ParameterManager) Catalog() string {
-	return pm.parameterSchema.Metadata.Catalog
-}
-
-func (pm *V1ParameterManager) Path() string {
-	return pm.parameterSchema.Metadata.Path
-}
-
 func (pm *V1ParameterManager) DataType() string {
 	return pm.parameterSchema.Spec.DataType
 }

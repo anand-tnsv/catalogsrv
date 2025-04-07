@@ -6,10 +6,11 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mugiliam/common/apperrors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/customvalidators" // Register custom validators
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 )
 
 /*
@@ -20,10 +21,10 @@ type ResourceHeader struct {
 */
 // ResourceSchema represents a schema for a resource.
 type ResourceSchema struct {
-	Version  string          `json:"version" validate:"required"`
-	Kind     string          `json:"kind" validate:"required,kindValidator"`
-	Metadata json.RawMessage `json:"metadata" validate:"required"`
-	Spec     json.RawMessage `json:"spec" validate:"required"`
+	Version  string                         `json:"version" validate:"required"`
+	Kind     string                         `json:"kind" validate:"required,kindValidator"`
+	Metadata schemamanager.ResourceMetadata `json:"metadata" validate:"required"`
+	Spec     json.RawMessage                `json:"spec" validate:"required"`
 }
 
 const (
@@ -70,6 +71,11 @@ func (rs *ResourceSchema) Validate() schemaerr.ValidationErrors {
 		case "kindValidator":
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrUnsupportedKind(jsonFieldName, val))
+		case "nameFormatValidator":
+			val, _ := e.Value().(string)
+			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
+		case "resourcePathValidator":
+			ves = append(ves, schemaerr.ErrInvalidResourcePath(jsonFieldName))
 		default:
 			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}

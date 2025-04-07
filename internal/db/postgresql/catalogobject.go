@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/golang/snappy"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/rs/zerolog/log"
 )
 
 func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error {
@@ -28,13 +30,17 @@ func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.Ca
 		return dberror.ErrInvalidInput.Msg("data cannot be nil")
 	}
 
+	// snappy compress the data
+	dataZ := snappy.Encode(nil, obj.Data)
+	log.Ctx(ctx).Debug().Msgf("raw: %d, compressed: %d", len(obj.Data), len(dataZ))
+
 	// Insert the catalog object into the database
 	query := `
 		INSERT INTO catalog_objects (hash, type, version, tenant_id, data)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (hash, tenant_id) DO NOTHING;
 	`
-	result, err := h.conn().ExecContext(ctx, query, obj.Hash, obj.Type, obj.Version, tenantID, obj.Data)
+	result, err := h.conn().ExecContext(ctx, query, obj.Hash, obj.Type, obj.Version, tenantID, dataZ)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -71,6 +77,7 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 	row := h.conn().QueryRowContext(ctx, query, hash, tenantID)
 
 	var obj models.CatalogObject
+
 	// Scan the result into obj fields
 	err := row.Scan(&obj.Hash, &obj.Type, &obj.Version, &obj.TenantID, &obj.Data)
 	if err != nil {
@@ -79,5 +86,12 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 		}
 		return nil, dberror.ErrDatabase.Err(err)
 	}
+
+	// Decompress the data
+	obj.Data, err = snappy.Decode(nil, obj.Data)
+	if err != nil {
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+
 	return &obj, nil
 }

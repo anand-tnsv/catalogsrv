@@ -7,64 +7,157 @@ import (
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/stretchr/testify/assert"
+	"sigs.k8s.io/yaml"
 )
 
 func TestResourceSchema_Validate(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    ResourceSchema
-		expected schemaerr.ValidationErrors
+		name      string
+		yamlInput string
+		expected  schemaerr.ValidationErrors
 	}{
 		{
 			name: "valid resource schema",
-			input: ResourceSchema{
-
-				Version:  "v1",
-				Kind:     "Parameter",
-				Metadata: json.RawMessage(`{"name": "example"}`),
-				Spec:     json.RawMessage(`{"description": "example spec"}`),
-			},
+			yamlInput: `
+version: v1
+kind: Parameter
+metadata:
+  name: validName
+  catalog: validCatalog
+  path: /valid/path
+spec:
+  description: example spec
+`,
 			expected: nil,
 		},
 		{
-			name: "missing required version",
-			input: ResourceSchema{
-				Kind:     "Parameter",
-				Metadata: json.RawMessage(`{"name": "example"}`),
-				Spec:     json.RawMessage(`{"description": "example spec"}`),
+			name: "invalid name in metadata",
+			yamlInput: `
+version: v1
+kind: Parameter
+metadata:
+  name: "Invalid Name!" # contains spaces and special characters
+  catalog: validCatalog
+  path: /valid/path
+spec:
+  description: example spec
+`,
+			expected: schemaerr.ValidationErrors{
+				schemaerr.ErrInvalidNameFormat("metadata.name", "Invalid Name!"),
 			},
+		},
+		{
+			name: "invalid catalog in metadata",
+			yamlInput: `
+version: v1
+kind: Parameter
+metadata:
+  name: validName
+  catalog: "Invalid Catalog!" # contains spaces and special characters
+  path: /valid/path
+spec:
+  description: example spec
+`,
+			expected: schemaerr.ValidationErrors{
+				schemaerr.ErrInvalidNameFormat("metadata.catalog", "Invalid Catalog!"),
+			},
+		},
+		{
+			name: "invalid path in metadata",
+			yamlInput: `
+version: v1
+kind: Parameter
+metadata:
+  name: validName
+  catalog: validCatalog
+  path: "invalid/path" # does not start with a slash
+spec:
+  description: example spec
+`,
+			expected: schemaerr.ValidationErrors{
+				schemaerr.ErrInvalidResourcePath("metadata.path"),
+			},
+		},
+		{
+			name: "missing required version",
+			yamlInput: `
+kind: Parameter
+metadata:
+  name: validName
+  catalog: validCatalog
+  path: /valid/path
+spec:
+  description: example spec
+`,
 			expected: schemaerr.ValidationErrors{
 				schemaerr.ErrMissingRequiredAttribute("version"),
 			},
 		},
 		{
-			name: "invalid kind",
-			input: ResourceSchema{
-				Version:  "v1",
-				Kind:     "InvalidKind",
-				Metadata: json.RawMessage(`{"name": "example"}`),
-				Spec:     json.RawMessage(`{"description": "example spec"}`),
-			},
+			name: "missing required metadata.name",
+			yamlInput: `
+version: v1
+kind: Parameter
+metadata:
+  catalog: validCatalog
+  path: /valid/path
+spec:
+  description: example spec
+`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrUnsupportedKind("kind", "InvalidKind"),
+				schemaerr.ErrMissingRequiredAttribute("metadata.name"),
 			},
 		},
 		{
-			name: "missing required metadata",
-			input: ResourceSchema{
-				Version: "v1",
-				Kind:    "Parameter",
-				Spec:    json.RawMessage(`{"description": "example spec"}`),
-			},
+			name: "missing required metadata.catalog",
+			yamlInput: `
+version: v1
+kind: Parameter
+metadata:
+  name: validName
+  path: /valid/path
+spec:
+  description: example spec
+`,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMissingRequiredAttribute("metadata"),
+				schemaerr.ErrMissingRequiredAttribute("metadata.catalog"),
+			},
+		},
+		{
+			name: "missing required metadata.path",
+			yamlInput: `
+version: v1
+kind: Parameter
+metadata:
+  name: validName
+  catalog: validCatalog
+spec:
+  description: example spec
+`,
+			expected: schemaerr.ValidationErrors{
+				schemaerr.ErrMissingRequiredAttribute("metadata.path"),
 			},
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
-			actual := tt.input.Validate()
+			// Convert YAML input to JSON for unmarshaling into ResourceSchema struct
+			var input ResourceSchema
+			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlInput))
+			if err != nil {
+				t.Fatalf("failed to convert YAML to JSON: %v", err)
+			}
+
+			// Unmarshal JSON into the ResourceSchema struct
+			err = json.Unmarshal(jsonData, &input)
+			if err != nil {
+				t.Fatalf("failed to unmarshal JSON input: %v", err)
+			}
+
+			// Validate the schema
+			actual := input.Validate()
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

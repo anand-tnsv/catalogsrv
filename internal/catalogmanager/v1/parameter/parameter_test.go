@@ -29,47 +29,6 @@ spec:
 			expected: nil,
 		},
 		{
-			name: "missing required name in metadata",
-			yamlInput: `
-metadata:
-  catalog: validCatalog
-  path: /valid_path
-spec:
-  dataType: Integer
-`,
-			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMissingRequiredAttribute("metadata.name"),
-			},
-		},
-		{
-			name: "invalid name format in metadata",
-			yamlInput: `
-metadata:
-  name: Invalid Name!
-  catalog: validCatalog
-  path: /valid_path
-spec:
-  dataType: Integer
-`,
-			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidNameFormat("metadata.name", "Invalid Name!"),
-			},
-		},
-		{
-			name: "invalid resource path in metadata",
-			yamlInput: `
-metadata:
-  name: validName
-  catalog: validCatalog
-  path: invalid_path
-spec:
-  dataType: Integer
-`,
-			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidResourcePath("metadata.path"),
-			},
-		},
-		{
 			name: "missing required data type in spec",
 			yamlInput: `
 metadata:
@@ -87,6 +46,7 @@ spec:
 	}
 
 	for _, tt := range tests {
+		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			// Convert YAML input to JSON for unmarshaling into struct
 			var input ParameterSchema

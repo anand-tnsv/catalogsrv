@@ -10,15 +10,8 @@ import (
 )
 
 type CollectionSchema struct {
-	Version  string             `json:"version" validate:"required"`
-	Metadata CollectionMetadata `json:"metadata" validate:"required"`
-	Spec     CollectionSpec     `json:"spec" validate:"required"`
-}
-
-type CollectionMetadata struct {
-	Name    string `json:"name" validate:"required,nameFormatValidator"`
-	Catalog string `json:"catalog" validate:"required,nameFormatValidator"`
-	Path    string `json:"path" validate:"resourcePathValidator"`
+	Version string         `json:"version" validate:"required"`
+	Spec    CollectionSpec `json:"spec" validate:"required"`
 }
 
 type CollectionSpec struct {

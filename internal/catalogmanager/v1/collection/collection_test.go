@@ -96,51 +96,10 @@ spec:
 				schemaerr.ErrShouldContainSchemaOrType("spec.parameters.maxRetries.dataType"),
 			},
 		},
-		{
-			name: "invalid name format in metadata",
-			yamlInput: `
-version: v1
-metadata:
-  name: Invalid Name!
-  catalog: myCatalog
-  path: /valid/path
-spec:
-  parameters:
-    maxRetries:
-      schema: IntegerParamSchema
-      default: 5
-  collections:
-    databaseConfig:
-      schema: DatabaseConfigCollection
-`,
-			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidNameFormat("metadata.name", "Invalid Name!"),
-			},
-		},
-		{
-			name: "invalid resource path in metadata",
-			yamlInput: `
-version: v1
-metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
-  path: invalid_path
-spec:
-  parameters:
-    maxRetries:
-      schema: IntegerParamSchema
-      default: 5
-  collections:
-    databaseConfig:
-      schema: DatabaseConfigCollection
-`,
-			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidResourcePath("metadata.path"),
-			},
-		},
 	}
 
 	for _, tt := range tests {
+		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			// Convert YAML input to JSON for unmarshaling into struct
 			var input CollectionSchema

@@ -54,7 +54,7 @@ func LoadV1ResourceManager(ctx context.Context, s *schemastore.SchemaStorageRepr
 	case types.CatalogObjectTypeCollectionSchema:
 		rs.Kind = "Collection"
 	}
-	rs.Metadata, _ = json.Marshal(m)
+	rs.Metadata = *m
 	rs.Spec, _ = json.Marshal(s.Schema)
 
 	ves := rs.Validate()
@@ -101,6 +101,22 @@ func (rm *V1ResourceManager) Version() string {
 
 func (rm *V1ResourceManager) Kind() string {
 	return rm.resourceSchema.Kind
+}
+
+func (rm *V1ResourceManager) Metadata() schemamanager.ResourceMetadata {
+	return rm.resourceSchema.Metadata
+}
+
+func (rm *V1ResourceManager) Name() string {
+	return rm.resourceSchema.Metadata.Name
+}
+
+func (rm *V1ResourceManager) Path() string {
+	return rm.resourceSchema.Metadata.Path
+}
+
+func (rm *V1ResourceManager) Catalog() string {
+	return rm.resourceSchema.Metadata.Catalog
 }
 
 func (rm *V1ResourceManager) ParameterManager() schemamanager.ParameterManager {
