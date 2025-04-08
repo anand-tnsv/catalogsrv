@@ -8,7 +8,7 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/resource"
+	resource "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/object"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
@@ -21,7 +21,7 @@ type VersionHeader struct {
 	Version string `json:"version"`
 }
 
-func NewResource(ctx context.Context, rsrcJson []byte) (schemamanager.ResourceManager, apperrors.Error) {
+func NewObject(ctx context.Context, rsrcJson []byte, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
 	if len(rsrcJson) == 0 {
 		return nil, validationerrors.ErrEmptySchema
 	}
@@ -35,15 +35,21 @@ func NewResource(ctx context.Context, rsrcJson []byte) (schemamanager.ResourceMa
 	if version.Version == "" {
 		return nil, validationerrors.ErrSchemaValidation.Msg(schemaerr.ErrMissingRequiredAttribute("version").Error())
 	}
+
 	// validate the version
 	if version.Version != "v1" {
 		return nil, validationerrors.ErrInvalidVersion
 	}
 
-	return resource.NewV1ResourceManager(ctx, []byte(rsrcJson), schemamanager.WithValidation())
+	// Replace the metadata if one is provided
+	if m != nil {
+		setMetadata(rsrcJson, *m)
+	}
+
+	return resource.NewV1ObjectManager(ctx, []byte(rsrcJson), schemamanager.WithValidation())
 }
 
-func SaveResource(ctx context.Context, s *schemastore.SchemaStorageRepresentation, errorIfExists ...bool) apperrors.Error {
+func SaveObject(ctx context.Context, s *schemastore.SchemaStorageRepresentation, errorIfExists ...bool) apperrors.Error {
 	if s == nil {
 		return validationerrors.ErrEmptySchema
 	}
@@ -73,7 +79,7 @@ func SaveResource(ctx context.Context, s *schemastore.SchemaStorageRepresentatio
 	return nil
 }
 
-func LoadResource(ctx context.Context, hash string, m *schemamanager.ResourceMetadata) (schemamanager.ResourceManager, apperrors.Error) {
+func LoadObject(ctx context.Context, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
 	if hash == "" {
 		return nil, dberror.ErrInvalidInput.Msg("hash cannot be empty")
 	}
@@ -81,15 +87,15 @@ func LoadResource(ctx context.Context, hash string, m *schemamanager.ResourceMet
 	obj, err := db.DB(ctx).GetCatalogObject(ctx, hash)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
-			return nil, ErrResourceNotFound.Err(err)
+			return nil, ErrObjectNotFound.Err(err)
 		}
-		return nil, ErrUnableToLoadResource.Err(err)
+		return nil, ErrUnableToLoadObject.Err(err)
 	}
 
 	s := &schemastore.SchemaStorageRepresentation{}
 	// we'll get the data from the object and not the table
 	if err := json.Unmarshal(obj.Data, s); err != nil {
-		return nil, ErrUnableToLoadResource.Err(err).Msg("failed to de-serialize catalog object data")
+		return nil, ErrUnableToLoadObject.Err(err).Msg("failed to de-serialize catalog object data")
 	}
 
 	if s.Type != obj.Type {
@@ -100,5 +106,5 @@ func LoadResource(ctx context.Context, hash string, m *schemamanager.ResourceMet
 		log.Ctx(ctx).Error().Str("Hash", hash).Msg("version mismatch when loading resource")
 	}
 
-	return resource.LoadV1ResourceManager(ctx, s, m)
+	return resource.LoadV1ObjectManager(ctx, s, m)
 }

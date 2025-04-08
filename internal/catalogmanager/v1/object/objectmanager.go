@@ -14,21 +14,21 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-type V1ResourceManager struct {
-	resourceSchema    *ResourceSchema
+type V1ObjectManager struct {
+	resourceSchema    *ObjectSchema
 	parameterManager  *parameter.V1ParameterManager
 	collectionManager *collection.V1CollectionManager
 }
 
-var _ schemamanager.ResourceManager = &V1ResourceManager{} // Ensure V1ResourceManager implements schemamanager.ResourceManager
+var _ schemamanager.ObjectManager = &V1ObjectManager{} // Ensure V1ObjectManager implements schemamanager.ObjectManager
 
-func NewV1ResourceManager(ctx context.Context, rsrcJson []byte, options ...schemamanager.Options) (*V1ResourceManager, apperrors.Error) {
+func NewV1ObjectManager(ctx context.Context, rsrcJson []byte, options ...schemamanager.Options) (*V1ObjectManager, apperrors.Error) {
 	o := schemamanager.OptionsConfig{}
 	for _, option := range options {
 		option(&o)
 	}
 
-	rs, err := ReadResourceSchema(string(rsrcJson))
+	rs, err := ReadObjectSchema(string(rsrcJson))
 	if err != nil {
 		return nil, err
 	}
@@ -42,11 +42,11 @@ func NewV1ResourceManager(ctx context.Context, rsrcJson []byte, options ...schem
 			return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 		}
 	}
-	return buildResourceManager(ctx, rs, rsrcJson, options...)
+	return buildObjectManager(ctx, rs, rsrcJson, options...)
 }
 
-func LoadV1ResourceManager(ctx context.Context, s *schemastore.SchemaStorageRepresentation, m *schemamanager.ResourceMetadata) (*V1ResourceManager, apperrors.Error) {
-	rs := &ResourceSchema{}
+func LoadV1ObjectManager(ctx context.Context, s *schemastore.SchemaStorageRepresentation, m *schemamanager.ObjectMetadata) (*V1ObjectManager, apperrors.Error) {
+	rs := &ObjectSchema{}
 	rs.Version = s.Version
 	switch s.Type {
 	case types.CatalogObjectTypeParameterSchema:
@@ -62,17 +62,17 @@ func LoadV1ResourceManager(ctx context.Context, s *schemastore.SchemaStorageRepr
 		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 	}
 
-	return buildResourceManager(ctx, rs, nil)
+	return buildObjectManager(ctx, rs, nil)
 }
 
-func buildResourceManager(ctx context.Context, rs *ResourceSchema, rsrcJson []byte, options ...schemamanager.Options) (*V1ResourceManager, apperrors.Error) {
+func buildObjectManager(ctx context.Context, rs *ObjectSchema, rsrcJson []byte, options ...schemamanager.Options) (*V1ObjectManager, apperrors.Error) {
 	if rs == nil {
 		return nil, validationerrors.ErrEmptySchema
 	}
 	if rsrcJson == nil {
 		rsrcJson, _ = json.Marshal(rs)
 	}
-	rm := &V1ResourceManager{
+	rm := &V1ObjectManager{
 		resourceSchema: rs,
 	}
 
@@ -95,39 +95,39 @@ func buildResourceManager(ctx context.Context, rs *ResourceSchema, rsrcJson []by
 
 }
 
-func (rm *V1ResourceManager) Version() string {
+func (rm *V1ObjectManager) Version() string {
 	return rm.resourceSchema.Version
 }
 
-func (rm *V1ResourceManager) Kind() string {
+func (rm *V1ObjectManager) Kind() string {
 	return rm.resourceSchema.Kind
 }
 
-func (rm *V1ResourceManager) Metadata() schemamanager.ResourceMetadata {
+func (rm *V1ObjectManager) Metadata() schemamanager.ObjectMetadata {
 	return rm.resourceSchema.Metadata
 }
 
-func (rm *V1ResourceManager) Name() string {
+func (rm *V1ObjectManager) Name() string {
 	return rm.resourceSchema.Metadata.Name
 }
 
-func (rm *V1ResourceManager) Path() string {
+func (rm *V1ObjectManager) Path() string {
 	return rm.resourceSchema.Metadata.Path
 }
 
-func (rm *V1ResourceManager) Catalog() string {
+func (rm *V1ObjectManager) Catalog() string {
 	return rm.resourceSchema.Metadata.Catalog
 }
 
-func (rm *V1ResourceManager) ParameterManager() schemamanager.ParameterManager {
+func (rm *V1ObjectManager) ParameterManager() schemamanager.ParameterManager {
 	return rm.parameterManager
 }
 
-func (rm *V1ResourceManager) CollectionManager() schemamanager.CollectionManager {
+func (rm *V1ObjectManager) CollectionManager() schemamanager.CollectionManager {
 	return rm.collectionManager
 }
 
-func (rm *V1ResourceManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
+func (rm *V1ObjectManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	var s *schemastore.SchemaStorageRepresentation = nil
 	switch rm.Kind() {
 	case "Parameter":

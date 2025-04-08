@@ -70,7 +70,7 @@ func ErrInvalidNameFormat(attr string, value ...string) ValidationError {
 	}
 }
 
-func ErrInvalidResourcePath(attr string, value ...any) ValidationError {
+func ErrInvalidObjectPath(attr string, value ...any) ValidationError {
 	return ValidationError{
 		Field:  attr,
 		Value:  value,

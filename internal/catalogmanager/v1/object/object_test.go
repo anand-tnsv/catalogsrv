@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func TestResourceSchema_Validate(t *testing.T) {
+func TestObjectSchema_Validate(t *testing.T) {
 	tests := []struct {
 		name      string
 		yamlInput string
@@ -75,7 +75,7 @@ spec:
   description: example spec
 `,
 			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrInvalidResourcePath("metadata.path"),
+				schemaerr.ErrInvalidObjectPath("metadata.path"),
 			},
 		},
 		{
@@ -143,14 +143,14 @@ spec:
 	for _, tt := range tests {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
-			// Convert YAML input to JSON for unmarshaling into ResourceSchema struct
-			var input ResourceSchema
+			// Convert YAML input to JSON for unmarshaling into ObjectSchema struct
+			var input ObjectSchema
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlInput))
 			if err != nil {
 				t.Fatalf("failed to convert YAML to JSON: %v", err)
 			}
 
-			// Unmarshal JSON into the ResourceSchema struct
+			// Unmarshal JSON into the ObjectSchema struct
 			err = json.Unmarshal(jsonData, &input)
 			if err != nil {
 				t.Fatalf("failed to unmarshal JSON input: %v", err)
@@ -253,7 +253,7 @@ func TestValidateJsonSchema(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := schemavalidator.ValidateJsonSchema(ResourceSchemaJsonSchema, tt.input)
+			actual := schemavalidator.ValidateJsonSchema(ObjectSchemaJsonSchema, tt.input)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

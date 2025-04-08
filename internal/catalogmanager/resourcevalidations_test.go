@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/yaml"
@@ -168,7 +168,7 @@ spec:
 			ctx = log.Logger.WithContext(ctx)
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
-				_, err := NewResource(ctx, jsonData)
+				_, err := NewObject(ctx, jsonData, nil)
 				errStr := ""
 				if err != nil {
 					errStr = err.Error()
@@ -298,7 +298,7 @@ spec:
 			ctx = log.Logger.WithContext(ctx)
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
-				_, err := NewResource(ctx, jsonData)
+				_, err := NewObject(ctx, jsonData, nil)
 				errStr := ""
 				if err != nil {
 					errStr = err.Error()

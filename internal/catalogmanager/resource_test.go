@@ -13,16 +13,16 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func TestSaveResource(t *testing.T) {
+func TestSaveObject(t *testing.T) {
 	tests := []struct {
 		name     string
-		metadata schemamanager.ResourceMetadata
+		metadata schemamanager.ObjectMetadata
 		yamlData string
 		expected string
 	}{
 		{
 			name: "valid parameter",
-			metadata: schemamanager.ResourceMetadata{
+			metadata: schemamanager.ObjectMetadata{
 				Name:    "example",
 				Catalog: "example-catalog",
 				Path:    "/example",
@@ -45,7 +45,7 @@ spec:
 		},
 		{
 			name: "valid collection with schema",
-			metadata: schemamanager.ResourceMetadata{
+			metadata: schemamanager.ObjectMetadata{
 				Name:    "AppConfigCollection",
 				Catalog: "myCatalog",
 				Path:    "/valid/path",
@@ -88,7 +88,7 @@ spec:
 		t.Run(tt.name, func(t *testing.T) {
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
-				r, err := NewResource(ctx, jsonData)
+				r, err := NewObject(ctx, jsonData, nil)
 				errStr := ""
 				if err != nil {
 					errStr = err.Error()
@@ -97,15 +97,15 @@ spec:
 					t.Errorf("got %v, want %v", err, tt.expected)
 				} else {
 					// Save the resource
-					err = SaveResource(ctx, r.StorageRepresentation())
+					err = SaveObject(ctx, r.StorageRepresentation())
 					if assert.NoError(t, err) {
 						// try to save again
-						err = SaveResource(ctx, r.StorageRepresentation(), true)
+						err = SaveObject(ctx, r.StorageRepresentation(), true)
 						if assert.Error(t, err) {
 							assert.ErrorIs(t, err, ErrAlreadyExists)
 						}
 						// load the resource from the database
-						lr, err := LoadResource(ctx, r.StorageRepresentation().GetHash(), &tt.metadata)
+						lr, err := LoadObject(ctx, r.StorageRepresentation().GetHash(), &tt.metadata)
 						if assert.NoError(t, err) { // Check if no error occurred
 							assert.NotNil(t, lr)                                                                       // Check if the loaded resource is not nil
 							assert.Equal(t, r.Kind(), lr.Kind())                                                       // Check if the kind matches

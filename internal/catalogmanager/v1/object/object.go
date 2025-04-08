@@ -14,17 +14,17 @@ import (
 )
 
 /*
-type ResourceHeader struct {
+type ObjectHeader struct {
 	Version string `json:"version" validate:"required"`
 	Kind    string `json:"kind" validate:"required,kindValidator"`
 }
 */
-// ResourceSchema represents a schema for a resource.
-type ResourceSchema struct {
-	Version  string                         `json:"version" validate:"required"`
-	Kind     string                         `json:"kind" validate:"required,kindValidator"`
-	Metadata schemamanager.ResourceMetadata `json:"metadata" validate:"required"`
-	Spec     json.RawMessage                `json:"spec" validate:"required"`
+// ObjectSchema represents a schema for a resource.
+type ObjectSchema struct {
+	Version  string                       `json:"version" validate:"required"`
+	Kind     string                       `json:"kind" validate:"required,kindValidator"`
+	Metadata schemamanager.ObjectMetadata `json:"metadata" validate:"required"`
+	Spec     json.RawMessage              `json:"spec" validate:"required"`
 }
 
 const (
@@ -48,7 +48,7 @@ func kindValidator(fl validator.FieldLevel) bool {
 	return false
 }
 
-func (rs *ResourceSchema) Validate() schemaerr.ValidationErrors {
+func (rs *ObjectSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 	err := schemavalidator.V().Struct(rs)
 	if err == nil {
@@ -75,7 +75,7 @@ func (rs *ResourceSchema) Validate() schemaerr.ValidationErrors {
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
 		case "resourcePathValidator":
-			ves = append(ves, schemaerr.ErrInvalidResourcePath(jsonFieldName))
+			ves = append(ves, schemaerr.ErrInvalidObjectPath(jsonFieldName))
 		default:
 			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}
@@ -83,9 +83,9 @@ func (rs *ResourceSchema) Validate() schemaerr.ValidationErrors {
 	return ves
 }
 
-// Read a json string in to a ResourceSchema struct
-func ReadResourceSchema(jsonStr string) (*ResourceSchema, apperrors.Error) {
-	rs := &ResourceSchema{}
+// Read a json string in to a ObjectSchema struct
+func ReadObjectSchema(jsonStr string) (*ObjectSchema, apperrors.Error) {
+	rs := &ObjectSchema{}
 	err := json.Unmarshal([]byte(jsonStr), rs)
 	if err != nil {
 		return nil, validationerrors.ErrSchemaValidation.Msg("failed to read resource schema")
@@ -97,7 +97,7 @@ func init() {
 	schemavalidator.V().RegisterValidation("kindValidator", kindValidator)
 }
 
-const ResourceSchemaJsonSchema = `{
+const ObjectSchemaJsonSchema = `{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"type": "object",
 		"properties": {

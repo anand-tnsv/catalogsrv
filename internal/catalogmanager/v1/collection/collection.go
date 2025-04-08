@@ -62,7 +62,7 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
 		case "resourcePathValidator":
-			ves = append(ves, schemaerr.ErrInvalidResourcePath(jsonFieldName))
+			ves = append(ves, schemaerr.ErrInvalidObjectPath(jsonFieldName))
 		case "noSpaces":
 			ves = append(ves, schemaerr.ErrInvalidAnnotation(jsonFieldName))
 		default:

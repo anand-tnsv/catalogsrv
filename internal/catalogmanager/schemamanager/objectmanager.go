@@ -2,7 +2,7 @@ package schemamanager
 
 import "github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
 
-type ResourceManager interface {
+type ObjectManager interface {
 	Version() string
 	Kind() string
 	ParameterManager() ParameterManager
