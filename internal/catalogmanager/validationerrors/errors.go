@@ -7,6 +7,7 @@ var (
 	ErrEmptySchema         apperrors.Error = ErrSchemaValidation.Msg("empty schema")
 	ErrInvalidVersion      apperrors.Error = ErrSchemaValidation.Msg("invalid version")
 	ErrSchemaSerialization apperrors.Error = ErrSchemaValidation.Msg("error serializing schema")
+	ErrInvalidSchema       apperrors.Error = ErrSchemaValidation.Msg("invalid schema")
 
 	ErrValueValidation apperrors.Error = apperrors.New("error validating value")
 	ErrInvalidType     apperrors.Error = ErrValueValidation.Msg("invalid type")

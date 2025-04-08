@@ -24,10 +24,10 @@ type DB_ interface {
 	DeleteProject(ctx context.Context, projectID types.ProjectId) error
 
 	// Catalog
-	CreateCatalog(ctx context.Context, catalog *models.Catalog) error
-	GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, error)
-	UpdateCatalog(ctx context.Context, catalog models.Catalog) error
-	DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) error
+	CreateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error
+	GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, apperrors.Error)
+	UpdateCatalog(ctx context.Context, catalog models.Catalog) apperrors.Error
+	DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) apperrors.Error
 
 	// Variant
 	CreateVariant(ctx context.Context, variant *models.Variant) error

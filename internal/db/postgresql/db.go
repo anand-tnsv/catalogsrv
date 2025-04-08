@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dbmanager"
@@ -72,7 +73,7 @@ func (h *hatchCatalogDb) Close(ctx context.Context) {
 	h.c.Close(ctx)
 }
 
-func getTenantAndProjectFromContext(ctx context.Context) (tenantID types.TenantId, projectID types.ProjectId, err error) {
+func getTenantAndProjectFromContext(ctx context.Context) (tenantID types.TenantId, projectID types.ProjectId, err apperrors.Error) {
 	err = nil
 	tenantID = common.TenantIdFromContext(ctx)
 	projectID = common.ProjectIdFromContext(ctx)

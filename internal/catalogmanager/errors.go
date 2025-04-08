@@ -8,4 +8,6 @@ var (
 	ErrObjectNotFound     apperrors.Error = ErrCatalogError.Msg("object not found")
 	ErrUnableToLoadObject apperrors.Error = ErrCatalogError.Msg("unable to load object")
 	ErrAlreadyExists      apperrors.Error = ErrCatalogError.Msg("object already exists")
+	ErrInvalidSchema      apperrors.Error = ErrCatalogError.Msg("invalid schema")
+	ErrInvalidProject     apperrors.Error = ErrCatalogError.Msg("invalid project")
 )

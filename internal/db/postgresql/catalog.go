@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/rs/zerolog/log"
@@ -12,13 +13,15 @@ import (
 
 // CreateCatalog inserts a new catalog into the database.
 // If the catalog name already exists for the project and tenant, it returns an error.
-func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Catalog) error {
+func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
 		return err
 	}
 	catalog.ProjectID = projectID
-	catalog.CatalogID = uuid.New()
+	if catalog.CatalogID == uuid.Nil {
+		catalog.CatalogID = uuid.New()
+	}
 
 	query := `
 		INSERT INTO catalogs (catalog_id, name, description, info, tenant_id, project_id)
@@ -30,14 +33,14 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 	// Execute the query directly using h.conn().QueryRowContext
 	row := h.conn().QueryRowContext(ctx, query, catalog.CatalogID, catalog.Name, catalog.Description, catalog.Info, tenantID, projectID)
 	var insertedCatalogID, insertedName string
-	err = row.Scan(&insertedCatalogID, &insertedName)
-	if err != nil {
-		if err == sql.ErrNoRows {
+	errDb := row.Scan(&insertedCatalogID, &insertedName)
+	if errDb != nil {
+		if errDb == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("catalog already exists")
 			return dberror.ErrAlreadyExists.Msg("catalog already exists")
 		}
-		log.Ctx(ctx).Error().Err(err).Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("failed to insert catalog")
-		return dberror.ErrDatabase.Err(err)
+		log.Ctx(ctx).Error().Err(errDb).Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("failed to insert catalog")
+		return dberror.ErrDatabase.Err(errDb)
 	}
 
 	return nil
@@ -45,7 +48,7 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 
 // GetCatalog retrieves a catalog from the database.
 // If both catalogID and name are provided, catalogID takes precedence.
-func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, error) {
+func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, apperrors.Error) {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -68,14 +71,14 @@ func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, na
 
 	// Scan the result into the catalog model
 	var catalog models.Catalog
-	err = row.Scan(&catalog.CatalogID, &catalog.Name, &catalog.Description, &catalog.Info, &catalog.ProjectID)
-	if err != nil {
-		if err == sql.ErrNoRows {
+	errDb := row.Scan(&catalog.CatalogID, &catalog.Name, &catalog.Description, &catalog.Info, &catalog.ProjectID)
+	if errDb != nil {
+		if errDb == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", name).Str("catalog_id", catalogID.String()).Msg("catalog not found")
 			return nil, dberror.ErrNotFound.Msg("catalog not found")
 		}
-		log.Ctx(ctx).Error().Err(err).Str("name", name).Str("catalog_id", catalogID.String()).Msg("failed to retrieve catalog")
-		return nil, dberror.ErrDatabase.Err(err)
+		log.Ctx(ctx).Error().Err(errDb).Str("name", name).Str("catalog_id", catalogID.String()).Msg("failed to retrieve catalog")
+		return nil, dberror.ErrDatabase.Err(errDb)
 	}
 
 	return &catalog, nil
@@ -83,7 +86,7 @@ func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, na
 
 // UpdateCatalog updates an existing catalog in the database.
 // If both catalogID and name are provided, catalogID takes precedence.
-func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catalog) error {
+func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catalog) apperrors.Error {
 	// Retrieve tenant and project IDs from context
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
@@ -113,14 +116,14 @@ func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catal
 
 	// Scan the updated values
 	var updatedCatalogID, updatedName string
-	err = row.Scan(&updatedCatalogID, &updatedName)
-	if err != nil {
-		if err == sql.ErrNoRows {
+	errDb := row.Scan(&updatedCatalogID, &updatedName)
+	if errDb != nil {
+		if errDb == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("catalog not found for update")
 			return dberror.ErrNotFound.Msg("catalog not found for update")
 		}
-		log.Ctx(ctx).Error().Err(err).Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("failed to update catalog")
-		return dberror.ErrDatabase.Err(err)
+		log.Ctx(ctx).Error().Err(errDb).Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("failed to update catalog")
+		return dberror.ErrDatabase.Err(errDb)
 	}
 
 	return nil
@@ -128,7 +131,7 @@ func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catal
 
 // DeleteCatalog deletes a catalog from the database.
 // If both catalogID and name are provided, catalogID takes precedence.
-func (h *hatchCatalogDb) DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) error {
+func (h *hatchCatalogDb) DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) apperrors.Error {
 	// Retrieve tenant and project IDs from context
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {

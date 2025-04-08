@@ -27,27 +27,6 @@ type ObjectSchema struct {
 	Spec     json.RawMessage              `json:"spec" validate:"required"`
 }
 
-const (
-	ParameterKind  = "Parameter"
-	CollectionKind = "Collection"
-)
-
-var validKinds = []string{
-	ParameterKind,
-	CollectionKind,
-}
-
-// kindValidator checks if the given kind is a valid resource kind.
-func kindValidator(fl validator.FieldLevel) bool {
-	kind := fl.Field().String()
-	for _, validKind := range validKinds {
-		if kind == validKind {
-			return true
-		}
-	}
-	return false
-}
-
 func (rs *ObjectSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 	err := schemavalidator.V().Struct(rs)
@@ -91,10 +70,6 @@ func ReadObjectSchema(jsonStr string) (*ObjectSchema, apperrors.Error) {
 		return nil, validationerrors.ErrSchemaValidation.Msg("failed to read resource schema")
 	}
 	return rs, nil
-}
-
-func init() {
-	schemavalidator.V().RegisterValidation("kindValidator", kindValidator)
 }
 
 const ObjectSchemaJsonSchema = `{
