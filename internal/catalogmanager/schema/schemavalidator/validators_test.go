@@ -1,4 +1,4 @@
-package customvalidators
+package schemavalidator
 
 import (
 	"testing"

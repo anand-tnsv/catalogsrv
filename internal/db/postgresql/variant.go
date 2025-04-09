@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgconn"
+	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
@@ -17,9 +18,9 @@ import (
 // If a variant with the same name and catalog ID already exists, the insertion is skipped.
 // Returns an error if the variant already exists, the variant name format is invalid,
 // the catalog ID is invalid, or there is a database error.
-func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) error {
+func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) apperrors.Error {
 	// Generate a new UUID for the variant ID
-	variant.VariantID = uuid.New()
+	variantID := uuid.New()
 
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
@@ -34,7 +35,7 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 	`
 
 	// Execute the query directly using h.conn().QueryRowContext
-	row := h.conn().QueryRowContext(ctx, query, variant.VariantID, variant.Name, variant.Description, variant.Info, variant.CatalogID, tenantID)
+	row := h.conn().QueryRowContext(ctx, query, variantID, variant.Name, variant.Description, variant.Info, variant.CatalogID, tenantID)
 	var insertedVariantID uuid.UUID
 	var insertedName string
 	err := row.Scan(&insertedVariantID, &insertedName)
@@ -53,17 +54,17 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 				return dberror.ErrInvalidCatalog
 			}
 		}
-		log.Ctx(ctx).Error().Err(err).Str("name", variant.Name).Str("variant_id", variant.VariantID.String()).Msg("failed to insert variant")
+		log.Ctx(ctx).Error().Err(err).Str("name", variant.Name).Str("variant_id", variantID.String()).Msg("failed to insert variant")
 		return dberror.ErrDatabase.Err(err)
 	}
-
+	variant.VariantID = insertedVariantID
 	return nil
 }
 
 // GetVariant retrieves a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
 // Returns the variant if found, or an error if the variant is not found or there is a database error.
-func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, error) {
+func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -110,7 +111,7 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, va
 // The VariantID and CatalogID fields cannot be updated.
 // Returns an error if the variant is not found, the variant name already exists for the given catalog ID,
 // the variant name format is invalid, or there is a database error.
-func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error {
+func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -167,38 +168,53 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 // DeleteVariant deletes a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
 // Returns an error if the variant is not found or there is a database error.
-func (h *hatchCatalogDb) DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) error {
+func (h *hatchCatalogDb) DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name string) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
 	}
+
 	if catalogID == uuid.Nil {
 		log.Ctx(ctx).Error().Msg("catalog ID is required")
 		return dberror.ErrInvalidInput.Msg("catalog ID is required")
 	}
 
+	if variantID == uuid.Nil && name == "" {
+		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
+		return dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")
+	}
+
 	var query string
 	var err error
+	var result sql.Result
+
 	if variantID != uuid.Nil {
 		query = `
 			DELETE FROM variants
-			WHERE variant_id = $1 AND catalog_id = $2 AND tenant_id = $3 ;
+			WHERE variant_id = $1 AND catalog_id = $2 AND tenant_id = $3;
 		`
-		_, err = h.conn().ExecContext(ctx, query, variantID, catalogID, tenantID)
-	} else if name != "" {
+		result, err = h.conn().ExecContext(ctx, query, variantID, catalogID, tenantID)
+	} else {
 		query = `
 			DELETE FROM variants
 			WHERE name = $1 AND catalog_id = $2 AND tenant_id = $3;
 		`
-		_, err = h.conn().ExecContext(ctx, query, name, catalogID, tenantID)
-	} else {
-		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
-		return dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")
+		result, err = h.conn().ExecContext(ctx, query, name, catalogID, tenantID)
 	}
 
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to delete variant")
 		return dberror.ErrDatabase.Err(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve result information")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	if rowsAffected == 0 {
+		log.Ctx(ctx).Info().Str("variant_id", variantID.String()).Str("variant_name", name).Str("catalog_id", catalogID.String()).Str("tenant_id", string(tenantID)).Msg("variant not found")
 	}
 
 	return nil

@@ -35,7 +35,8 @@ func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Vers
 
 	// Execute the query and scan the returned version_num
 	row := h.conn().QueryRowContext(ctx, query, label, version.Description, version.Info, version.VariantID, version.CatalogID, version.TenantID)
-	err := row.Scan(&version.VersionNum)
+	var versionNum int
+	err := row.Scan(&versionNum)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("label", version.Label).Str("variant_id", version.VariantID.String()).Str("catalog_id", version.CatalogID.String()).Msg("version already exists")
@@ -58,7 +59,7 @@ func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Vers
 		log.Ctx(ctx).Error().Err(err).Str("label", version.Label).Str("variant_id", version.VariantID.String()).Str("catalog_id", version.CatalogID.String()).Msg("failed to insert version")
 		return dberror.ErrDatabase.Err(err)
 	}
-
+	version.VersionNum = versionNum
 	return nil
 }
 

@@ -10,4 +10,6 @@ var (
 	ErrAlreadyExists      apperrors.Error = ErrCatalogError.Msg("object already exists")
 	ErrInvalidSchema      apperrors.Error = ErrCatalogError.Msg("invalid schema")
 	ErrInvalidProject     apperrors.Error = ErrCatalogError.Msg("invalid project")
+	ErrInvalidCatalog     apperrors.Error = ErrCatalogError.Msg("invalid catalog")
+	ErrVariantNotFound    apperrors.Error = ErrCatalogError.Msg("variant not found")
 )

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
-	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/customvalidators"
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/yaml"
 )

@@ -24,7 +24,7 @@ type catalogSchema struct {
 }
 
 type catalogMetadata struct {
-	Name        string `json:"name" validate:"required"`
+	Name        string `json:"name" validate:"required,nameFormatValidator"`
 	Description string `json:"description"`
 }
 
@@ -79,17 +79,18 @@ func (cm *catalogManager) Description() string {
 	return cm.c.Description
 }
 
-func (cm *catalogManager) Load(ctx context.Context, name string) apperrors.Error {
+func LoadCatalogManagerByName(ctx context.Context, name string) (schemamanager.CatalogManager, apperrors.Error) {
 	c, err := db.DB(ctx).GetCatalog(ctx, uuid.Nil, name)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
-			return ErrCatalogNotFound
+			return nil, ErrCatalogNotFound
 		}
 		log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-		return err
+		return nil, err
 	}
-	cm.c = *c
-	return nil
+	return &catalogManager{
+		c: *c,
+	}, nil
 }
 
 func (cm *catalogManager) Save(ctx context.Context) apperrors.Error {
@@ -99,6 +100,18 @@ func (cm *catalogManager) Save(ctx context.Context) apperrors.Error {
 			return ErrAlreadyExists.Msg("catalog already exists")
 		}
 		log.Ctx(ctx).Error().Err(err).Msg("failed to create catalog")
+		return err
+	}
+	return nil
+}
+
+func DeleteCatalogByName(ctx context.Context, name string) apperrors.Error {
+	err := db.DB(ctx).DeleteCatalog(ctx, uuid.Nil, name)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			return ErrCatalogNotFound
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to delete catalog")
 		return err
 	}
 	return nil

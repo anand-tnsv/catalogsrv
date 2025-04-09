@@ -202,6 +202,16 @@ func TestCreateCatalog(t *testing.T) {
 	assert.NoError(t, err)
 	defer DB(ctx).DeleteCatalog(ctx, catalog.CatalogID, "")
 
+	// Try to get id of created catalog by name
+	cId, err := DB(ctx).GetCatalogIDByName(ctx, catalog.Name)
+	assert.NoError(t, err)
+	assert.Equal(t, catalog.CatalogID, cId)
+
+	// Try to get an invalid name
+	cId, err = DB(ctx).GetCatalogIDByName(ctx, "invalid_name")
+	assert.Error(t, err)
+	assert.Equal(t, uuid.Nil, cId)
+
 	// Try to create a catalog with the same name, project, and tenant (should return ErrAlreadyExists)
 	err = DB(ctx).CreateCatalog(ctx, catalog)
 	assert.Error(t, err)

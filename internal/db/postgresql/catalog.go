@@ -32,7 +32,8 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 
 	// Execute the query directly using h.conn().QueryRowContext
 	row := h.conn().QueryRowContext(ctx, query, catalog.CatalogID, catalog.Name, catalog.Description, catalog.Info, tenantID, projectID)
-	var insertedCatalogID, insertedName string
+	var insertedCatalogID uuid.UUID
+	var insertedName string
 	errDb := row.Scan(&insertedCatalogID, &insertedName)
 	if errDb != nil {
 		if errDb == sql.ErrNoRows {
@@ -42,8 +43,35 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 		log.Ctx(ctx).Error().Err(errDb).Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("failed to insert catalog")
 		return dberror.ErrDatabase.Err(errDb)
 	}
-
+	catalog.CatalogID = insertedCatalogID
 	return nil
+}
+
+// GetCatalogIDByName retrieves the catalog ID associated with a given catalog name and tenant ID.
+func (h *hatchCatalogDb) GetCatalogIDByName(ctx context.Context, catalogName string) (uuid.UUID, apperrors.Error) {
+	var catalogID uuid.UUID
+
+	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	// Query to get the catalog_id by catalog name and tenant ID
+	query := `
+		SELECT catalog_id FROM catalogs 
+		WHERE name = $1 AND tenant_id = $2 AND project_id = $3;
+	`
+	errDb := h.conn().QueryRowContext(ctx, query, catalogName, tenantID, projectID).Scan(&catalogID)
+	if errDb != nil {
+		if errDb == sql.ErrNoRows {
+			log.Ctx(ctx).Info().Str("catalog_name", catalogName).Msg("catalog not found")
+			return uuid.Nil, dberror.ErrInvalidCatalog
+		}
+		log.Ctx(ctx).Error().Err(errDb).Msg("failed to retrieve catalog ID")
+		return uuid.Nil, dberror.ErrDatabase.Err(errDb)
+	}
+
+	return catalogID, nil
 }
 
 // GetCatalog retrieves a catalog from the database.

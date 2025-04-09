@@ -3,28 +3,32 @@ package catalogmanager
 import (
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewCatalogManager(t *testing.T) {
+func TestNewVariantManager(t *testing.T) {
 	tests := []struct {
 		name     string
 		jsonData string
 		expected string
 	}{
 		{
-			name: "valid catalog",
+			name: "valid variant",
 			jsonData: `
 {
     "version": "v1",
-    "kind": "Catalog",
+    "kind": "Variant",
     "metadata": {
-        "name": "ValidCatalog",
-        "description": "This is a valid catalog"
+        "name": "ValidVariant",
+        "catalog": "ValidCatalog",
+        "description": "This is a valid variant"
     }
 }`,
 			expected: "",
@@ -34,10 +38,11 @@ func TestNewCatalogManager(t *testing.T) {
 			jsonData: `
 {
     "version": "v2",
-    "kind": "Catalog",
+    "kind": "Variant",
     "metadata": {
-        "name": "InvalidVersionCatalog",
-        "description": "Invalid version in catalog"
+        "name": "InvalidVersionVariant",
+        "catalog": "ValidCatalog",
+        "description": "Invalid version in variant"
     }
 }`,
 			expected: validationerrors.ErrInvalidVersion.Error(),
@@ -49,8 +54,9 @@ func TestNewCatalogManager(t *testing.T) {
     "version": "v1",
     "kind": "InvalidKind",
     "metadata": {
-        "name": "InvalidKindCatalog",
-        "description": "Invalid kind in catalog"
+        "name": "InvalidKindVariant",
+        "catalog": "ValidCatalog",
+        "description": "Invalid kind in variant"
     }
 }`,
 			expected: validationerrors.ErrInvalidKind.Error(),
@@ -73,25 +79,34 @@ func TestNewCatalogManager(t *testing.T) {
 	ctx = common.SetTenantIdInContext(ctx, tenantID)
 	ctx = common.SetProjectIdInContext(ctx, projectID)
 
-	// Create the tenant for testing
+	// Create the tenant and project for testing
 	err := db.DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
 	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
 
-	// Create the project for testing
 	err = db.DB(ctx).CreateProject(ctx, projectID)
 	assert.NoError(t, err)
 	defer db.DB(ctx).DeleteProject(ctx, projectID)
 
+	// Create a catalog for testing the variants
+	catalogName := "ValidCatalog"
+	err = db.DB(ctx).CreateCatalog(ctx, &models.Catalog{
+		Name:        catalogName,
+		Description: "Test catalog",
+		ProjectID:   projectID,
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+	})
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteCatalog(ctx, uuid.Nil, catalogName)
+
 	for _, tt := range tests {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
-
 			// Convert JSON to []byte
 			jsonData := []byte(tt.jsonData)
 
-			// Create a new catalog manager
-			cm, err := NewCatalogManager(ctx, jsonData, "CatalogName")
+			// Create a new variant manager
+			vm, err := NewVariantManager(ctx, jsonData, "", catalogName)
 			errStr := ""
 			if err != nil {
 				errStr = err.Error()
@@ -101,42 +116,44 @@ func TestNewCatalogManager(t *testing.T) {
 			if errStr != tt.expected {
 				t.Errorf("got error %v, expected error %v", err, tt.expected)
 			} else if tt.expected == "" {
-				// If no error is expected, validate catalog properties
-				assert.NotNil(t, cm)
-				assert.Equal(t, "ValidCatalog", cm.Name())
-				assert.Equal(t, "This is a valid catalog", cm.Description())
+				// If no error is expected, validate variant properties
+				assert.NotNil(t, vm)
+				assert.Equal(t, "ValidVariant", vm.Name())
+				assert.Equal(t, "This is a valid variant", vm.Description())
+				assert.Equal(t, catalogName, vm.Catalog())
 
-				// Save the catalog
-				err = cm.Save(ctx)
+				// Save the variant
+				err = vm.Save(ctx)
 				assert.NoError(t, err)
 
 				// Attempt to save again to check for duplicate handling
-				err = cm.Save(ctx)
+				err = vm.Save(ctx)
 				assert.Error(t, err)
 				assert.ErrorIs(t, err, ErrAlreadyExists)
 
-				// Load the catalog
-				loadedCatalog, loadErr := LoadCatalogManagerByName(ctx, "ValidCatalog")
+				// Load the variant
+				loadedVariant, loadErr := LoadVariantManagerByName(ctx, vm.CatalogID(), vm.Name())
 				assert.NoError(t, loadErr)
-				assert.Equal(t, cm.Name(), loadedCatalog.Name())
-				assert.Equal(t, cm.Description(), loadedCatalog.Description())
+				assert.Equal(t, vm.Name(), loadedVariant.Name())
+				assert.Equal(t, vm.Description(), loadedVariant.Description())
 
-				// Load the catalog with an invalid name
-				_, loadErr = LoadCatalogManagerByName(ctx, "InvalidCatalog")
+				// Load the variant with an invalid name
+				_, loadErr = LoadVariantManagerByName(ctx, vm.CatalogID(), "InvalidVariant")
 				assert.Error(t, loadErr)
-				assert.ErrorIs(t, loadErr, ErrCatalogNotFound)
+				assert.ErrorIs(t, loadErr, ErrVariantNotFound)
 
-				// Delete the catalog
-				err = DeleteCatalogByName(ctx, "ValidCatalog")
+				// Delete the variant
+				err = DeleteVariant(ctx, vm.CatalogID(), vm.ID(), vm.Name())
 				assert.NoError(t, err)
 
-				// Try loading the deleted catalog
-				_, loadErr = LoadCatalogManagerByName(ctx, "ValidCatalog")
+				// Try loading the deleted variant
+				_, loadErr = LoadVariantManagerByName(ctx, vm.CatalogID(), vm.Name())
 				assert.Error(t, loadErr)
+				assert.ErrorIs(t, loadErr, ErrVariantNotFound)
 
-				// Try Deleting again
-				err = DeleteCatalogByName(ctx, "ValidCatalog")
-				assert.NoError(t, err) // should not return an error
+				// Try deleting again to ensure no error is raised
+				err = DeleteVariant(ctx, vm.CatalogID(), vm.ID(), vm.Name())
+				assert.NoError(t, err)
 			}
 		})
 	}

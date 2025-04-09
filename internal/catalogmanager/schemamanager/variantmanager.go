@@ -7,9 +7,11 @@ import (
 	"github.com/mugiliam/common/apperrors"
 )
 
-type CatalogManager interface {
+type VariantManager interface {
 	ID() uuid.UUID
 	Name() string
 	Description() string
+	Catalog() string
+	CatalogID() uuid.UUID
 	Save(context.Context) apperrors.Error
 }

@@ -25,15 +25,16 @@ type DB_ interface {
 
 	// Catalog
 	CreateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error
+	GetCatalogIDByName(ctx context.Context, catalogName string) (uuid.UUID, apperrors.Error)
 	GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, apperrors.Error)
 	UpdateCatalog(ctx context.Context, catalog models.Catalog) apperrors.Error
 	DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) apperrors.Error
 
 	// Variant
-	CreateVariant(ctx context.Context, variant *models.Variant) error
-	GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, error)
-	UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) error
-	DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) error
+	CreateVariant(ctx context.Context, variant *models.Variant) apperrors.Error
+	GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, apperrors.Error)
+	UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) apperrors.Error
+	DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) apperrors.Error
 
 	// Version
 	CreateVersion(ctx context.Context, version *models.Version) error
