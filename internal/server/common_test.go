@@ -42,6 +42,8 @@ func compareJson(t *testing.T, expected any, actual string) {
 	assert.JSONEq(t, string(j), actual, "Expected: %v\n Got: %v\n", expected, actual)
 }
 
+var _ = setRequestBodyAndHeader
+
 func setRequestBodyAndHeader(t *testing.T, req *http.Request, data interface{}) {
 	// Marshal the data into JSON
 	jsonData, err := json.Marshal(data)

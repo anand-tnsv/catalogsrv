@@ -46,6 +46,12 @@ type DB_ interface {
 	CountVersionsInCatalogAndVariant(ctx context.Context, catalogID, variantID uuid.UUID) (int, error)
 	GetNamedVersions(ctx context.Context, catalogID, variantID uuid.UUID) ([]models.Version, error)
 
+	// Workspace
+	CreateWorkspace(ctx context.Context, workspace *models.Workspace) error
+	DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) error
+	GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*models.Workspace, error)
+	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) error
+
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error
 	GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error)

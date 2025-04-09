@@ -87,7 +87,7 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 		return nil, dberror.ErrDatabase.Err(err)
 	}
 
-	// Decompress the data
+	// Uncompress the data
 	obj.Data, err = snappy.Decode(nil, obj.Data)
 	if err != nil {
 		return nil, dberror.ErrDatabase.Err(err)

@@ -12,6 +12,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
+	"github.com/rs/zerolog/log"
 )
 
 func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory) apperrors.Error {
@@ -21,9 +22,6 @@ func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.Cata
 	}
 	if dir.DirectoryID == uuid.Nil {
 		dir.DirectoryID = uuid.New()
-	}
-	if dir.VersionNum <= 0 {
-		return dberror.ErrInvalidInput.Msg("version_num must be greater than 0")
 	}
 	if dir.VariantID == uuid.Nil {
 		return dberror.ErrInvalidInput.Msg("variant_id cannot be empty")
@@ -37,18 +35,59 @@ func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.Cata
 	if len(dir.Directory) == 0 {
 		return dberror.ErrInvalidInput.Msg("directory cannot be nil")
 	}
+
+	dir.TenantID = tenantID
+
+	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to start transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	errDb := h.createSchemaDirectoryWithTransaction(ctx, t, dir, tx)
+	if errDb != nil {
+		tx.Rollback()
+		return errDb
+	}
+
+	if err := tx.Commit(); err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+	return nil
+}
+
+func (H *hatchCatalogDb) createSchemaDirectoryWithTransaction(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory, tx *sql.Tx) apperrors.Error {
 	tableName := getSchemaDirectoryTableName(t)
 	if tableName == "" {
 		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
+	if dir.DirectoryID == uuid.Nil {
+		dir.DirectoryID = uuid.New()
+	}
+	var refName string
+	var refId any
+	if dir.WorkspaceID != uuid.Nil {
+		refName = "workspace_id"
+		refId = dir.WorkspaceID
+	} else if dir.VersionNum != 0 {
+		refName = "version_num"
+		refId = dir.VersionNum
+	} else {
+		return dberror.ErrInvalidInput.Msg("either workspace_id or version_num must be set")
+	}
 
 	// Insert the schema directory into the database and get created uuid
-	query := ` INSERT INTO ` + tableName + ` (directory_id, version_num, variant_id, catalog_id, tenant_id, directory)
+	query := ` INSERT INTO ` + tableName + ` (directory_id, ` + refName + `, variant_id, catalog_id, tenant_id, directory)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (directory_id, tenant_id) DO NOTHING RETURNING directory_id;`
 
 	var directoryID uuid.UUID
-	err := h.conn().QueryRowContext(ctx, query, dir.DirectoryID, dir.VersionNum, dir.VariantID, dir.CatalogID, tenantID, dir.Directory).Scan(&directoryID)
+	err := tx.QueryRowContext(ctx, query, dir.DirectoryID, refId, dir.VariantID, dir.CatalogID, dir.TenantID, dir.Directory).Scan(&directoryID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return dberror.ErrAlreadyExists.Msg("schema directory already exists")
@@ -56,6 +95,9 @@ func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.Cata
 			return dberror.ErrDatabase.Err(err)
 		}
 	}
+
+	dir.DirectoryID = directoryID
+
 	return nil
 }
 
@@ -69,12 +111,12 @@ func (h *hatchCatalogDb) GetSchemaDirectory(ctx context.Context, t types.Catalog
 		return nil, dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
 
-	query := `SELECT directory_id, version_num, variant_id, catalog_id, tenant_id, directory
+	query := `SELECT directory_id, variant_id, catalog_id, tenant_id, directory
 		FROM ` + tableName + `
 		WHERE directory_id = $1 AND tenant_id = $2;`
 
 	dir := &models.SchemaDirectory{}
-	err := h.conn().QueryRowContext(ctx, query, directoryID, tenantID).Scan(&dir.DirectoryID, &dir.VersionNum, &dir.VariantID, &dir.CatalogID, &dir.TenantID, &dir.Directory)
+	err := h.conn().QueryRowContext(ctx, query, directoryID, tenantID).Scan(&dir.DirectoryID, &dir.VariantID, &dir.CatalogID, &dir.TenantID, &dir.Directory)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("schema directory not found")

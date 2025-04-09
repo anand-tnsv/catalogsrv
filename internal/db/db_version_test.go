@@ -23,7 +23,7 @@ func TestCreateVersion(t *testing.T) {
 	defer DB(ctx).Close(ctx)
 
 	tenantID := types.TenantId("TABCDE")
-	projectID := types.ProjectId("P12345")
+	projectID := types.ProjectId("P12346")
 
 	// Set the tenant ID and project ID in the context
 	ctx = common.SetTenantIdInContext(ctx, tenantID)
@@ -573,7 +573,7 @@ func TestCountVersionsInCatalogAndVariant(t *testing.T) {
 	// Test case: Count versions in catalog and variant
 	count, err := DB(ctx).CountVersionsInCatalogAndVariant(ctx, catalog.CatalogID, variant.VariantID)
 	assert.NoError(t, err)
-	assert.Equal(t, 3, count)
+	assert.Equal(t, 4, count) //there will be a default version when creating variant
 
 	// Test case: Count versions in a non-existent catalog and variant (should be zero)
 	nonExistentCatalogID := uuid.New()
@@ -662,10 +662,14 @@ func TestGetNamedVersions(t *testing.T) {
 	assert.NotNil(t, namedVersions)
 
 	// Verify that only the named versions are returned (should be 2)
-	assert.Equal(t, 2, len(namedVersions))
+	assert.Equal(t, 3, len(namedVersions)) //account for the "init" version
 	for i, version := range namedVersions {
-		expectedLabel := fmt.Sprintf("v%d", i+1)
-		expectedDescription := fmt.Sprintf("Test named version %d", i+1)
+		if version.VersionNum == 1 {
+			assert.Equal(t, "init", version.Label)
+			continue
+		}
+		expectedLabel := fmt.Sprintf("v%d", i)
+		expectedDescription := fmt.Sprintf("Test named version %d", i)
 		assert.Equal(t, expectedLabel, version.Label)
 		assert.Equal(t, expectedDescription, version.Description)
 	}

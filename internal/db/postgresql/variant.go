@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgtype"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
@@ -19,37 +20,56 @@ import (
 // Returns an error if the variant already exists, the variant name format is invalid,
 // the catalog ID is invalid, or there is a database error.
 func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) apperrors.Error {
-	// Generate a new UUID for the variant ID
-	variantID := uuid.New()
+
+	// Generate a new UUID for the variant ID if not provided
+	variantID := variant.VariantID
+	if variant.VariantID == uuid.Nil {
+		variantID = uuid.New()
+	}
 
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
 	}
 
-	query := `
+	// Start a transaction
+	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to start transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+	defer func() {
+		// Ensure transaction is rolled back if not committed
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Query to insert the variant
+	queryVariant := `
 		INSERT INTO variants (variant_id, name, description, info, catalog_id, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (name, catalog_id) DO NOTHING
+		ON CONFLICT (name, catalog_id, tenant_id) DO NOTHING
 		RETURNING variant_id, name;
 	`
 
-	// Execute the query directly using h.conn().QueryRowContext
-	row := h.conn().QueryRowContext(ctx, query, variantID, variant.Name, variant.Description, variant.Info, variant.CatalogID, tenantID)
+	// Execute variant insertion within the transaction
+	row := tx.QueryRowContext(ctx, queryVariant, variantID, variant.Name, variant.Description, variant.Info, variant.CatalogID, tenantID)
 	var insertedVariantID uuid.UUID
 	var insertedName string
-	err := row.Scan(&insertedVariantID, &insertedName)
+	err = row.Scan(&insertedVariantID, &insertedName)
 	if err != nil {
+		tx.Rollback()
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", variant.Name).Str("variant_id", variant.VariantID.String()).Msg("variant already exists")
 			return dberror.ErrAlreadyExists.Msg("variant already exists")
 		}
 		if pgErr, ok := err.(*pgconn.PgError); ok {
-			if pgErr.Code == "23514" && pgErr.ConstraintName == "variants_name_check" { // Check constraint violation code and specific constraint name
+			if pgErr.Code == "23514" && pgErr.ConstraintName == "variants_name_check" {
 				log.Ctx(ctx).Error().Str("name", variant.Name).Msg("invalid variant name format")
 				return dberror.ErrInvalidInput.Msg("invalid variant name format")
 			}
-			if pgErr.ConstraintName == "variants_catalog_id_fkey" { // Foreign key constraint violation
+			if pgErr.ConstraintName == "variants_catalog_id_fkey" {
 				log.Ctx(ctx).Info().Str("catalog_id", variant.CatalogID.String()).Msg("catalog not found")
 				return dberror.ErrInvalidCatalog
 			}
@@ -57,7 +77,33 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 		log.Ctx(ctx).Error().Err(err).Str("name", variant.Name).Str("variant_id", variantID.String()).Msg("failed to insert variant")
 		return dberror.ErrDatabase.Err(err)
 	}
+
+	// Set the variant ID
 	variant.VariantID = insertedVariantID
+
+	// Create the default version for the variant
+	version := models.Version{
+		VariantID:   variant.VariantID,
+		CatalogID:   variant.CatalogID,
+		TenantID:    tenantID,
+		Label:       "init",
+		Description: "Initial version",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+	}
+
+	errDb := h.createVersionWithTransaction(ctx, &version, tx)
+	if errDb != nil {
+		tx.Rollback()
+		return errDb
+	}
+
+	// Commit the transaction if both insertions succeed
+	err = tx.Commit()
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+
 	return nil
 }
 
@@ -149,7 +195,7 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 			return dberror.ErrNotFound.Msg("variant not found or no changes made")
 		}
 		if pgErr, ok := err.(*pgconn.PgError); ok {
-			if pgErr.Code == "23505" && pgErr.ConstraintName == "variants_name_catalog_id_key" { // Unique constraint violation
+			if pgErr.Code == "23505" && pgErr.ConstraintName == "variants_name_catalog_id_tenant_id_key" { // Unique constraint violation
 				log.Ctx(ctx).Error().Msg("variant name already exists for the given catalog_id")
 				return dberror.ErrAlreadyExists.Msg("variant name already exists for the given catalog_id")
 			}

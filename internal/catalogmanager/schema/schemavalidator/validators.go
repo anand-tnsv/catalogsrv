@@ -80,6 +80,6 @@ func ValidateObjectName(name string) bool {
 func init() {
 	V().RegisterValidation("kindValidator", kindValidator)
 	V().RegisterValidation("nameFormatValidator", nameFormatValidator)
-	V().RegisterValidation("noSpacesValidator", noSpacesValidator)
+	V().RegisterValidation("noSpaces", noSpacesValidator)
 	V().RegisterValidation("resourcePathValidator", resourcePathValidator)
 }

@@ -6,9 +6,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgconn"
+	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,9 +26,35 @@ func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Vers
 	}
 	version.TenantID = tenantID
 
-	// Set label as sql.NullString
-	label := sql.NullString{String: version.Label, Valid: version.Label != ""}
+	// create a transaction
+	tx, err := h.conn().BeginTx(ctx, nil)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to begin transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+	defer func() {
+		if err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				log.Ctx(ctx).Error().Err(rollbackErr).Msg("failed to rollback transaction")
+			}
+		}
+	}()
+	errDb := h.createVersionWithTransaction(ctx, version, tx)
+	if errDb != nil {
+		tx.Rollback()
+		log.Ctx(ctx).Error().Err(errDb).Msg("failed to create version")
+		return errDb
+	}
+	if err := tx.Commit(); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+	return nil
+}
 
+func (h *hatchCatalogDb) createVersionWithTransaction(ctx context.Context, version *models.Version, tx *sql.Tx) apperrors.Error {
+
+	label := sql.NullString{String: version.Label, Valid: version.Label != ""} // Set label as sql.NullString
 	query := `
 		INSERT INTO versions (label, description, info, variant_id, catalog_id, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -34,7 +62,7 @@ func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Vers
 	`
 
 	// Execute the query and scan the returned version_num
-	row := h.conn().QueryRowContext(ctx, query, label, version.Description, version.Info, version.VariantID, version.CatalogID, version.TenantID)
+	row := tx.QueryRowContext(ctx, query, label, version.Description, version.Info, version.VariantID, version.CatalogID, version.TenantID)
 	var versionNum int
 	err := row.Scan(&versionNum)
 	if err != nil {
@@ -51,7 +79,7 @@ func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Vers
 				log.Ctx(ctx).Error().Str("label", version.Label).Msg("invalid label format")
 				return dberror.ErrInvalidInput.Msg("invalid label format")
 			}
-			if pgErr.ConstraintName == "versions_variant_id_fkey" || pgErr.ConstraintName == "versions_catalog_id_fkey" { // Foreign key constraint violations
+			if pgErr.ConstraintName == "versions_variant_id_catalog_id_tenant_id_fkey" || pgErr.ConstraintName == "version_sequences_variant_id_catalog_id_tenant_id_fkey" { // Foreign key constraint violations
 				log.Ctx(ctx).Info().Str("variant_id", version.VariantID.String()).Str("catalog_id", version.CatalogID.String()).Msg("catalog or variant not found")
 				return dberror.ErrInvalidCatalog
 			}
@@ -60,6 +88,43 @@ func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Vers
 		return dberror.ErrDatabase.Err(err)
 	}
 	version.VersionNum = versionNum
+
+	// Create the parameters and collections directories
+	pd := models.SchemaDirectory{
+		VersionNum: version.VersionNum,
+		VariantID:  version.VariantID,
+		CatalogID:  version.CatalogID,
+		TenantID:   version.TenantID,
+		Directory:  []byte("{}"), // Initialize with empty JSON
+	}
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeParameterSchema, &pd, tx); err != nil {
+		return err
+	}
+	cd := models.SchemaDirectory{
+		VersionNum: version.VersionNum,
+		VariantID:  version.VariantID,
+		CatalogID:  version.CatalogID,
+		TenantID:   version.TenantID,
+		Directory:  []byte("{}"), // Initialize with empty JSON
+	}
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCollectionSchema, &cd, tx); err != nil {
+		return err
+	}
+
+	// update the parameter and collections directories in version
+	version.ParametersDir = pd.DirectoryID
+	version.CollectionsDir = cd.DirectoryID
+
+	query = `
+		UPDATE versions SET parameters_directory = $1, collections_directory = $2
+		WHERE version_num = $3 AND variant_id = $4 AND catalog_id = $5 AND tenant_id = $6;
+	`
+	_, err = tx.ExecContext(ctx, query, version.ParametersDir, version.CollectionsDir, version.VersionNum, version.VariantID, version.CatalogID, version.TenantID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to update version with directories")
+		return dberror.ErrDatabase.Err(err)
+	}
+
 	return nil
 }
 
