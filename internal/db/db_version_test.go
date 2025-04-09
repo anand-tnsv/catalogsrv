@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -758,4 +760,112 @@ func TestGetVersionByLabel(t *testing.T) {
 	_, err = DB(ctx).GetVersionByLabel(ctx, "v1", catalog.CatalogID, invalidVariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
+}
+
+func TestConcurrentVersionCreate(t *testing.T) {
+	// Initialize context with logger and database connection
+	ctx := log.Logger.WithContext(context.Background())
+	ctx = newDb(ctx)
+	defer DB(ctx).Close(ctx)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("P12347")
+
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant and project for testing
+	err := DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	defer DB(ctx).DeleteTenant(ctx, tenantID)
+
+	err = DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+	defer DB(ctx).DeleteProject(ctx, projectID)
+
+	var info pgtype.JSONB
+	err = info.Set(`{"key": "value"}`)
+	assert.NoError(t, err)
+
+	// Create the catalog for testing
+	catalog := models.Catalog{
+		Name:        "test_catalog_concurrent",
+		Description: "A test catalog for concurrency",
+		Info:        info,
+	}
+	err = DB(ctx).CreateCatalog(ctx, &catalog)
+	assert.NoError(t, err)
+	defer DB(ctx).DeleteCatalog(ctx, catalog.CatalogID, "")
+
+	// Create a variant for testing
+	variant := models.Variant{
+		Name:        "test_variant_concurrent",
+		Description: "A test variant for concurrency",
+		CatalogID:   catalog.CatalogID,
+		Info:        info,
+	}
+	err = DB(ctx).CreateVariant(ctx, &variant)
+	assert.NoError(t, err)
+	defer DB(ctx).DeleteVariant(ctx, catalog.CatalogID, variant.VariantID, "")
+
+	// At this point, a default version (version_num = 1) is already created for this variant.
+
+	// Define number of goroutines for concurrency testing
+	numGoroutines := 20
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Slice to hold errors from each goroutine
+	errs := make([]error, numGoroutines)
+
+	// Concurrently create versions
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			ctx := log.Logger.WithContext(context.Background())
+			ctx = newDb(ctx)
+			defer DB(ctx).Close(ctx)
+			defer wg.Done()
+			ctx = common.SetTenantIdInContext(ctx, tenantID)
+			version := models.Version{
+				Label:       fmt.Sprintf("v%d", index+2), // Starting from label "v2"
+				Description: fmt.Sprintf("Concurrent version %d", index+2),
+				Info:        info,
+				VariantID:   variant.VariantID,
+				CatalogID:   catalog.CatalogID,
+			}
+			err := DB(ctx).CreateVersion(ctx, &version)
+			if err != nil {
+				errs[index] = err
+				return
+			}
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+
+	// Check if any errors occurred
+	for _, err := range errs {
+		assert.NoError(t, err, "Unexpected error occurred during concurrent version creation")
+	}
+
+	// Verify that versions were created sequentially, starting from version_num = 1
+	versions, err := DB(ctx).GetNamedVersions(ctx, catalog.CatalogID, variant.VariantID)
+	assert.NoError(t, err)
+
+	// Ensure exactly numGoroutines + 1 versions are created (including the initial default version)
+	expectedVersionsCount := numGoroutines + 1
+	assert.Equal(t, expectedVersionsCount, len(versions), "Expected %d versions to be created", expectedVersionsCount)
+
+	// Sort versions by version_num
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i].VersionNum < versions[j].VersionNum
+	})
+
+	// Check that the version numbers are sequential from 1 to expectedVersionsCount
+	for i := 0; i < expectedVersionsCount; i++ {
+		expectedVersionNum := i + 1
+		assert.Equal(t, expectedVersionNum, versions[i].VersionNum, "Version numbers should be sequential and without conflict")
+	}
 }
