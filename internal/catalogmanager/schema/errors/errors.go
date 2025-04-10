@@ -121,3 +121,11 @@ func ErrUnsupportedDataType(attr string, value ...string) ValidationError {
 		ErrStr: errStr,
 	}
 }
+
+func ErrUndefinedParameterSchema(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "undefined parameter schema",
+	}
+}

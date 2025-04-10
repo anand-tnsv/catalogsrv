@@ -53,3 +53,11 @@ func (cm *V1CollectionManager) StorageRepresentation() *schemastore.SchemaStorag
 	s.Schema, _ = json.Marshal(cm.collectionSchema.Spec)
 	return &s
 }
+
+func (cm *V1CollectionManager) ParameterSchemaReferences() []string {
+	var refs []string
+	for _, p := range cm.collectionSchema.Spec.Parameters {
+		refs = append(refs, p.Schema)
+	}
+	return refs
+}

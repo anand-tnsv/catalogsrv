@@ -102,11 +102,12 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	var (
-		t            types.CatalogObjectType = s.Type      // object type
-		dir          uuid.UUID                             // directory for this object type
-		hash         string                  = s.GetHash() // hash of the object's storage representation
-		path         string                  = m.Path      // path to the object in the directory
-		pathWithName string                  = ""          // path with name
+		t             types.CatalogObjectType = s.Type      // object type
+		paramDir      uuid.UUID                             // parameters directory for this object type
+		collectionDir uuid.UUID                             // collections directory for this object type
+		hash          string                  = s.GetHash() // hash of the object's storage representation
+		path          string                  = m.Path      // path to the object in the directory
+		pathWithName  string                  = ""          // path with name
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
@@ -123,11 +124,11 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 		}
 
 		if t == types.CatalogObjectTypeParameterSchema {
-			if dir = wm.ParametersDir(); dir == uuid.Nil {
+			if paramDir = wm.ParametersDir(); paramDir == uuid.Nil {
 				return ErrInvalidWorkspace.Msg("workspace does not have a parameters directory")
 			}
 		} else if t == types.CatalogObjectTypeCollectionSchema {
-			if dir = wm.CollectionsDir(); dir == uuid.Nil {
+			if paramDir = wm.CollectionsDir(); paramDir == uuid.Nil {
 				return ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
 			}
 		} else {
@@ -138,27 +139,29 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 	// TODO: handle version number
 
-	if s.Type == types.CatalogObjectTypeParameterSchema {
-		// get this objectRef from the directory
-		r, err := db.DB(ctx).GetObjectByPath(ctx, t, dir, pathWithName)
-		if err != nil {
-			if errors.Is(err, dberror.ErrNotFound) {
-				log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
-			} else {
-				log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
-				return ErrCatalogError
-			}
-		}
-		if r != nil {
-			// if the hash is the same, we don't need to save the object
-			if r.Hash == hash {
-				log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
+	switch t {
+	case types.CatalogObjectTypeParameterSchema:
+		if err := validateParameterSchema(ctx, paramDir, pathWithName, hash); err != nil {
+			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
 					return ErrAlreadyExists
 				}
 				return nil
 			}
+			return err
 		}
+	case types.CatalogObjectTypeCollectionSchema:
+		if err := validateCollectionSchema(ctx, om.CollectionManager(), paramDir, collectionDir, pathWithName, hash); err != nil {
+			if errors.Is(err, ErrAlreadyExists) {
+				if options.ErrorIfExists {
+					return ErrAlreadyExists
+				}
+				return nil
+			}
+			return err
+		}
+	default:
+		return ErrCatalogError.Msg("invalid object type")
 	}
 
 	// if we came here, we have a new object to save
@@ -179,11 +182,8 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	if dberr != nil {
 		if errors.Is(dberr, dberror.ErrAlreadyExists) {
 			log.Ctx(ctx).Debug().Str("hash", obj.Hash).Msg("catalog object already exists")
-			if options.ErrorIfExists {
-				log.Ctx(ctx).Debug().Str("hash", obj.Hash).Msg("object already exists in DB")
-				// in this case, we don't return. If we came here it means the object is not in the directory,
-				// so we'll keep chugging along and save the object to the directory
-			}
+			// in this case, we don't return. If we came here it means the object is not in the directory,
+			// so we'll keep chugging along and save the object to the directory
 		} else {
 			log.Ctx(ctx).Error().Err(dberr).Msg("failed to save catalog object")
 			return dberr
@@ -191,6 +191,13 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	// write the object to the directory
+	var dir uuid.UUID
+	if t == types.CatalogObjectTypeParameterSchema {
+		dir = paramDir
+	} else if t == types.CatalogObjectTypeCollectionSchema {
+		dir = collectionDir
+	}
+
 	if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, t, dir, pathWithName, models.ObjectRef{
 		Hash: obj.Hash,
 	}); err != nil {
@@ -199,6 +206,84 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	return nil
+}
+
+func validateParameterSchema(ctx context.Context, dir uuid.UUID, path string, hash string) apperrors.Error {
+	// get this objectRef from the directory
+	r, err := db.DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir, path)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			log.Ctx(ctx).Debug().Str("path", path).Msg("object not found")
+		} else {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
+			return ErrCatalogError
+		}
+	}
+	if r != nil && r.Hash == hash {
+		// if the hash is the same, we don't need to save the object
+		log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
+		return ErrAlreadyExists
+	}
+
+	return nil
+}
+
+func validateCollectionSchema(ctx context.Context, cm schemamanager.CollectionManager, pd, cd uuid.UUID, path, hash string) apperrors.Error {
+	if cm == nil {
+		log.Ctx(ctx).Error().Msg("collection manager is nil")
+		return ErrCatalogError
+	}
+
+	refs := cm.ParameterSchemaReferences()
+
+	parentPath := removeLastSegment(path)
+
+	var ves schemaerr.ValidationErrors
+	for _, ref := range refs {
+		op, _, err := db.DB(ctx).FindClosestObject(ctx, types.CatalogObjectTypeParameterSchema, pd, ref, parentPath)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				log.Ctx(ctx).Error().Str("path", ref).Msg("parameter schema not found")
+				ves = append(ves, schemaerr.ErrUndefinedParameterSchema(ref))
+			} else {
+				log.Ctx(ctx).Error().Err(err).Msg("failed to find closest object")
+				return ErrCatalogError.Err(err)
+			}
+		} else if op == "" { // should never come here
+			log.Ctx(ctx).Error().Str("path", ref).Msg("parameter schema not found")
+			ves = append(ves, schemaerr.ErrUndefinedParameterSchema(ref))
+		}
+	}
+	if len(ves) > 0 {
+		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
+	}
+
+	// get this objectRef from the directory
+	r, err := db.DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, path)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			log.Ctx(ctx).Debug().Str("path", path).Msg("object not found")
+		} else {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
+			return ErrCatalogError
+		}
+	}
+	if r != nil && r.Hash == hash {
+		log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
+		return ErrAlreadyExists
+	}
+	return nil
+}
+
+func removeLastSegment(path string) string {
+	if path == "" {
+		return path
+	}
+	lastSlashIndex := strings.LastIndex(path, "/")
+	if lastSlashIndex == -1 {
+		return path // no slashes found, return the path as-is
+	}
+	return path[:lastSlashIndex]
 }
 
 func LoadObject(ctx context.Context, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
