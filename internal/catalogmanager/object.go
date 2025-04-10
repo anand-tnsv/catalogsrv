@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/mugiliam/common/apperrors"
@@ -15,6 +16,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -56,34 +58,146 @@ func NewObject(ctx context.Context, rsrcJson []byte, m *schemamanager.ObjectMeta
 	return resource.NewV1ObjectManager(ctx, []byte(rsrcJson), schemamanager.WithValidation())
 }
 
-func SaveObject(ctx context.Context, s *schemastore.SchemaStorageRepresentation, errorIfExists ...bool) apperrors.Error {
+type StoreOptions struct {
+	ErrorIfExists bool
+	WorkspaceID   uuid.UUID
+	VersionNum    int
+}
+
+type ObjectStoreOption func(*StoreOptions)
+
+func WithErrorIfExists() ObjectStoreOption {
+	return func(o *StoreOptions) {
+		o.ErrorIfExists = true
+	}
+}
+
+func WithWorkspaceID(id uuid.UUID) ObjectStoreOption {
+	return func(o *StoreOptions) {
+		o.WorkspaceID = id
+	}
+}
+
+func WithVersionNum(num int) ObjectStoreOption {
+	return func(o *StoreOptions) {
+		o.VersionNum = num
+	}
+}
+
+func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...ObjectStoreOption) apperrors.Error {
+	if om == nil {
+		return validationerrors.ErrEmptySchema
+	}
+	s := om.StorageRepresentation()
 	if s == nil {
 		return validationerrors.ErrEmptySchema
 	}
+
+	m := om.Metadata()
+
+	// get the options
+	options := &StoreOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	var (
+		t            types.CatalogObjectType = s.Type      // object type
+		dir          uuid.UUID                             // directory for this object type
+		hash         string                  = s.GetHash() // hash of the object's storage representation
+		path         string                  = m.Path      // path to the object in the directory
+		pathWithName string                  = ""          // path with name
+	)
+
+	// strip path with any trailing slashes and append the name to get a FQRP
+	path = strings.TrimRight(path, "/")
+	pathWithName = path + "/" + m.Name
+
+	// get the directory
+	if options.WorkspaceID != uuid.Nil {
+		var wm schemamanager.WorkspaceManager
+		var apperr apperrors.Error
+
+		if wm, apperr = LoadWorkspaceManagerByID(ctx, options.WorkspaceID); apperr != nil {
+			return apperr
+		}
+
+		if t == types.CatalogObjectTypeParameterSchema {
+			if dir = wm.ParametersDir(); dir == uuid.Nil {
+				return ErrInvalidWorkspace.Msg("workspace does not have a parameters directory")
+			}
+		} else if t == types.CatalogObjectTypeCollectionSchema {
+			if dir = wm.CollectionsDir(); dir == uuid.Nil {
+				return ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
+			}
+		} else {
+			return ErrCatalogError.Msg("invalid object type")
+		}
+	} else {
+		return ErrInvalidVersionOrWorkspace
+	}
+	// TODO: handle version number
+
+	if s.Type == types.CatalogObjectTypeParameterSchema {
+		// get this objectRef from the directory
+		r, err := db.DB(ctx).GetObjectByPath(ctx, t, dir, pathWithName)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
+			} else {
+				log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
+				return ErrCatalogError
+			}
+		}
+		if r != nil {
+			// if the hash is the same, we don't need to save the object
+			if r.Hash == hash {
+				log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
+				if options.ErrorIfExists {
+					return ErrAlreadyExists
+				}
+				return nil
+			}
+		}
+	}
+
+	// if we came here, we have a new object to save
 	data, err := s.Serialize()
 	if err != nil {
 		return validationerrors.ErrSchemaSerialization
 	}
+
 	obj := models.CatalogObject{
 		Type:    s.Type,
 		Version: s.Version,
 		Data:    data,
-		Hash:    s.GetHash(),
+		Hash:    hash,
 	}
+
 	// Save obj to the database
 	dberr := db.DB(ctx).CreateCatalogObject(ctx, &obj)
 	if dberr != nil {
 		if errors.Is(dberr, dberror.ErrAlreadyExists) {
 			log.Ctx(ctx).Debug().Str("hash", obj.Hash).Msg("catalog object already exists")
-			if len(errorIfExists) > 0 && errorIfExists[0] {
-				return ErrAlreadyExists.Err(dberr)
+			if options.ErrorIfExists {
+				log.Ctx(ctx).Debug().Str("hash", obj.Hash).Msg("object already exists in DB")
+				// in this case, we don't return. If we came here it means the object is not in the directory,
+				// so we'll keep chugging along and save the object to the directory
 			}
 		} else {
 			log.Ctx(ctx).Error().Err(dberr).Msg("failed to save catalog object")
 			return dberr
 		}
 	}
-	// write the object path directory
+
+	// write the object to the directory
+	if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, t, dir, pathWithName, models.ObjectRef{
+		Hash: obj.Hash,
+	}); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to save object to directory")
+		return ErrCatalogError
+	}
+
 	return nil
 }
 

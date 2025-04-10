@@ -12,5 +12,8 @@ type WorkspaceManager interface {
 	Description() string
 	CatalogID() uuid.UUID
 	VariantID() uuid.UUID
+	BaseVersion() int
+	ParametersDir() uuid.UUID
+	CollectionsDir() uuid.UUID
 	Save(context.Context) apperrors.Error
 }

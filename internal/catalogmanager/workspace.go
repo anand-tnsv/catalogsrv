@@ -163,6 +163,18 @@ func (wm *workspaceManager) VariantID() uuid.UUID {
 	return wm.w.VariantID
 }
 
+func (wm *workspaceManager) BaseVersion() int {
+	return wm.w.BaseVersion
+}
+
+func (wm *workspaceManager) ParametersDir() uuid.UUID {
+	return wm.w.ParametersDir
+}
+
+func (wm *workspaceManager) CollectionsDir() uuid.UUID {
+	return wm.w.CollectionsDir
+}
+
 func LoadWorkspaceManagerByID(ctx context.Context, workspaceID uuid.UUID) (schemamanager.WorkspaceManager, apperrors.Error) {
 	if workspaceID == uuid.Nil {
 		return nil, ErrInvalidWorkspace

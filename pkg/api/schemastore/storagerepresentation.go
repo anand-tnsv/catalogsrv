@@ -7,9 +7,10 @@ import (
 )
 
 type SchemaStorageRepresentation struct {
-	Version string                  `json:"version"`
-	Type    types.CatalogObjectType `json:"type"`
-	Schema  json.RawMessage         `json:"schema"`
+	Version     string                  `json:"version"`
+	Type        types.CatalogObjectType `json:"type"`
+	Description string                  `json:"description"`
+	Schema      json.RawMessage         `json:"schema"`
 }
 
 // Serialize converts the SchemaStorageRepresentation to a JSON byte array

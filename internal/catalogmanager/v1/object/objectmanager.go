@@ -61,6 +61,7 @@ func LoadV1ObjectManager(ctx context.Context, s *schemastore.SchemaStorageRepres
 		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 	}
 
+	rs.Metadata.Description = s.Description
 	return buildObjectManager(ctx, rs, nil)
 }
 
@@ -118,6 +119,26 @@ func (rm *V1ObjectManager) Catalog() string {
 	return rm.resourceSchema.Metadata.Catalog
 }
 
+func (rm *V1ObjectManager) Description() string {
+	return rm.resourceSchema.Metadata.Description
+}
+
+func (rm *V1ObjectManager) SetName(name string) {
+	rm.resourceSchema.Metadata.Name = name
+}
+
+func (rm *V1ObjectManager) SetPath(path string) {
+	rm.resourceSchema.Metadata.Path = path
+}
+
+func (rm *V1ObjectManager) SetCatalog(catalog string) {
+	rm.resourceSchema.Metadata.Catalog = catalog
+}
+
+func (rm *V1ObjectManager) SetDescription(description string) {
+	rm.resourceSchema.Metadata.Description = description
+}
+
 func (rm *V1ObjectManager) ParameterManager() schemamanager.ParameterManager {
 	return rm.parameterManager
 }
@@ -138,5 +159,6 @@ func (rm *V1ObjectManager) StorageRepresentation() *schemastore.SchemaStorageRep
 			s = rm.collectionManager.StorageRepresentation()
 		}
 	}
+	s.Description = rm.resourceSchema.Metadata.Description
 	return s
 }
