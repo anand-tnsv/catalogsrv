@@ -11,6 +11,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,12 +20,12 @@ import (
 // If a variant with the same name and catalog ID already exists, the insertion is skipped.
 // Returns an error if the variant already exists, the variant name format is invalid,
 // the catalog ID is invalid, or there is a database error.
-func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) apperrors.Error {
+func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) (err apperrors.Error) {
 	// Start a transaction
-	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to start transaction")
-		return dberror.ErrDatabase.Err(err)
+	tx, errdb := h.conn().BeginTx(ctx, &sql.TxOptions{})
+	if errdb != nil {
+		log.Ctx(ctx).Error().Err(errdb).Msg("failed to start transaction")
+		return dberror.ErrDatabase.Err(errdb)
 	}
 	defer func() {
 		// Ensure transaction is rolled back if not committed
@@ -33,17 +34,17 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 		}
 	}()
 
-	errDb := h.createVariantWithTransaction(ctx, variant, tx)
-	if errDb != nil {
+	err = h.createVariantWithTransaction(ctx, variant, tx)
+	if err != nil {
 		tx.Rollback()
-		return errDb
+		return err
 	}
 
 	// Commit the transaction if both insertions succeed
-	err = tx.Commit()
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
-		return dberror.ErrDatabase.Err(err)
+	errdb = tx.Commit()
+	if errdb != nil {
+		log.Ctx(ctx).Error().Err(errdb).Msg("failed to commit transaction")
+		return dberror.ErrDatabase.Err(errdb)
 	}
 
 	return nil
@@ -98,7 +99,7 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 		VariantID:   variant.VariantID,
 		CatalogID:   variant.CatalogID,
 		TenantID:    tenantID,
-		Label:       "init",
+		Label:       types.InitialVersionLabel,
 		Description: "Initial version",
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 	}

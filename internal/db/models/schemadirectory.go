@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+
 	"github.com/google/uuid"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
@@ -31,6 +33,21 @@ type SchemaDirectory struct {
 	CatalogID   uuid.UUID      `db:"catalog_id"`
 	TenantID    types.TenantId `db:"tenant_id"`
 	Directory   []byte         `db:"directory"` // JSONB
+}
+
+type ObjectRef struct {
+	Hash string `json:"hash"`
+}
+type Directory map[string]ObjectRef
+
+func DirectoryToJSON(directory Directory) ([]byte, error) {
+	return json.Marshal(directory)
+}
+
+func JSONToDirectory(data []byte) (Directory, error) {
+	var directory Directory
+	err := json.Unmarshal(data, &directory)
+	return directory, err
 }
 
 /*

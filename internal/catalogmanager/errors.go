@@ -9,6 +9,7 @@ var (
 	ErrUnableToLoadObject apperrors.Error = ErrCatalogError.Msg("unable to load object")
 	ErrAlreadyExists      apperrors.Error = ErrCatalogError.Msg("object already exists")
 	ErrInvalidSchema      apperrors.Error = ErrCatalogError.Msg("invalid schema")
+	ErrEmptyMetadata      apperrors.Error = ErrCatalogError.Msg("empty metadata")
 	ErrInvalidProject     apperrors.Error = ErrCatalogError.Msg("invalid project")
 	ErrInvalidCatalog     apperrors.Error = ErrCatalogError.Msg("invalid catalog")
 	ErrVariantNotFound    apperrors.Error = ErrCatalogError.Msg("variant not found")

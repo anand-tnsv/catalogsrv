@@ -4,10 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jackc/pgtype"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +19,7 @@ import (
 func TestSaveObject(t *testing.T) {
 	tests := []struct {
 		name     string
-		metadata schemamanager.ObjectMetadata
+		metadata schemamanager.ObjectMetadata // for the purposes of this test, any garbage metadata will do
 		yamlData string
 		expected string
 	}{
@@ -56,7 +58,7 @@ version: v1
 kind: Collection
 metadata:
   name: AppConfigCollection
-  catalog: myCatalog
+  catalog: example-catalog
   path: /valid/path
 spec:
   parameters:
@@ -69,20 +71,62 @@ spec:
 `,
 			expected: "",
 		},
+		{
+			name: "catalog that doesn't exist",
+			metadata: schemamanager.ObjectMetadata{
+				Name:    "AppConfigCollection",
+				Catalog: "myCatalog",
+				Path:    "/valid/path",
+			},
+			yamlData: `
+version: v1
+kind: Collection
+metadata:
+  name: AppConfigCollection
+  catalog: invalid-catalog
+  path: /valid/path
+spec:
+  parameters:
+    maxRetries:
+      schema: IntegerParamSchema
+      default: 5
+  collections:
+    databaseConfig:
+      schema: DatabaseConfigCollection
+`,
+			expected: ErrInvalidCatalog.Error(),
+		},
 	}
 	// Run tests
 	// Initialize context with logger and database connection
 	ctx := newDb()
-	defer db.DB(ctx).Close(ctx)
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
 
 	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
 	// Set the tenant ID and project ID in the context
 	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
 
 	// Create the tenant and project for testing
 	err := db.DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
-	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+
+	// create catalog example-catalog
+	cat := &models.Catalog{
+		Name:        "example-catalog",
+		Description: "An example catalog",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		ProjectID:   projectID,
+	}
+	err = db.DB(ctx).CreateCatalog(ctx, cat)
 
 	for _, tt := range tests {
 		tt := tt // capture range variable
@@ -96,7 +140,7 @@ spec:
 				}
 				if errStr != tt.expected {
 					t.Errorf("got %v, want %v", err, tt.expected)
-				} else {
+				} else if err == nil {
 					// Save the resource
 					err = SaveObject(ctx, r.StorageRepresentation())
 					if assert.NoError(t, err) {

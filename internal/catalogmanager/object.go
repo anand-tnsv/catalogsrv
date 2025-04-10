@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/mugiliam/common/apperrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
@@ -41,9 +42,15 @@ func NewObject(ctx context.Context, rsrcJson []byte, m *schemamanager.ObjectMeta
 		return nil, validationerrors.ErrInvalidVersion
 	}
 
-	// Replace the metadata if one is provided
-	if m != nil {
-		setMetadata(rsrcJson, *m)
+	// get the metadata, replace fields in json from provided metadata. Set defaults.
+	rsrcJson, m, err = canonicalizeMetadata(rsrcJson, m)
+	if err != nil {
+		return nil, validationerrors.ErrSchemaSerialization
+	}
+
+	// validate the metadata
+	if err := validateMetadata(ctx, m); err != nil {
+		return nil, err
 	}
 
 	return resource.NewV1ObjectManager(ctx, []byte(rsrcJson), schemamanager.WithValidation())
@@ -76,6 +83,7 @@ func SaveObject(ctx context.Context, s *schemastore.SchemaStorageRepresentation,
 			return dberr
 		}
 	}
+	// write the object path directory
 	return nil
 }
 
@@ -107,4 +115,33 @@ func LoadObject(ctx context.Context, hash string, m *schemamanager.ObjectMetadat
 	}
 
 	return resource.LoadV1ObjectManager(ctx, s, m)
+}
+
+func validateMetadata(ctx context.Context, m *schemamanager.ObjectMetadata) apperrors.Error {
+	if m == nil {
+		return ErrEmptyMetadata
+	}
+	ves := m.Validate()
+	if ves != nil {
+		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
+	}
+	// Check if the catalog exists
+	c, err := db.DB(ctx).GetCatalog(ctx, uuid.Nil, m.Catalog)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			return ErrInvalidCatalog.Err(err)
+		}
+		return ErrCatalogError.Err(err)
+	}
+	// check if the variant exists
+	if !m.Variant.IsNil() {
+		if _, err := db.DB(ctx).GetVariant(ctx, c.CatalogID, uuid.Nil, m.Variant.String()); err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return ErrVariantNotFound.Err(err)
+			}
+			return ErrCatalogError.Err(err)
+		}
+	}
+	// we won't handle resource path here
+	return nil
 }

@@ -9,12 +9,13 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
 // CreateCatalog inserts a new catalog into the database.
 // If the catalog name already exists for the project and tenant, it returns an error.
-func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error {
+func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Catalog) (err apperrors.Error) {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
 		return err
@@ -64,7 +65,7 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 
 	// create default variant
 	variant := models.Variant{
-		Name:        "default",
+		Name:        types.DefaultVariant,
 		CatalogID:   catalog.CatalogID,
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		Description: "default variant",

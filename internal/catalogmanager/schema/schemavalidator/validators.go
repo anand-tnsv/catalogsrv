@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 const (
@@ -36,8 +37,26 @@ const nameRegex = `^[A-Za-z0-9_-]+$`
 
 // nameFormatValidator checks if the given name is alphanumeric with underscores and hyphens.
 func nameFormatValidator(fl validator.FieldLevel) bool {
+	var str string
+	if ns, ok := fl.Field().Interface().(types.NullableString); ok {
+		if ns.IsNil() {
+			return true
+		}
+		str = ns.String()
+	} else {
+		str = fl.Field().String()
+	}
 	re := regexp.MustCompile(nameRegex)
-	return re.MatchString(fl.Field().String())
+	return re.MatchString(str)
+}
+
+// notNull checks if a nullable value is not null
+func notNull(fl validator.FieldLevel) bool {
+	nv, ok := fl.Field().Interface().(types.Nullable)
+	if !ok { // not a nullable type
+		return true
+	}
+	return !nv.IsNil()
 }
 
 func noSpacesValidator(fl validator.FieldLevel) bool {
@@ -82,4 +101,5 @@ func init() {
 	V().RegisterValidation("nameFormatValidator", nameFormatValidator)
 	V().RegisterValidation("noSpaces", noSpacesValidator)
 	V().RegisterValidation("resourcePathValidator", resourcePathValidator)
+	V().RegisterValidation("notNull", notNull)
 }

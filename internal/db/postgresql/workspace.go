@@ -9,6 +9,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -16,7 +17,7 @@ import (
 // It automatically assigns a unique workspace ID if one is not provided.
 // Returns an error if the label already exists, the label format is invalid,
 // the catalog or variant ID is invalid, or there is a database error.
-func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.Workspace) error {
+func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.Workspace) (err error) {
 	// Retrieve tenantID from the context
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
@@ -32,6 +33,20 @@ func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.
 	// Set label as sql.NullString
 	label := sql.NullString{String: workspace.Label, Valid: workspace.Label != ""}
 
+	// create a transaction
+	tx, errdb := h.conn().BeginTx(ctx, &sql.TxOptions{})
+	if errdb != nil {
+		log.Ctx(ctx).Error().Err(errdb).Msg("failed to start transaction")
+		return dberror.ErrDatabase.Err(errdb)
+	}
+	defer func() {
+		if err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				log.Ctx(ctx).Error().Err(rollbackErr).Msg("failed to rollback transaction")
+			}
+		}
+	}()
+
 	query := `
 		INSERT INTO workspaces (workspace_id, label, description, info, base_version, variant_id, catalog_id, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -39,9 +54,9 @@ func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.
 	`
 
 	// Execute the query and scan the returned workspace_id
-	row := h.conn().QueryRowContext(ctx, query, workspace.WorkspaceID, label, workspace.Description, workspace.Info, workspace.BaseVersion, workspace.VariantID, workspace.CatalogID, workspace.TenantID)
+	row := tx.QueryRowContext(ctx, query, workspace.WorkspaceID, label, workspace.Description, workspace.Info, workspace.BaseVersion, workspace.VariantID, workspace.CatalogID, workspace.TenantID)
 	var insertedWorkspaceID uuid.UUID
-	err := row.Scan(&insertedWorkspaceID)
+	err = row.Scan(&insertedWorkspaceID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("label", workspace.Label).Str("variant_id", workspace.VariantID.String()).Str("catalog_id", workspace.CatalogID.String()).Msg("workspace already exists")
@@ -66,6 +81,51 @@ func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.
 	}
 
 	workspace.WorkspaceID = insertedWorkspaceID
+
+	// Create the parameters and collections directories
+	pd := models.SchemaDirectory{
+		WorkspaceID: workspace.WorkspaceID,
+		VariantID:   workspace.VariantID,
+		CatalogID:   workspace.CatalogID,
+		TenantID:    workspace.TenantID,
+		Directory:   []byte("{}"), // Initialize with empty JSON
+	}
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeParameterSchema, &pd, tx); err != nil {
+		return err
+	}
+	cd := models.SchemaDirectory{
+		WorkspaceID: workspace.WorkspaceID,
+		VariantID:   workspace.VariantID,
+		CatalogID:   workspace.CatalogID,
+		TenantID:    workspace.TenantID,
+		Directory:   []byte("{}"), // Initialize with empty JSON
+	}
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCollectionSchema, &cd, tx); err != nil {
+		return err
+	}
+
+	// update the parameter and collections directories in version
+	workspace.ParametersDir = pd.DirectoryID
+	workspace.CollectionsDir = cd.DirectoryID
+
+	// update the worskpace with the directories
+	updateQuery := `
+		UPDATE workspaces
+		SET parameters_directory = $1, collections_directory = $2
+		WHERE workspace_id = $3 AND tenant_id = $4;
+	`
+	_, err = tx.ExecContext(ctx, updateQuery, workspace.ParametersDir, workspace.CollectionsDir, workspace.WorkspaceID, workspace.TenantID)
+	if err != nil {
+		tx.Rollback()
+		log.Ctx(ctx).Error().Err(err).Msg("failed to update workspace with directories")
+		return dberror.ErrDatabase.Err(err)
+	}
+	// Commit the transaction if all insertions succeed
+	if err := tx.Commit(); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+
 	return nil
 }
 

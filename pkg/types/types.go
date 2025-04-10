@@ -6,6 +6,9 @@ type TenantId string
 type ProjectId string
 type CatalogId uuid.UUID
 
+const DefaultVariant = "default"
+const InitialVersionLabel = "init"
+
 func (u CatalogId) String() string {
 	return uuid.UUID(u).String()
 }
@@ -21,3 +24,7 @@ const (
 	CatalogObjectTypeCollectionSchema       CatalogObjectType = "collection_schema"
 	CatalogObjectTypeCatalogCollectionValue CatalogObjectType = "collection_value"
 )
+
+type Nullable interface {
+	IsNil() bool
+}

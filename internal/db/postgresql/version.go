@@ -18,7 +18,7 @@ import (
 // It automatically assigns a unique version number within the catalog and variant based on the sequence.
 // Returns an error if the label already exists for the given variant and catalog (when not empty),
 // the label format is invalid, the catalog or variant ID is invalid, or there is a database error.
-func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Version) error {
+func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Version) (err error) {
 	// Retrieve tenantID from the context
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
