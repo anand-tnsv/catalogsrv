@@ -33,7 +33,7 @@ func (rs *ObjectMetadata) Validate() schemaerr.ValidationErrors {
 
 	for _, e := range ve {
 		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
-
+		jsonFieldName = "metadata." + jsonFieldName
 		switch e.Tag() {
 		case "required":
 			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))

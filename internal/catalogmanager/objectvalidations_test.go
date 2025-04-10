@@ -2,13 +2,16 @@ package catalogmanager
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"testing"
 
+	"github.com/jackc/pgtype"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
-	"github.com/rs/zerolog/log"
+	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/yaml"
 )
@@ -162,10 +165,48 @@ spec:
 		},
 	}
 	// Run tests
+	ctx := newDb()
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant and project for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+
+	// create catalog example-catalog
+	cat := &models.Catalog{
+		Name:        "example-catalog",
+		Description: "An example catalog",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		ProjectID:   projectID,
+	}
+	err = db.DB(ctx).CreateCatalog(ctx, cat)
+	assert.NoError(t, err)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctx = log.Logger.WithContext(ctx)
+			ctx := newDb()
+			t.Cleanup(func() {
+				db.DB(ctx).Close(ctx)
+			})
+
+			tenantID := types.TenantId("TABCDE")
+			projectID := types.ProjectId("PABCDE")
+			// Set the tenant ID and project ID in the context
+			ctx = common.SetTenantIdInContext(ctx, tenantID)
+			ctx = common.SetProjectIdInContext(ctx, projectID)
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
 				_, err := NewObject(ctx, jsonData, nil)
@@ -292,10 +333,46 @@ spec:
 		},
 	}
 	// Run tests
+	ctx := newDb()
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant and project for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+
+	// create catalog example-catalog
+	cat := &models.Catalog{
+		Name:        "myCatalog",
+		Description: "An example catalog",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		ProjectID:   projectID,
+	}
+	err = db.DB(ctx).CreateCatalog(ctx, cat)
+	assert.NoError(t, err)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			ctx = log.Logger.WithContext(ctx)
+			ctx := newDb()
+			t.Cleanup(func() {
+				db.DB(ctx).Close(ctx)
+			})
+			tenantID := types.TenantId("TABCDE")
+			projectID := types.ProjectId("PABCDE")
+			// Set the tenant ID and project ID in the context
+			ctx = common.SetTenantIdInContext(ctx, tenantID)
+			ctx = common.SetProjectIdInContext(ctx, projectID)
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
 				_, err := NewObject(ctx, jsonData, nil)
