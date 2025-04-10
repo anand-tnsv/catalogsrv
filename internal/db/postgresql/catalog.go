@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
@@ -19,9 +20,24 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 		return err
 	}
 	catalog.ProjectID = projectID
-	if catalog.CatalogID == uuid.Nil {
-		catalog.CatalogID = uuid.New()
+	catalogID := catalog.CatalogID
+	if catalogID == uuid.Nil {
+		catalogID = uuid.New()
 	}
+
+	// create a transaction
+	tx, errdb := h.conn().BeginTx(ctx, &sql.TxOptions{})
+	if errdb != nil {
+		log.Ctx(ctx).Error().Err(errdb).Msg("failed to start transaction")
+		return dberror.ErrDatabase.Err(errdb)
+	}
+	defer func() {
+		if err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				log.Ctx(ctx).Error().Err(rollbackErr).Msg("failed to rollback transaction")
+			}
+		}
+	}()
 
 	query := `
 		INSERT INTO catalogs (catalog_id, name, description, info, tenant_id, project_id)
@@ -31,11 +47,12 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 	`
 
 	// Execute the query directly using h.conn().QueryRowContext
-	row := h.conn().QueryRowContext(ctx, query, catalog.CatalogID, catalog.Name, catalog.Description, catalog.Info, tenantID, projectID)
+	row := tx.QueryRowContext(ctx, query, catalogID, catalog.Name, catalog.Description, catalog.Info, tenantID, projectID)
 	var insertedCatalogID uuid.UUID
 	var insertedName string
 	errDb := row.Scan(&insertedCatalogID, &insertedName)
 	if errDb != nil {
+		tx.Rollback()
 		if errDb == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", catalog.Name).Str("catalog_id", catalog.CatalogID.String()).Msg("catalog already exists")
 			return dberror.ErrAlreadyExists.Msg("catalog already exists")
@@ -44,6 +61,26 @@ func (h *hatchCatalogDb) CreateCatalog(ctx context.Context, catalog *models.Cata
 		return dberror.ErrDatabase.Err(errDb)
 	}
 	catalog.CatalogID = insertedCatalogID
+
+	// create default variant
+	variant := models.Variant{
+		Name:        "default",
+		CatalogID:   catalog.CatalogID,
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		Description: "default variant",
+	}
+	err = h.createVariantWithTransaction(ctx, &variant, tx)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Commit the transaction if both insertions succeed
+	if err := tx.Commit(); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+
 	return nil
 }
 

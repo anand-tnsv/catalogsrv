@@ -20,18 +20,6 @@ import (
 // Returns an error if the variant already exists, the variant name format is invalid,
 // the catalog ID is invalid, or there is a database error.
 func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) apperrors.Error {
-
-	// Generate a new UUID for the variant ID if not provided
-	variantID := variant.VariantID
-	if variant.VariantID == uuid.Nil {
-		variantID = uuid.New()
-	}
-
-	tenantID := common.TenantIdFromContext(ctx)
-	if tenantID == "" {
-		return dberror.ErrMissingTenantID
-	}
-
 	// Start a transaction
 	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
@@ -45,6 +33,31 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 		}
 	}()
 
+	errDb := h.createVariantWithTransaction(ctx, variant, tx)
+	if errDb != nil {
+		tx.Rollback()
+		return errDb
+	}
+
+	// Commit the transaction if both insertions succeed
+	err = tx.Commit()
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	return nil
+}
+
+func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, variant *models.Variant, tx *sql.Tx) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	variantID := variant.VariantID
+	if variant.VariantID == uuid.Nil {
+		variantID = uuid.New()
+	}
 	// Query to insert the variant
 	queryVariant := `
 		INSERT INTO variants (variant_id, name, description, info, catalog_id, tenant_id)
@@ -57,9 +70,8 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 	row := tx.QueryRowContext(ctx, queryVariant, variantID, variant.Name, variant.Description, variant.Info, variant.CatalogID, tenantID)
 	var insertedVariantID uuid.UUID
 	var insertedName string
-	err = row.Scan(&insertedVariantID, &insertedName)
+	err := row.Scan(&insertedVariantID, &insertedName)
 	if err != nil {
-		tx.Rollback()
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("name", variant.Name).Str("variant_id", variant.VariantID.String()).Msg("variant already exists")
 			return dberror.ErrAlreadyExists.Msg("variant already exists")
@@ -74,7 +86,7 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 				return dberror.ErrInvalidCatalog
 			}
 		}
-		log.Ctx(ctx).Error().Err(err).Str("name", variant.Name).Str("variant_id", variantID.String()).Msg("failed to insert variant")
+		log.Ctx(ctx).Error().Err(err).Str("name", variant.Name).Str("variant_id", variant.VariantID.String()).Msg("failed to insert variant")
 		return dberror.ErrDatabase.Err(err)
 	}
 
@@ -93,15 +105,7 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 
 	errDb := h.createVersionWithTransaction(ctx, &version, tx)
 	if errDb != nil {
-		tx.Rollback()
 		return errDb
-	}
-
-	// Commit the transaction if both insertions succeed
-	err = tx.Commit()
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
-		return dberror.ErrDatabase.Err(err)
 	}
 
 	return nil
