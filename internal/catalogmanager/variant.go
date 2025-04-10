@@ -31,8 +31,7 @@ type variantMetadata struct {
 }
 
 type variantManager struct {
-	v       models.Variant
-	catalog string
+	v models.Variant
 }
 
 var _ schemamanager.VariantManager = (*variantManager)(nil)
@@ -91,8 +90,7 @@ func NewVariantManager(ctx context.Context, rsrcJson []byte, name string, catalo
 	}
 
 	return &variantManager{
-		v:       v,
-		catalog: vs.Metadata.Catalog,
+		v: v,
 	}, nil
 }
 
@@ -110,10 +108,6 @@ func (vm *variantManager) Description() string {
 
 func (vm *variantManager) CatalogID() uuid.UUID {
 	return vm.v.CatalogID
-}
-
-func (vm *variantManager) Catalog() string {
-	return vm.catalog
 }
 
 func LoadVariantManagerByName(ctx context.Context, catalogID uuid.UUID, name string) (schemamanager.VariantManager, apperrors.Error) {

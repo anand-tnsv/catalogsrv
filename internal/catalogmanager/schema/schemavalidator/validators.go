@@ -11,6 +11,7 @@ import (
 const (
 	CatalogKind    = "Catalog"
 	VariantKind    = "Variant"
+	WorkspaceKind  = "Workspace"
 	ParameterKind  = "Parameter"
 	CollectionKind = "Collection"
 )
@@ -18,6 +19,7 @@ const (
 var validKinds = []string{
 	CatalogKind,
 	VariantKind,
+	WorkspaceKind,
 	ParameterKind,
 	CollectionKind,
 }
@@ -91,6 +93,11 @@ func resourcePathValidator(fl validator.FieldLevel) bool {
 	return true
 }
 
+func requireVersionV1(fl validator.FieldLevel) bool {
+	version := fl.Field().String()
+	return version == "v1"
+}
+
 func ValidateObjectName(name string) bool {
 	re := regexp.MustCompile(nameRegex)
 	return re.MatchString(name)
@@ -102,4 +109,5 @@ func init() {
 	V().RegisterValidation("noSpaces", noSpacesValidator)
 	V().RegisterValidation("resourcePathValidator", resourcePathValidator)
 	V().RegisterValidation("notNull", notNull)
+	V().RegisterValidation("requireVersionV1", requireVersionV1)
 }

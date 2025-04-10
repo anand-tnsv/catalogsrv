@@ -157,6 +157,32 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, va
 	return variant, nil
 }
 
+func (h *hatchCatalogDb) GetVariantIDFromName(ctx context.Context, catalogID uuid.UUID, name string) (uuid.UUID, apperrors.Error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return uuid.Nil, dberror.ErrMissingTenantID
+	}
+
+	query := `
+		SELECT variant_id
+		FROM variants
+		WHERE name = $1 AND catalog_id = $2 AND tenant_id = $3;
+	`
+
+	var variantID uuid.UUID
+	err := h.conn().QueryRowContext(ctx, query, name, catalogID, tenantID).Scan(&variantID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Ctx(ctx).Info().Msg("variant not found")
+			return uuid.Nil, dberror.ErrNotFound.Msg("variant not found")
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve variant ID")
+		return uuid.Nil, dberror.ErrDatabase.Err(err)
+	}
+
+	return variantID, nil
+}
+
 // UpdateVariant updates an existing variant in the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
 // The VariantID and CatalogID fields cannot be updated.

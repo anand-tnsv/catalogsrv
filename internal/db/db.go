@@ -33,6 +33,7 @@ type DB_ interface {
 	// Variant
 	CreateVariant(ctx context.Context, variant *models.Variant) apperrors.Error
 	GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, apperrors.Error)
+	GetVariantIDFromName(ctx context.Context, catalogID uuid.UUID, name string) (uuid.UUID, apperrors.Error)
 	UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) apperrors.Error
 	DeleteVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) apperrors.Error
 
@@ -47,10 +48,10 @@ type DB_ interface {
 	GetNamedVersions(ctx context.Context, catalogID, variantID uuid.UUID) ([]models.Version, error)
 
 	// Workspace
-	CreateWorkspace(ctx context.Context, workspace *models.Workspace) error
-	DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) error
-	GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*models.Workspace, error)
-	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) error
+	CreateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
+	DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) apperrors.Error
+	GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*models.Workspace, apperrors.Error)
+	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) apperrors.Error
 
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error

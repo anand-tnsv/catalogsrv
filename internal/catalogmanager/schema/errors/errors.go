@@ -78,6 +78,14 @@ func ErrInvalidObjectPath(attr string, value ...any) ValidationError {
 	}
 }
 
+func ErrInvalidVersion(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "invalid version",
+	}
+}
+
 func ErrInvalidAnnotation(attr string, value ...string) ValidationError {
 	return ValidationError{
 		Field:  attr,

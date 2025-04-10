@@ -120,7 +120,6 @@ func TestNewVariantManager(t *testing.T) {
 				assert.NotNil(t, vm)
 				assert.Equal(t, "ValidVariant", vm.Name())
 				assert.Equal(t, "This is a valid variant", vm.Description())
-				assert.Equal(t, catalogName, vm.Catalog())
 
 				// Save the variant
 				err = vm.Save(ctx)
