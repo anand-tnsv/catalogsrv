@@ -14,6 +14,7 @@ import (
 type V1CollectionManager struct {
 	version          string
 	collectionSchema CollectionSchema
+	objectLoaders    schemamanager.ObjectLoaders
 }
 
 func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte, options ...schemamanager.Options) (*V1CollectionManager, apperrors.Error) {
@@ -42,6 +43,7 @@ func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte
 	return &V1CollectionManager{
 		version:          version,
 		collectionSchema: *cs,
+		objectLoaders:    o.ObjectLoaders,
 	}, nil
 }
 

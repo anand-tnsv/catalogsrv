@@ -1,6 +1,12 @@
 package schemamanager
 
-import "github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
+import (
+	"context"
+
+	"github.com/mugiliam/common/apperrors"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
+)
 
 type ObjectManager interface {
 	Version() string
@@ -17,4 +23,14 @@ type ObjectManager interface {
 	SetPath(path string)
 	SetCatalog(catalog string)
 	SetDescription(description string)
+}
+
+type ClosestParentObjectFinder func(ctx context.Context, t types.CatalogObjectType, targetName, startPath string) (path string, hash string, err apperrors.Error)
+type ObjectLoaderByPath func(ctx context.Context, t types.CatalogObjectType, path string) (ObjectManager, apperrors.Error)
+type ObjectLoaderByHash func(ctx context.Context, t types.CatalogObjectType, hash string) (ObjectManager, apperrors.Error)
+
+type ObjectLoaders struct {
+	ByPath        ObjectLoaderByPath
+	ByHash        ObjectLoaderByHash
+	ClosestParent ClosestParentObjectFinder
 }

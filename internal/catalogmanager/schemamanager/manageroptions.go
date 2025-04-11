@@ -1,7 +1,9 @@
 package schemamanager
 
 type OptionsConfig struct {
-	Validate bool
+	Validate             bool
+	ValidateDependencies bool
+	ObjectLoaders        ObjectLoaders
 }
 
 type Options func(*OptionsConfig)
@@ -13,5 +15,21 @@ func WithValidation(validate ...bool) Options {
 		} else {
 			cfg.Validate = true
 		}
+	}
+}
+
+func WithValidateDependencies(validate ...bool) Options {
+	return func(cfg *OptionsConfig) {
+		if len(validate) > 0 {
+			cfg.ValidateDependencies = validate[0]
+		} else {
+			cfg.ValidateDependencies = true
+		}
+	}
+}
+
+func WithObjectLoaders(loaders ObjectLoaders) Options {
+	return func(cfg *OptionsConfig) {
+		cfg.ObjectLoaders = loaders
 	}
 }

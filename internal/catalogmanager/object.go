@@ -394,3 +394,42 @@ func validateMetadata(ctx context.Context, m *schemamanager.ObjectMetadata) appe
 	// we won't handle resource path here
 	return nil
 }
+
+func getClosestParentObjectFinder(paramDir, collectionDir uuid.UUID) schemamanager.ClosestParentObjectFinder {
+	return func(ctx context.Context, t types.CatalogObjectType, targetName, startPath string) (path string, hash string, err apperrors.Error) {
+		var dir uuid.UUID
+		switch t {
+		case types.CatalogObjectTypeParameterSchema:
+			dir = paramDir
+		case types.CatalogObjectTypeCollectionSchema:
+			dir = collectionDir
+		default:
+			return "", "", ErrCatalogError.Msg("invalid object type")
+		}
+
+		path, obj, err := db.DB(ctx).FindClosestObject(ctx, t, dir, targetName, startPath)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return "", "", ErrObjectNotFound
+			}
+			return "", "", ErrCatalogError.Err(err)
+		}
+		if obj == nil {
+			return "", "", ErrObjectNotFound
+		}
+		hash = obj.Hash
+		return
+	}
+}
+
+func getObjectLoaderByPath(m *schemamanager.ObjectMetadata, opts ...ObjectStoreOption) schemamanager.ObjectLoaderByPath {
+	return func(ctx context.Context, t types.CatalogObjectType, path string) (schemamanager.ObjectManager, apperrors.Error) {
+		return LoadObjectByPath(ctx, t, m, opts...)
+	}
+}
+
+func getObjectLoaderByHash(m *schemamanager.ObjectMetadata) schemamanager.ObjectLoaderByHash {
+	return func(ctx context.Context, t types.CatalogObjectType, hash string) (schemamanager.ObjectManager, apperrors.Error) {
+		return LoadObjectByHash(ctx, hash, m)
+	}
+}
