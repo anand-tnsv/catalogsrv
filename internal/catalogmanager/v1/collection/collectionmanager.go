@@ -76,3 +76,11 @@ func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders
 	}
 	return nil
 }
+
+func (cm *V1CollectionManager) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) apperrors.Error {
+	ves := cm.collectionSchema.ValidateValue(ctx, loaders, param, value)
+	if ves != nil {
+		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
+	}
+	return nil
+}

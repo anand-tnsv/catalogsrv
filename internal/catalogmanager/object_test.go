@@ -48,9 +48,44 @@ func TestSaveObject(t *testing.T) {
 				schema: IntegerParamSchema
 				default: 8
 			maxDelay:
-				dataType: Integer1
+				dataType: Integer
 				default: 1000
 	`
+
+	nonExistentParamYaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: AppConfigCollection
+		catalog: example-catalog
+		path: /valid/path
+	spec:
+		parameters:
+			maxRetries:
+				schema: NonExistentParamSchema
+				default: 8
+			maxDelay:
+				dataType: Integer
+				default: 1000
+	`
+
+	nonExistentDataTypeYaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: AppConfigCollection
+		catalog: example-catalog
+		path: /valid/path
+	spec:
+		parameters:
+			maxRetries:
+				schema: NonExistentParamSchema
+				default: 8
+			maxDelay:
+				dataType: InvalidType
+				default: 1000
+	`
+
 	// Run tests
 	// Initialize context with logger and database connection
 	ctx := newDb()
@@ -60,6 +95,8 @@ func TestSaveObject(t *testing.T) {
 
 	replaceTabsWithSpaces(&validParamYaml)
 	replaceTabsWithSpaces(&validCollectionYaml)
+	replaceTabsWithSpaces(&nonExistentParamYaml)
+	replaceTabsWithSpaces(&nonExistentDataTypeYaml)
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -199,6 +236,192 @@ func TestSaveObject(t *testing.T) {
 		if assert.Error(t, err) {
 			t.Logf("Error: %v", err)
 		}
+	}
+
+	// create a collection with a non-existent parameter schema
+	jsonData, err = yaml.YAMLToJSON([]byte(nonExistentParamYaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		if assert.Error(t, err) {
+			t.Logf("Error: %v", err)
+		}
+	}
+
+	// create a collection with a non-existent data type
+	jsonData, err = yaml.YAMLToJSON([]byte(nonExistentDataTypeYaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		if assert.Error(t, err) {
+			t.Logf("Error: %v", err)
+		}
+	}
+}
+
+func TestSaveValue(t *testing.T) {
+
+	validParamYaml := `
+				version: v1
+				kind: Parameter
+				metadata:
+				  name: IntegerParamSchema
+				  catalog: example-catalog
+				  path: /valid/path
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 10
+				  default: 5
+	`
+	validCollectionYaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: AppConfigCollection
+		catalog: example-catalog
+		path: /valid/path
+	spec:
+		parameters:
+			maxRetries:
+				schema: IntegerParamSchema
+				default: 8
+			maxDelay:
+				dataType: Integer
+				default: 1000
+	`
+	validValueYaml := `
+	version: v1
+	kind: Value
+	metadata:
+		catalog: example-catalog
+		variant: default
+		collection: /valid/path/AppConfigCollection
+	spec:
+		maxRetries: 5
+		maxDelay: 2000
+	`
+
+	invalidDataTypeYaml := `
+	version: v1
+	kind: Value
+	metadata:
+		catalog: example-catalog
+		variant: default
+		collection: /valid/path/AppConfigCollection
+	spec:
+		maxRetries: 5
+		maxDelay: two_thousand
+	`
+	invalidParamYaml := `
+	version: v1
+	kind: Value
+	metadata:
+		catalog: example-catalog
+		variant: default
+		collection: /valid/path/AppConfigCollection
+	spec:
+		maxRetries: 5000
+		maxDelay: 2000
+	`
+
+	// Run tests
+	// Initialize context with logger and database connection
+	ctx := newDb()
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
+
+	replaceTabsWithSpaces(&validParamYaml)
+	replaceTabsWithSpaces(&validCollectionYaml)
+	replaceTabsWithSpaces(&validValueYaml)
+	replaceTabsWithSpaces(&invalidDataTypeYaml)
+	replaceTabsWithSpaces(&invalidParamYaml)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant and project for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+
+	// create catalog example-catalog
+	cat := &models.Catalog{
+		Name:        "example-catalog",
+		Description: "An example catalog",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		ProjectID:   projectID,
+	}
+	err = db.DB(ctx).CreateCatalog(ctx, cat)
+	assert.NoError(t, err)
+
+	varId, err := db.DB(ctx).GetVariantIDFromName(ctx, cat.CatalogID, types.DefaultVariant)
+	assert.NoError(t, err)
+
+	// create a workspace
+	ws := &models.Workspace{
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		BaseVersion: 1,
+		VariantID:   varId,
+		CatalogID:   cat.CatalogID,
+	}
+	err = db.DB(ctx).CreateWorkspace(ctx, ws)
+	assert.NoError(t, err)
+
+	// Create the parameter
+	jsonData, err := yaml.YAMLToJSON([]byte(validParamYaml))
+	if assert.NoError(t, err) {
+		r, err := NewObject(ctx, jsonData, nil)
+		require.NoError(t, err)
+		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+	}
+	// Create the collection
+	// unmarshal the yaml of the param schema
+	param := make(map[string]any)
+	yaml.Unmarshal([]byte(validParamYaml), &param)
+	collection := make(map[string]any)
+	yaml.Unmarshal([]byte(validCollectionYaml), &collection)
+	// create the collection schema
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+	}
+
+	// create a value
+	jsonData, err = yaml.YAMLToJSON([]byte(validValueYaml))
+	require.NoError(t, err)
+	err = SaveValue(ctx, jsonData, nil, WithWorkspaceID(ws.WorkspaceID))
+	assert.NoError(t, err)
+
+	// create a value with invalid data type
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidDataTypeYaml))
+	require.NoError(t, err)
+	err = SaveValue(ctx, jsonData, nil, WithWorkspaceID(ws.WorkspaceID))
+	if assert.Error(t, err) {
+		t.Logf("Error: %v", err)
+	}
+
+	// create a value with invalid parameter
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidParamYaml))
+	require.NoError(t, err)
+	err = SaveValue(ctx, jsonData, nil, WithWorkspaceID(ws.WorkspaceID))
+	if assert.Error(t, err) {
+		t.Logf("Error: %v", err)
 	}
 }
 

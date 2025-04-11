@@ -2,19 +2,15 @@ package integer
 
 import (
 	"github.com/mugiliam/common/apperrors"
+	v1errors "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-func (is *Spec) ValidateValue(v any) apperrors.Error {
-	val, ok := v.(int)
-	if !ok {
-		// If the value was default casted to float64, we'll need to cast it back to int losing precision
-		fval, ok := v.(float64)
-		if ok {
-			val = int(fval)
-		} else {
-			return validationerrors.ErrInvalidType
-		}
+func (is *Spec) ValidateValue(v types.NullableAny) apperrors.Error {
+	var val int
+	if err := v.GetAs(&val); err != nil {
+		return v1errors.ErrInvalidIntegerType
 	}
 	if is.Validation == nil {
 		return nil

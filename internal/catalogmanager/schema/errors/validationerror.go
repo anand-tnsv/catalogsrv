@@ -15,7 +15,7 @@ type ValidationError struct {
 
 // Error allows ValidationError to satisfy the error interface.
 func (ve ValidationError) Error() string {
-	if ve.Value != nil {
+	if len(ve.Field) > 0 {
 		return ve.Field + ": " + ve.ErrStr
 	} else {
 		return ve.ErrStr

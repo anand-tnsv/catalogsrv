@@ -14,6 +14,7 @@ const (
 	WorkspaceKind  = "Workspace"
 	ParameterKind  = "Parameter"
 	CollectionKind = "Collection"
+	ValueKind      = "Value"
 )
 
 var validKinds = []string{
@@ -22,6 +23,7 @@ var validKinds = []string{
 	WorkspaceKind,
 	ParameterKind,
 	CollectionKind,
+	ValueKind,
 }
 
 // kindValidator checks if the given kind is a valid resource kind.

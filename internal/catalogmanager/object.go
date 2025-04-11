@@ -99,7 +99,7 @@ func WithWorkspaceID(id uuid.UUID) ObjectStoreOption {
 	}
 }
 
-func WithDirectory(d Directories) ObjectStoreOption {
+func WithDirectories(d Directories) ObjectStoreOption {
 	return func(o *storeOptions) {
 		o.Dir = d
 	}
@@ -133,7 +133,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 		dir          Directories                           // directories for this object type
 		hash         string                  = s.GetHash() // hash of the object's storage representation
 		path         string                  = m.Path      // path to the object in the directory
-		pathWithName string                  = ""          // path with name
+		pathWithName string                  = ""          // fully qualified resource path with name
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
@@ -258,7 +258,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 	parentPath := m.Path
 	pathWithName := parentPath + "/" + m.Name
 
-	loaders := getObjectLoaders(ctx, m, WithDirectory(dir))
+	loaders := getObjectLoaders(ctx, m, WithDirectories(dir))
 
 	// validate the collection schema
 	if err := cm.ValidateDependencies(ctx, loaders); err != nil {
@@ -479,7 +479,7 @@ func getObjectLoaderByPath(ctx context.Context, m schemamanager.ObjectMetadata, 
 	}
 
 	// We do this so load workspace never gets called again
-	opts = append(opts, WithDirectory(Directories{
+	opts = append(opts, WithDirectories(Directories{
 		ParametersDir:  paramDir,
 		CollectionsDir: collectionDir,
 	}))

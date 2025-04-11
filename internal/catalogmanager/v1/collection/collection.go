@@ -93,6 +93,29 @@ func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders sc
 	return ves
 }
 
+func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) schemaerr.ValidationErrors {
+	var ves schemaerr.ValidationErrors
+	if value.IsNil() {
+		return ves
+	}
+	if loaders.ClosestParent == nil || loaders.ByHash == nil {
+		return append(ves, schemaerr.ErrMissingObjectLoaders(""))
+	}
+	p, ok := cs.Spec.Parameters[param]
+	if !ok {
+		return append(ves, schemaerr.ErrInvalidParameter(param))
+	}
+	// shallow copy the parameter
+	pShallowCopy := p
+	pShallowCopy.Default = value
+	if p.Schema != "" {
+		ves = append(ves, validateParameterSchemaDependency(ctx, loaders, param, &pShallowCopy)...)
+	} else if p.DataType != "" {
+		ves = append(ves, validateDataTypeDependency(param, &pShallowCopy, cs.Version)...)
+	}
+	return ves
+}
+
 func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 	// find if there is an applicable parameter schema.
@@ -113,8 +136,8 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 			ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 			return ves
 		}
-		if err := pm.ValidateValue(p.Default.Value); err != nil {
-			ves = append(ves, schemaerr.ErrInvalidDefaultValue(name))
+		if err := pm.ValidateValue(p.Default); err != nil {
+			ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
 			return ves
 		}
 	}
@@ -136,17 +159,12 @@ func validateDataTypeDependency(name string, p *Parameter, version string) schem
 	}
 	if !p.Default.IsNil() {
 		appendError := func() {
-			ves = append(ves, schemaerr.ErrInvalidDefaultValue(name))
+			ves = append(ves, schemaerr.ErrInvalidValue(name))
 		}
 		// construct a spec
-		jsonDefault, err := json.Marshal(p.Default)
-		if err != nil {
-			appendError()
-			return ves
-		}
 		dataTypeSpec := parameter.ParameterSpec{
 			DataType: p.DataType,
-			Default:  jsonDefault,
+			Default:  p.Default,
 		}
 		js, err := json.Marshal(dataTypeSpec)
 		if err != nil {
@@ -158,8 +176,8 @@ func validateDataTypeDependency(name string, p *Parameter, version string) schem
 			appendError()
 			return ves
 		}
-		if err := parameter.ValidateValue(p.Default.Value); err != nil {
-			appendError()
+		if err := parameter.ValidateValue(p.Default); err != nil {
+			ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
 			return ves
 		}
 	}

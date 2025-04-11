@@ -10,6 +10,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/datatypes"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 type ParameterSchema struct {
@@ -17,9 +18,9 @@ type ParameterSchema struct {
 }
 
 type ParameterSpec struct {
-	DataType   string          `json:"dataType" validate:"required"`
-	Validation json.RawMessage `json:"validation"`
-	Default    json.RawMessage `json:"default"`
+	DataType   string            `json:"dataType" validate:"required"`
+	Validation json.RawMessage   `json:"validation"`
+	Default    types.NullableAny `json:"default"`
 }
 
 func (ps *ParameterSchema) Validate() schemaerr.ValidationErrors {

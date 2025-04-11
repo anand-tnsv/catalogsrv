@@ -146,10 +146,24 @@ func ErrParameterSchemaDoesNotExist(attr string, value ...any) ValidationError {
 	}
 }
 
-func ErrInvalidDefaultValue(attr string, value ...any) ValidationError {
+func ErrInvalidValue(attr string, value ...any) ValidationError {
+	errStr := "invalid value"
+	if len(value) > 0 {
+		if str, ok := value[0].(string); ok {
+			errStr = str
+		}
+	}
 	return ValidationError{
 		Field:  attr,
 		Value:  value,
-		ErrStr: "invalid default value",
+		ErrStr: errStr,
+	}
+}
+
+func ErrInvalidParameter(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "invalid parameter",
 	}
 }

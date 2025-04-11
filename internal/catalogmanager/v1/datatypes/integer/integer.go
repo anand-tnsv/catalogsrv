@@ -6,11 +6,12 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/mugiliam/common/apperrors"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager/datatyperegistry"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 const (
@@ -25,9 +26,9 @@ type Validation struct {
 }
 
 type Spec struct {
-	DataType   string      `json:"dataType" validate:"required,eq=Integer"`
-	Validation *Validation `json:"validation,omitempty" validate:"omitnil"`
-	Default    *int        `json:"default,omitempty" validate:"omitnil"`
+	DataType   string            `json:"dataType" validate:"required,eq=Integer"`
+	Validation *Validation       `json:"validation,omitempty" validate:"omitnil"`
+	Default    types.NullableAny `json:"default,omitempty" validate:"omitnil"`
 }
 
 var _ schemamanager.Parameter = &Spec{}         // Ensure Spec implements schemamanager.Parameter
@@ -38,8 +39,8 @@ func (is *Spec) ValidateSpec() schemaerr.ValidationErrors {
 	err := schemavalidator.V().Struct(is)
 	if err == nil {
 		// validate the default value
-		if is.Validation != nil && is.Default != nil {
-			err := is.ValidateValue(*is.Default)
+		if is.Validation != nil && !is.Default.IsNil() {
+			err := is.ValidateValue(is.Default)
 			if err != nil {
 				return append(ves, schemaerr.ValidationError{
 					Field:  "default",
@@ -78,10 +79,14 @@ func (is *Spec) ValidateSpec() schemaerr.ValidationErrors {
 }
 
 func (is *Spec) DefaultValue() any {
-	if is.Default != nil {
-		return *is.Default
+	if !is.Default.IsNil() {
+		var v int
+		if err := is.Default.GetAs(&v); err != nil {
+			return nil
+		}
+		return v
 	}
-	return 0
+	return nil
 }
 
 func LoadIntegerSpec(data []byte) (schemamanager.Parameter, apperrors.Error) {
