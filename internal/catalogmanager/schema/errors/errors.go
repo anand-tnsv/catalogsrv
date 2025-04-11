@@ -129,3 +129,27 @@ func ErrUndefinedParameterSchema(attr string, value ...any) ValidationError {
 		ErrStr: "undefined parameter schema",
 	}
 }
+
+func ErrMissingObjectLoaders(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "unable to resolve path; missing object loaders",
+	}
+}
+
+func ErrParameterSchemaDoesNotExist(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "parameter schema does not exist",
+	}
+}
+
+func ErrInvalidDefaultValue(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "invalid default value",
+	}
+}

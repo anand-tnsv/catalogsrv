@@ -1,11 +1,18 @@
 package collection
 
 import (
+	"context"
+	"encoding/json"
 	"reflect"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager/datatyperegistry"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/parameter"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 type CollectionSchema struct {
@@ -14,15 +21,15 @@ type CollectionSchema struct {
 }
 
 type CollectionSpec struct {
-	Parameters  map[string]Parameter  `json:"parameters" validate:"omitempty,dive,keys,nameFormatValidator,endkeys,required"`
-	Collections map[string]Collection `json:"collections" validate:"omitempty,dive,keys,nameFormatValidator,endkeys,required"`
+	Parameters map[string]Parameter `json:"parameters" validate:"omitempty,dive,keys,nameFormatValidator,endkeys,required"`
+	//Collections map[string]Collection `json:"collections" validate:"omitempty,dive,keys,nameFormatValidator,endkeys,required"` // We don't maintain collection hierarcy here
 }
 
 type Parameter struct {
-	Schema      string      `json:"schema" validate:"required_without=DataType,omitempty,nameFormatValidator"`
-	DataType    string      `json:"dataType" validate:"required_without=Schema,excluded_unless=Schema '',omitempty,nameFormatValidator"`
-	Default     any         `json:"default" validate:"omitempty"`
-	Annotations Annotations `json:"annotations" validate:"omitempty,dive,keys,noSpaces,endkeys,noSpaces"`
+	Schema      string            `json:"schema" validate:"required_without=DataType,omitempty,nameFormatValidator"`
+	DataType    string            `json:"dataType" validate:"required_without=Schema,excluded_unless=Schema '',omitempty,nameFormatValidator"`
+	Default     types.NullableAny `json:"default"`
+	Annotations Annotations       `json:"annotations" validate:"omitempty,dive,keys,noSpaces,endkeys,noSpaces"`
 }
 
 type Annotations map[string]string
@@ -31,34 +38,13 @@ type Collection struct {
 	Schema string `json:"schema" validate:"required,nameFormatValidator"`
 }
 
-type validateOptions struct {
-	validateParams bool
-}
-
-type CollectionValidateOption func(*validateOptions)
-
-func WithValidateParams() CollectionValidateOption {
-	return func(o *validateOptions) {
-		o.validateParams = true
-	}
-}
-
-func (cs *CollectionSchema) Validate(opts ...CollectionValidateOption) schemaerr.ValidationErrors {
-	o := validateOptions{}
-	for _, opt := range opts {
-		opt(&o)
-	}
+func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 	// Note: We don't validate the dataType and default fields here
 	// TODO: Add validation for dataType and default fields
 	err := schemavalidator.V().Struct(cs)
 	if err == nil {
-		if o.validateParams {
-			err := cs.ValidateParameters()
-			if err != nil {
-				return err
-			}
-		}
+		return nil
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {
@@ -92,11 +78,90 @@ func (cs *CollectionSchema) Validate(opts ...CollectionValidateOption) schemaerr
 	return ves
 }
 
-func (cs *CollectionSchema) ValidateParameters() schemaerr.ValidationErrors {
+func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
-	for _, p := range cs.Spec.Parameters {
-		// load the parameter manager
-		_ = p
+	if loaders.ClosestParent == nil || loaders.ByHash == nil {
+		return append(ves, schemaerr.ErrMissingObjectLoaders(""))
+	}
+	for n, p := range cs.Spec.Parameters {
+		if p.Schema != "" {
+			ves = append(ves, validateParameterSchemaDependency(ctx, loaders, n, &p)...)
+		} else if p.DataType != "" {
+			ves = append(ves, validateDataTypeDependency(n, &p, cs.Version)...)
+		}
+	}
+	return ves
+}
+
+func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) schemaerr.ValidationErrors {
+	var ves schemaerr.ValidationErrors
+	// find if there is an applicable parameter schema.
+	path, hash, err := loaders.ClosestParent(ctx, types.CatalogObjectTypeParameterSchema, p.Schema)
+	if err != nil || path == "" || hash == "" {
+		ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
+	} else if !p.Default.IsNil() {
+		om, err := loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, schemamanager.ObjectMetadata{
+			Name: path[strings.LastIndex(path, "/")+1:],
+			Path: path,
+		})
+		if err != nil && om == nil {
+			ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
+			return ves
+		}
+		pm := om.ParameterManager()
+		if pm == nil {
+			ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
+			return ves
+		}
+		if err := pm.ValidateValue(p.Default.Value); err != nil {
+			ves = append(ves, schemaerr.ErrInvalidDefaultValue(name))
+			return ves
+		}
+	}
+
+	return ves
+}
+
+func validateDataTypeDependency(name string, p *Parameter, version string) schemaerr.ValidationErrors {
+	var ves schemaerr.ValidationErrors
+
+	//check if the DataType is supported
+	loader := datatyperegistry.GetLoader(datatyperegistry.DataTypeKey{
+		Type:    p.DataType,
+		Version: version,
+	})
+	if loader == nil {
+		ves = append(ves, schemaerr.ErrUnsupportedDataType("spec.parameters.dataType", p.DataType))
+		return ves
+	}
+	if !p.Default.IsNil() {
+		appendError := func() {
+			ves = append(ves, schemaerr.ErrInvalidDefaultValue(name))
+		}
+		// construct a spec
+		jsonDefault, err := json.Marshal(p.Default)
+		if err != nil {
+			appendError()
+			return ves
+		}
+		dataTypeSpec := parameter.ParameterSpec{
+			DataType: p.DataType,
+			Default:  jsonDefault,
+		}
+		js, err := json.Marshal(dataTypeSpec)
+		if err != nil {
+			appendError()
+			return ves
+		}
+		parameter, apperr := loader(js)
+		if apperr != nil {
+			appendError()
+			return ves
+		}
+		if err := parameter.ValidateValue(p.Default.Value); err != nil {
+			appendError()
+			return ves
+		}
 	}
 	return ves
 }

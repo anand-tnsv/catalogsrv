@@ -14,7 +14,6 @@ import (
 type V1CollectionManager struct {
 	version          string
 	collectionSchema CollectionSchema
-	objectLoaders    schemamanager.ObjectLoaders
 }
 
 func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte, options ...schemamanager.Options) (*V1CollectionManager, apperrors.Error) {
@@ -40,10 +39,16 @@ func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte
 		}
 	}
 
+	if o.ValidateDependencies {
+		ves := cs.ValidateDependencies(ctx, o.ObjectLoaders)
+		if ves != nil {
+			return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
+		}
+	}
+
 	return &V1CollectionManager{
 		version:          version,
 		collectionSchema: *cs,
-		objectLoaders:    o.ObjectLoaders,
 	}, nil
 }
 
@@ -62,4 +67,12 @@ func (cm *V1CollectionManager) ParameterSchemaReferences() []string {
 		refs = append(refs, p.Schema)
 	}
 	return refs
+}
+
+func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) apperrors.Error {
+	ves := cm.collectionSchema.ValidateDependencies(ctx, loaders)
+	if ves != nil {
+		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
+	}
+	return nil
 }

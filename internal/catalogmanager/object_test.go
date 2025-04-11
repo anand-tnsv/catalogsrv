@@ -2,6 +2,7 @@ package catalogmanager
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -14,101 +15,51 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 )
 
 func TestSaveObject(t *testing.T) {
-	tests := []struct {
-		name     string
-		metadata schemamanager.ObjectMetadata // for the purposes of this test, any garbage metadata will do
-		yamlData string
-		expected string
-	}{
 
-		{
-			name: "valid parameter",
-			metadata: schemamanager.ObjectMetadata{
-				Name:    "example",
-				Catalog: "example-catalog",
-				Path:    "/example",
-			},
-			yamlData: `
-			version: v1
-			kind: Parameter
-			metadata:
-			  name: example
-			  catalog: example-catalog
-			  path: /example
-			spec:
-			  dataType: Integer
-			  validation:
-			    minValue: 1
-			    maxValue: 10
-			  default: 5
-			`,
-			expected: "",
-		},
-
-		/*
-		   		{
-		   			name: "valid collection with schema",
-		   			metadata: schemamanager.ObjectMetadata{
-		   				Name:    "AppConfigCollection",
-		   				Catalog: "myCatalog",
-		   				Path:    "/valid/path",
-		   			},
-		   			yamlData: `
-		   version: v1
-		   kind: Collection
-		   metadata:
-		     name: AppConfigCollection
-		     catalog: example-catalog
-		     path: /valid/path
-		   spec:
-		     parameters:
-		       maxRetries:
-		         schema: IntegerParamSchema
-		         default: 5
-		         collections:
-		           databaseConfig:
-		             schema: DatabaseConfigCollection
-		   			`,
-		   			expected: "",
-		   		},
-		   		/*
-		   					{
-		   						name: "catalog that doesn't exist",
-		   						metadata: schemamanager.ObjectMetadata{
-		   							Name:    "AppConfigCollection",
-		   							Catalog: "myCatalog",
-		   							Path:    "/valid/path",
-		   						},
-		   						yamlData: `
-		   			version: v1
-		   			kind: Collection
-		   			metadata:
-		   			  name: AppConfigCollection
-		   			  catalog: invalid-catalog
-		   			  path: /valid/path
-		   			spec:
-		   			  parameters:
-		   			    maxRetries:
-		   			      schema: IntegerParamSchema
-		   			      default: 5
-		   			  collections:
-		   			    databaseConfig:
-		   			      schema: DatabaseConfigCollection
-		   			`,
-		   						expected: ErrInvalidCatalog.Error(),
-		   					},
-		*/
-	}
+	validParamYaml := `
+				version: v1
+				kind: Parameter
+				metadata:
+				  name: IntegerParamSchema
+				  catalog: example-catalog
+				  path: /valid/path
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 10
+				  default: 5
+	`
+	validCollectionYaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: AppConfigCollection
+		catalog: example-catalog
+		path: /valid/path
+	spec:
+		parameters:
+			maxRetries:
+				schema: IntegerParamSchema
+				default: 8
+			maxDelay:
+				dataType: Integer1
+				default: 1000
+	`
 	// Run tests
 	// Initialize context with logger and database connection
 	ctx := newDb()
 	t.Cleanup(func() {
 		db.DB(ctx).Close(ctx)
 	})
+
+	replaceTabsWithSpaces(&validParamYaml)
+	replaceTabsWithSpaces(&validCollectionYaml)
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -148,66 +99,106 @@ func TestSaveObject(t *testing.T) {
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)
 
-	for _, tt := range tests {
-		tt := tt // capture range variable
-		t.Run(tt.name, func(t *testing.T) {
-			replaceTabsWithSpaces(&tt.yamlData)
-			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
+	// Create the parameter
+	jsonData, err := yaml.YAMLToJSON([]byte(validParamYaml))
+	if assert.NoError(t, err) {
+		r, err := NewObject(ctx, jsonData, nil)
+		if assert.NoError(t, err) {
+			err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 			if assert.NoError(t, err) {
-				r, err := NewObject(ctx, jsonData, nil)
-				errStr := ""
-				if err != nil {
-					errStr = err.Error()
+				// try to save again
+				err = SaveObject(ctx, r, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
+				if assert.Error(t, err) {
+					assert.ErrorIs(t, err, ErrAlreadyExists)
 				}
-				if errStr != tt.expected {
-					t.Errorf("got %v, want %v", err, tt.expected)
-				} else if err == nil {
-					// Save the resource
-					err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+				// create another object with same spec but at different path. Should not create a duplicate hash
+				rNew, err := NewObject(ctx, jsonData, &schemamanager.ObjectMetadata{
+					Name: "example_new",
+					Path: "/another/path",
+				})
+				if assert.NoError(t, err) {
+					err = SaveObject(ctx, rNew, WithWorkspaceID(ws.WorkspaceID))
 					if assert.NoError(t, err) {
-						// try to save again
-						err = SaveObject(ctx, r, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
-						if assert.Error(t, err) {
-							assert.ErrorIs(t, err, ErrAlreadyExists)
-						}
-						// create another object with same spec but at different path. Should not create a duplicate hash
-						rNew, err := NewObject(ctx, jsonData, &schemamanager.ObjectMetadata{
-							Name: "example_new",
-							Path: "/another/path",
-						})
-						if assert.NoError(t, err) {
-							err = SaveObject(ctx, rNew, WithWorkspaceID(ws.WorkspaceID))
-							if assert.NoError(t, err) {
-								assert.Equal(t, r.StorageRepresentation().GetHash(), rNew.StorageRepresentation().GetHash())
-							}
-						}
-						// load the resource from the database
-						lr, err := LoadObjectByHash(ctx, r.StorageRepresentation().GetHash(), &tt.metadata)
-						if assert.NoError(t, err) { // Check if no error occurred
-							assert.NotNil(t, lr)                                                                       // Check if the loaded resource is not nil
-							assert.Equal(t, r.Kind(), lr.Kind())                                                       // Check if the kind matches
-							assert.Equal(t, r.Version(), lr.Version())                                                 // Check if the version matches
-							assert.Equal(t, r.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash()) // Check if the hashes match
-						}
-						// load object by path
-						var tp types.CatalogObjectType
-						if r.Kind() == "Collection" {
-							tp = types.CatalogObjectTypeCollectionSchema
-						} else if r.Kind() == "Parameter" {
-							tp = types.CatalogObjectTypeParameterSchema
-						}
-						m := r.Metadata()
-						lr, err = LoadObjectByPath(ctx, tp, &m, WithWorkspaceID(ws.WorkspaceID))
-						if assert.NoError(t, err) {
-							assert.NotNil(t, lr)
-							assert.Equal(t, r.Kind(), lr.Kind())
-							assert.Equal(t, r.Version(), lr.Version())
-							assert.Equal(t, r.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
-						}
+						assert.Equal(t, r.StorageRepresentation().GetHash(), rNew.StorageRepresentation().GetHash())
 					}
 				}
+				// load the resource from the database
+				m := r.Metadata()
+				lr, err := LoadObjectByHash(ctx, r.StorageRepresentation().GetHash(), &m)
+				if assert.NoError(t, err) { // Check if no error occurred
+					assert.NotNil(t, lr)                                                                       // Check if the loaded resource is not nil
+					assert.Equal(t, r.Kind(), lr.Kind())                                                       // Check if the kind matches
+					assert.Equal(t, r.Version(), lr.Version())                                                 // Check if the version matches
+					assert.Equal(t, r.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash()) // Check if the hashes match
+				}
+				// load object by path
+				var tp types.CatalogObjectType
+				if r.Kind() == "Collection" {
+					tp = types.CatalogObjectTypeCollectionSchema
+				} else if r.Kind() == "Parameter" {
+					tp = types.CatalogObjectTypeParameterSchema
+				}
+				lr, err = LoadObjectByPath(ctx, tp, &m, WithWorkspaceID(ws.WorkspaceID))
+				if assert.NoError(t, err) {
+					assert.NotNil(t, lr)
+					assert.Equal(t, r.Kind(), lr.Kind())
+					assert.Equal(t, r.Version(), lr.Version())
+					assert.Equal(t, r.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
+				}
 			}
-		})
+		}
+	}
+	// Create the collection
+	// unmarshal the yaml of the param schema
+	param := make(map[string]any)
+	yaml.Unmarshal([]byte(validParamYaml), &param)
+	collection := make(map[string]any)
+	yaml.Unmarshal([]byte(validCollectionYaml), &collection)
+	// create the collection schema
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		if assert.NoError(t, err) {
+			// load the collection schema
+			m := collectionSchema.Metadata()
+			lr, err := LoadObjectByHash(ctx, collectionSchema.StorageRepresentation().GetHash(), &m)
+			if assert.NoError(t, err) {
+				assert.NotNil(t, lr)
+				assert.Equal(t, collectionSchema.Kind(), lr.Kind())
+				assert.Equal(t, collectionSchema.Version(), lr.Version())
+				assert.Equal(t, collectionSchema.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
+			}
+			// load by path
+			lr, err = LoadObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
+			if assert.NoError(t, err) {
+				assert.NotNil(t, lr)
+				assert.Equal(t, collectionSchema.Kind(), lr.Kind())
+				assert.Equal(t, collectionSchema.Version(), lr.Version())
+				assert.Equal(t, collectionSchema.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
+			}
+		}
+	}
+	// change the base path of the collection schema
+	collectionSchema.SetPath("/another/collection/path")
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	if assert.Error(t, err) {
+		t.Logf("Error: %v", err)
+	}
+
+	// revert the path
+	collectionSchema.SetPath("/valid/path")
+	// change default value to a string
+	collection["spec"].(map[string]any)["parameters"].(map[string]any)["maxRetries"].(map[string]any)["default"] = "five"
+	jsonData, err = json.Marshal(collection)
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		if assert.Error(t, err) {
+			t.Logf("Error: %v", err)
+		}
 	}
 }
 

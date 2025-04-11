@@ -80,7 +80,7 @@ func (pm *V1ParameterManager) Default() interface{} {
 	return pm.parameter.DefaultValue()
 }
 
-func (pm *V1ParameterManager) Validate(value any) apperrors.Error {
+func (pm *V1ParameterManager) ValidateValue(value any) apperrors.Error {
 	return pm.parameter.ValidateValue(value)
 }
 

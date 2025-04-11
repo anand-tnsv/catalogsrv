@@ -21,6 +21,7 @@ func (ns NullableString) IsNil() bool {
 func (ns NullableString) Set(value string) {
 	ns.Value = value
 	ns.Valid = true
+	_ = ns
 }
 
 var _ json.Marshaler = &NullableString{}   // Ensure NullableString implements json.Marshaler

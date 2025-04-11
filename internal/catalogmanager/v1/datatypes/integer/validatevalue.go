@@ -8,7 +8,13 @@ import (
 func (is *Spec) ValidateValue(v any) apperrors.Error {
 	val, ok := v.(int)
 	if !ok {
-		return validationerrors.ErrInvalidType
+		// If the value was default casted to float64, we'll need to cast it back to int losing precision
+		fval, ok := v.(float64)
+		if ok {
+			val = int(fval)
+		} else {
+			return validationerrors.ErrInvalidType
+		}
 	}
 	if is.Validation == nil {
 		return nil

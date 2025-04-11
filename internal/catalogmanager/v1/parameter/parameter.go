@@ -8,7 +8,7 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
-	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/parameter/datatypes"
+	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/datatypes"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 )
 

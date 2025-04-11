@@ -8,6 +8,6 @@ import (
 type ParameterManager interface {
 	DataType() string
 	Default() any
-	Validate(any) apperrors.Error
+	ValidateValue(any) apperrors.Error
 	StorageRepresentation() *schemastore.SchemaStorageRepresentation
 }
