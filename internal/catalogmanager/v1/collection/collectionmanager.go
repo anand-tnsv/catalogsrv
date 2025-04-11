@@ -46,6 +46,10 @@ func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte
 		}
 	}
 
+	if o.SetDefaultValues {
+		cs.SetDefaultValues(ctx)
+	}
+
 	return &V1CollectionManager{
 		version:          version,
 		collectionSchema: *cs,
@@ -81,6 +85,14 @@ func (cm *V1CollectionManager) ValidateValue(ctx context.Context, loaders schema
 	ves := cm.collectionSchema.ValidateValue(ctx, loaders, param, value)
 	if ves != nil {
 		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
+	}
+	return nil
+}
+
+func (cm *V1CollectionManager) SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error {
+	err := cm.collectionSchema.SetValue(ctx, param, value)
+	if err != nil {
+		return validationerrors.ErrSchemaValidation.Msg(err.Error())
 	}
 	return nil
 }

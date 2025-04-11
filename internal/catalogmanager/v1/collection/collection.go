@@ -30,6 +30,7 @@ type Parameter struct {
 	DataType    string            `json:"dataType" validate:"required_without=Schema,excluded_unless=Schema '',omitempty,nameFormatValidator"`
 	Default     types.NullableAny `json:"default"`
 	Annotations Annotations       `json:"annotations" validate:"omitempty,dive,keys,noSpaces,endkeys,noSpaces"`
+	Value       types.NullableAny `json:"value"`
 }
 
 type Annotations map[string]string
@@ -114,6 +115,25 @@ func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemaman
 		ves = append(ves, validateDataTypeDependency(param, &pShallowCopy, cs.Version)...)
 	}
 	return ves
+}
+
+func (cs *CollectionSchema) SetValue(ctx context.Context, param string, value types.NullableAny) error {
+	p, ok := cs.Spec.Parameters[param]
+	if !ok {
+		return schemaerr.ErrInvalidParameter(param)
+	}
+	p.Value = value
+	cs.Spec.Parameters[param] = p
+	return nil
+}
+
+func (cs *CollectionSchema) SetDefaultValues(ctx context.Context) {
+	for n, p := range cs.Spec.Parameters {
+		if p.Default.IsNil() {
+			continue
+		}
+		cs.SetValue(ctx, n, p.Default)
+	}
 }
 
 func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) schemaerr.ValidationErrors {

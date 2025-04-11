@@ -136,6 +136,12 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 		if err := c.ValidateValue(ctx, loaders, param, value); err != nil {
 			return err
 		}
+		c.SetValue(ctx, param, value)
+	}
+
+	// save the collection object
+	if err := SaveObject(ctx, om, WithDirectories(dir), SkipValidationForUpdate()); err != nil {
+		return err
 	}
 
 	return nil

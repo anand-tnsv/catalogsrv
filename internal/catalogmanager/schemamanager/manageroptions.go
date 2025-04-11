@@ -3,6 +3,7 @@ package schemamanager
 type OptionsConfig struct {
 	Validate             bool
 	ValidateDependencies bool
+	SetDefaultValues     bool
 	ObjectLoaders        ObjectLoaders
 }
 
@@ -31,5 +32,15 @@ func WithValidateDependencies(validate ...bool) Options {
 func WithObjectLoaders(loaders ObjectLoaders) Options {
 	return func(cfg *OptionsConfig) {
 		cfg.ObjectLoaders = loaders
+	}
+}
+
+func WithDefaultValues(set ...bool) Options {
+	return func(cfg *OptionsConfig) {
+		if len(set) > 0 {
+			cfg.SetDefaultValues = set[0]
+		} else {
+			cfg.SetDefaultValues = true
+		}
 	}
 }

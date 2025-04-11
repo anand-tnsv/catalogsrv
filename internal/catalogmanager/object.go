@@ -55,14 +55,15 @@ func NewObject(ctx context.Context, rsrcJson []byte, m *schemamanager.ObjectMeta
 		return nil, err
 	}
 
-	return resource.NewV1ObjectManager(ctx, []byte(rsrcJson), schemamanager.WithValidation())
+	return resource.NewV1ObjectManager(ctx, []byte(rsrcJson), schemamanager.WithValidation(), schemamanager.WithDefaultValues())
 }
 
 type storeOptions struct {
-	ErrorIfExists bool
-	WorkspaceID   uuid.UUID
-	Dir           Directories
-	VersionNum    int
+	ErrorIfExists           bool
+	WorkspaceID             uuid.UUID
+	Dir                     Directories
+	SkipValidationForUpdate bool
+	VersionNum              int
 }
 
 type Directories struct {
@@ -111,6 +112,12 @@ func WithVersionNum(num int) ObjectStoreOption {
 	}
 }
 
+func SkipValidationForUpdate() ObjectStoreOption {
+	return func(o *storeOptions) {
+		o.SkipValidationForUpdate = true
+	}
+}
+
 func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...ObjectStoreOption) apperrors.Error {
 	if om == nil {
 		return validationerrors.ErrEmptySchema
@@ -141,7 +148,9 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	pathWithName = path + "/" + m.Name
 
 	// get the directory
-	if options.WorkspaceID != uuid.Nil {
+	if !options.Dir.IsNil() {
+		dir = options.Dir
+	} else if options.WorkspaceID != uuid.Nil {
 		var wm schemamanager.WorkspaceManager
 		var apperr apperrors.Error
 
@@ -163,6 +172,9 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 
 	switch t {
 	case types.CatalogObjectTypeParameterSchema:
+		if options.SkipValidationForUpdate {
+			break
+		}
 		if err := validateParameterSchema(ctx, dir.ParametersDir, pathWithName, hash); err != nil {
 			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
@@ -173,6 +185,9 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 			return err
 		}
 	case types.CatalogObjectTypeCollectionSchema:
+		if options.SkipValidationForUpdate {
+			break
+		}
 		if err := validateCollectionSchema(ctx, om, dir, hash); err != nil {
 			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
