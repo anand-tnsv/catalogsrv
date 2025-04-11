@@ -2,6 +2,7 @@ package catalogmanager
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgtype"
@@ -23,6 +24,7 @@ func TestSaveObject(t *testing.T) {
 		yamlData string
 		expected string
 	}{
+
 		{
 			name: "valid parameter",
 			metadata: schemamanager.ObjectMetadata{
@@ -31,72 +33,74 @@ func TestSaveObject(t *testing.T) {
 				Path:    "/example",
 			},
 			yamlData: `
-version: v1
-kind: Parameter
-metadata:
-  name: example
-  catalog: example-catalog
-  path: /example
-spec:
-  dataType: Integer
-  validation:
-    minValue: 1
-    maxValue: 10
-  default: 5
-`,
+			version: v1
+			kind: Parameter
+			metadata:
+			  name: example
+			  catalog: example-catalog
+			  path: /example
+			spec:
+			  dataType: Integer
+			  validation:
+			    minValue: 1
+			    maxValue: 10
+			  default: 5
+			`,
 			expected: "",
 		},
+
 		/*
-					{
-						name: "valid collection with schema",
-						metadata: schemamanager.ObjectMetadata{
-							Name:    "AppConfigCollection",
-							Catalog: "myCatalog",
-							Path:    "/valid/path",
-						},
-						yamlData: `
-			version: v1
-			kind: Collection
-			metadata:
-			  name: AppConfigCollection
-			  catalog: example-catalog
-			  path: /valid/path
-			spec:
-			  parameters:
-			    maxRetries:
-			      schema: IntegerParamSchema
-			      default: 5
-			  collections:
-			    databaseConfig:
-			      schema: DatabaseConfigCollection
-			`,
-						expected: "",
-					},
-					{
-						name: "catalog that doesn't exist",
-						metadata: schemamanager.ObjectMetadata{
-							Name:    "AppConfigCollection",
-							Catalog: "myCatalog",
-							Path:    "/valid/path",
-						},
-						yamlData: `
-			version: v1
-			kind: Collection
-			metadata:
-			  name: AppConfigCollection
-			  catalog: invalid-catalog
-			  path: /valid/path
-			spec:
-			  parameters:
-			    maxRetries:
-			      schema: IntegerParamSchema
-			      default: 5
-			  collections:
-			    databaseConfig:
-			      schema: DatabaseConfigCollection
-			`,
-						expected: ErrInvalidCatalog.Error(),
-					},
+		   		{
+		   			name: "valid collection with schema",
+		   			metadata: schemamanager.ObjectMetadata{
+		   				Name:    "AppConfigCollection",
+		   				Catalog: "myCatalog",
+		   				Path:    "/valid/path",
+		   			},
+		   			yamlData: `
+		   version: v1
+		   kind: Collection
+		   metadata:
+		     name: AppConfigCollection
+		     catalog: example-catalog
+		     path: /valid/path
+		   spec:
+		     parameters:
+		       maxRetries:
+		         schema: IntegerParamSchema
+		         default: 5
+		         collections:
+		           databaseConfig:
+		             schema: DatabaseConfigCollection
+		   			`,
+		   			expected: "",
+		   		},
+		   		/*
+		   					{
+		   						name: "catalog that doesn't exist",
+		   						metadata: schemamanager.ObjectMetadata{
+		   							Name:    "AppConfigCollection",
+		   							Catalog: "myCatalog",
+		   							Path:    "/valid/path",
+		   						},
+		   						yamlData: `
+		   			version: v1
+		   			kind: Collection
+		   			metadata:
+		   			  name: AppConfigCollection
+		   			  catalog: invalid-catalog
+		   			  path: /valid/path
+		   			spec:
+		   			  parameters:
+		   			    maxRetries:
+		   			      schema: IntegerParamSchema
+		   			      default: 5
+		   			  collections:
+		   			    databaseConfig:
+		   			      schema: DatabaseConfigCollection
+		   			`,
+		   						expected: ErrInvalidCatalog.Error(),
+		   					},
 		*/
 	}
 	// Run tests
@@ -147,6 +151,7 @@ spec:
 	for _, tt := range tests {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
+			replaceTabsWithSpaces(&tt.yamlData)
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
 				r, err := NewObject(ctx, jsonData, nil)
@@ -177,12 +182,27 @@ spec:
 							}
 						}
 						// load the resource from the database
-						lr, err := LoadObject(ctx, r.StorageRepresentation().GetHash(), &tt.metadata)
+						lr, err := LoadObjectByHash(ctx, r.StorageRepresentation().GetHash(), &tt.metadata)
 						if assert.NoError(t, err) { // Check if no error occurred
 							assert.NotNil(t, lr)                                                                       // Check if the loaded resource is not nil
 							assert.Equal(t, r.Kind(), lr.Kind())                                                       // Check if the kind matches
 							assert.Equal(t, r.Version(), lr.Version())                                                 // Check if the version matches
 							assert.Equal(t, r.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash()) // Check if the hashes match
+						}
+						// load object by path
+						var tp types.CatalogObjectType
+						if r.Kind() == "Collection" {
+							tp = types.CatalogObjectTypeCollectionSchema
+						} else if r.Kind() == "Parameter" {
+							tp = types.CatalogObjectTypeParameterSchema
+						}
+						m := r.Metadata()
+						lr, err = LoadObjectByPath(ctx, tp, &m, WithWorkspaceID(ws.WorkspaceID))
+						if assert.NoError(t, err) {
+							assert.NotNil(t, lr)
+							assert.Equal(t, r.Kind(), lr.Kind())
+							assert.Equal(t, r.Version(), lr.Version())
+							assert.Equal(t, r.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
 						}
 					}
 				}
@@ -195,4 +215,8 @@ func newDb() context.Context {
 	ctx := log.Logger.WithContext(context.Background())
 	ctx = db.ConnCtx(ctx)
 	return ctx
+}
+
+func replaceTabsWithSpaces(s *string) {
+	*s = strings.ReplaceAll(*s, "\t", "    ")
 }

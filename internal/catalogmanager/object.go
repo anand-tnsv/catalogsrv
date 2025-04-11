@@ -58,28 +58,35 @@ func NewObject(ctx context.Context, rsrcJson []byte, m *schemamanager.ObjectMeta
 	return resource.NewV1ObjectManager(ctx, []byte(rsrcJson), schemamanager.WithValidation())
 }
 
-type StoreOptions struct {
+type storeOptions struct {
 	ErrorIfExists bool
 	WorkspaceID   uuid.UUID
+	Dir           uuid.UUID
 	VersionNum    int
 }
 
-type ObjectStoreOption func(*StoreOptions)
+type ObjectStoreOption func(*storeOptions)
 
 func WithErrorIfExists() ObjectStoreOption {
-	return func(o *StoreOptions) {
+	return func(o *storeOptions) {
 		o.ErrorIfExists = true
 	}
 }
 
 func WithWorkspaceID(id uuid.UUID) ObjectStoreOption {
-	return func(o *StoreOptions) {
+	return func(o *storeOptions) {
 		o.WorkspaceID = id
 	}
 }
 
+func WithDirectory(id uuid.UUID) ObjectStoreOption {
+	return func(o *storeOptions) {
+		o.Dir = id
+	}
+}
+
 func WithVersionNum(num int) ObjectStoreOption {
-	return func(o *StoreOptions) {
+	return func(o *storeOptions) {
 		o.VersionNum = num
 	}
 }
@@ -96,7 +103,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	m := om.Metadata()
 
 	// get the options
-	options := &StoreOptions{}
+	options := &storeOptions{}
 	for _, opt := range opts {
 		opt(options)
 	}
@@ -123,16 +130,12 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 			return apperr
 		}
 
-		if t == types.CatalogObjectTypeParameterSchema {
-			if paramDir = wm.ParametersDir(); paramDir == uuid.Nil {
-				return ErrInvalidWorkspace.Msg("workspace does not have a parameters directory")
-			}
-		} else if t == types.CatalogObjectTypeCollectionSchema {
-			if paramDir = wm.CollectionsDir(); paramDir == uuid.Nil {
-				return ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
-			}
-		} else {
-			return ErrCatalogError.Msg("invalid object type")
+		if paramDir = wm.ParametersDir(); paramDir == uuid.Nil {
+			return ErrInvalidWorkspace.Msg("workspace does not have a parameters directory")
+		}
+
+		if collectionDir = wm.CollectionsDir(); collectionDir == uuid.Nil {
+			return ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
 		}
 	} else {
 		return ErrInvalidVersionOrWorkspace
@@ -249,7 +252,7 @@ func validateCollectionSchema(ctx context.Context, cm schemamanager.CollectionMa
 				log.Ctx(ctx).Error().Err(err).Msg("failed to find closest object")
 				return ErrCatalogError.Err(err)
 			}
-		} else if op == "" { // should never come here
+		} else if op == "" {
 			log.Ctx(ctx).Error().Str("path", ref).Msg("parameter schema not found")
 			ves = append(ves, schemaerr.ErrUndefinedParameterSchema(ref))
 		}
@@ -286,7 +289,54 @@ func removeLastSegment(path string) string {
 	return path[:lastSlashIndex]
 }
 
-func LoadObject(ctx context.Context, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
+func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemamanager.ObjectMetadata, opts ...ObjectStoreOption) (schemamanager.ObjectManager, apperrors.Error) {
+	o := &storeOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	var dir uuid.UUID
+	if o.Dir != uuid.Nil {
+		dir = o.Dir
+	} else if o.WorkspaceID != uuid.Nil {
+		var wm schemamanager.WorkspaceManager
+		var apperr apperrors.Error
+
+		if wm, apperr = LoadWorkspaceManagerByID(ctx, o.WorkspaceID); apperr != nil {
+			return nil, apperr
+		}
+
+		switch t {
+		case types.CatalogObjectTypeParameterSchema:
+			if dir = wm.ParametersDir(); dir == uuid.Nil {
+				return nil, ErrInvalidWorkspace.Msg("workspace does not have a parameters directory")
+			}
+		case types.CatalogObjectTypeCollectionSchema:
+			if dir = wm.CollectionsDir(); dir == uuid.Nil {
+				return nil, ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
+			}
+		default:
+			return nil, ErrCatalogError.Msg("invalid object type")
+		}
+	} else {
+		return nil, ErrInvalidVersionOrWorkspace
+	}
+
+	fqrp := m.Path + "/" + m.Name
+	obj, err := db.DB(ctx).GetObjectByPath(ctx, t, dir, fqrp)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			return nil, ErrObjectNotFound
+		}
+		return nil, ErrCatalogError.Err(err)
+	}
+	if obj == nil { //should never get here
+		return nil, ErrObjectNotFound
+	}
+	return LoadObjectByHash(ctx, obj.Hash, m)
+}
+
+func LoadObjectByHash(ctx context.Context, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
 	if hash == "" {
 		return nil, dberror.ErrInvalidInput.Msg("hash cannot be empty")
 	}

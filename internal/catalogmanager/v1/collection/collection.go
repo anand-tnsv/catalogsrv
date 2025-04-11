@@ -31,13 +31,34 @@ type Collection struct {
 	Schema string `json:"schema" validate:"required,nameFormatValidator"`
 }
 
-func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
+type validateOptions struct {
+	validateParams bool
+}
+
+type CollectionValidateOption func(*validateOptions)
+
+func WithValidateParams() CollectionValidateOption {
+	return func(o *validateOptions) {
+		o.validateParams = true
+	}
+}
+
+func (cs *CollectionSchema) Validate(opts ...CollectionValidateOption) schemaerr.ValidationErrors {
+	o := validateOptions{}
+	for _, opt := range opts {
+		opt(&o)
+	}
 	var ves schemaerr.ValidationErrors
 	// Note: We don't validate the dataType and default fields here
 	// TODO: Add validation for dataType and default fields
 	err := schemavalidator.V().Struct(cs)
 	if err == nil {
-		return nil
+		if o.validateParams {
+			err := cs.ValidateParameters()
+			if err != nil {
+				return err
+			}
+		}
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {
@@ -67,6 +88,15 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 		default:
 			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}
+	}
+	return ves
+}
+
+func (cs *CollectionSchema) ValidateParameters() schemaerr.ValidationErrors {
+	var ves schemaerr.ValidationErrors
+	for _, p := range cs.Spec.Parameters {
+		// load the parameter manager
+		_ = p
 	}
 	return ves
 }
