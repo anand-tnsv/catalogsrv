@@ -258,6 +258,150 @@ func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.Ca
 	return nil
 }
 
+func (h *hatchCatalogDb) AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references []string) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	tableName := getSchemaDirectoryTableName(t)
+	if tableName == "" {
+		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	// JSONB query to append multiple references to the array
+	query := `
+		UPDATE ` + tableName + `
+		SET directory = jsonb_set(
+			directory,
+			ARRAY[$1, 'references'],
+			COALESCE(
+				(
+					SELECT jsonb_agg(DISTINCT to_jsonb(x))
+					FROM (
+						SELECT x
+						FROM jsonb_array_elements_text(
+							CASE
+								WHEN jsonb_typeof(directory #> ARRAY[$1, 'references']) = 'array' THEN
+									directory #> ARRAY[$1, 'references']
+								ELSE
+									'[]'::jsonb
+							END
+						) x
+						UNION ALL
+						SELECT unnest($2::text[])
+					) combined
+				),
+				to_jsonb($2::text[])
+			),
+			true
+		)
+		WHERE directory_id = $3 AND tenant_id = $4;`
+
+	// Execute the query
+	result, err := h.conn().ExecContext(ctx, query, path, references, directoryID, tenantID)
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	if rowsAffected == 0 {
+		return dberror.ErrNotFound.Msg("object not found")
+	}
+
+	return nil
+}
+
+func (h *hatchCatalogDb) GetAllReferences(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (models.References, apperrors.Error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return nil, dberror.ErrMissingTenantID
+	}
+	tableName := getSchemaDirectoryTableName(t)
+	if tableName == "" {
+		return nil, dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	// Query to extract the references array
+	query := `
+		SELECT COALESCE(directory #> ARRAY[$1, 'references'], '[]'::jsonb)
+		FROM ` + tableName + `
+		WHERE directory_id = $2 AND tenant_id = $3;`
+
+	var jsonbData []byte
+	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&jsonbData)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, dberror.ErrNotFound.Msg("object not found")
+		}
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+
+	// Unmarshal the JSONB data into a slice of strings
+	var references models.References
+	if err := json.Unmarshal(jsonbData, &references); err != nil {
+		return nil, dberror.ErrDatabase.Msg("failed to unmarshal references").Err(err)
+	}
+
+	return references, nil
+}
+
+func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, reference string) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	tableName := getSchemaDirectoryTableName(t)
+	if tableName == "" {
+		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	// SQL query to remove a specific reference from the JSONB array
+	query := `
+		UPDATE ` + tableName + `
+		SET directory = jsonb_set(
+			directory,
+			ARRAY[$1, 'references'],
+			COALESCE(
+				(
+					SELECT jsonb_agg(x)
+					FROM jsonb_array_elements(
+						CASE
+							WHEN jsonb_typeof(directory #> ARRAY[$1, 'references']) = 'array' THEN
+								directory #> ARRAY[$1, 'references']
+							ELSE
+								'[]'::jsonb
+						END
+					) x
+					WHERE x != to_jsonb($2::text)
+				),
+				'[]'::jsonb
+			),
+			true
+		)
+		WHERE directory_id = $3 AND tenant_id = $4;`
+
+	// Execute the query
+	result, err := h.conn().ExecContext(ctx, query, path, reference, directoryID, tenantID)
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	if rowsAffected == 0 {
+		return dberror.ErrNotFound.Msg("object not found")
+	}
+
+	return nil
+}
+
 func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {

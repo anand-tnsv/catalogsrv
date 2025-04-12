@@ -176,6 +176,57 @@ func TestSchemaDirectory(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, object.Hash, updateObj.Hash)
 
+	// Add a reference
+	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []string{"ref1", "ref2"})
+	assert.NoError(t, err)
+
+	// Add more references
+	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []string{"ref3", "ref4"})
+	assert.NoError(t, err)
+	// Get the references
+	references, err := DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, references, []string{"ref1", "ref2", "ref3", "ref4"})
+
+	// Delete one of the references
+	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref2")
+	assert.NoError(t, err)
+	// Get the references
+	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, references, []string{"ref1", "ref3", "ref4"})
+
+	// Delete non-existing reference
+	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref2")
+	assert.NoError(t, err)
+	// Get the references
+	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, references, []string{"ref1", "ref3", "ref4"})
+
+	// Delete all references
+	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref1")
+	assert.NoError(t, err)
+	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref3")
+	assert.NoError(t, err)
+	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref4")
+	assert.NoError(t, err)
+	// Get the references
+	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, references, []string{})
+	// Delete non-existing reference
+	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref1")
+	assert.NoError(t, err)
+
+	// Now add a reference
+	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []string{"ref1"})
+	assert.NoError(t, err)
+	// Get the references
+	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, references, []string{"ref1"})
+
 	// Delete object by path
 	result, err := DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)

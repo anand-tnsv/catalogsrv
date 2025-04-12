@@ -79,19 +79,22 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 	return ves
 }
 
-func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) schemaerr.ValidationErrors {
+func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ParameterReferences, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
+	var refs schemamanager.ParameterReferences
 	if loaders.ClosestParent == nil || loaders.ByHash == nil {
-		return append(ves, schemaerr.ErrMissingObjectLoaders(""))
+		return nil, append(ves, schemaerr.ErrMissingObjectLoaders(""))
 	}
 	for n, p := range cs.Spec.Parameters {
 		if p.Schema != "" {
-			ves = append(ves, validateParameterSchemaDependency(ctx, loaders, n, &p)...)
+			var ve schemaerr.ValidationErrors
+			refs, ve = validateParameterSchemaDependency(ctx, loaders, n, &p)
+			ves = append(ves, ve...)
 		} else if p.DataType != "" {
 			ves = append(ves, validateDataTypeDependency(n, &p, cs.Version)...)
 		}
 	}
-	return ves
+	return refs, ves
 }
 
 func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) schemaerr.ValidationErrors {
@@ -110,7 +113,8 @@ func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemaman
 	pShallowCopy := p
 	pShallowCopy.Default = value
 	if p.Schema != "" {
-		ves = append(ves, validateParameterSchemaDependency(ctx, loaders, param, &pShallowCopy)...)
+		_, ve := validateParameterSchemaDependency(ctx, loaders, param, &pShallowCopy)
+		ves = append(ves, ve...)
 	} else if p.DataType != "" {
 		ves = append(ves, validateDataTypeDependency(param, &pShallowCopy, cs.Version)...)
 	}
@@ -136,33 +140,39 @@ func (cs *CollectionSchema) SetDefaultValues(ctx context.Context) {
 	}
 }
 
-func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) schemaerr.ValidationErrors {
+func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) (schemamanager.ParameterReferences, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
+	var refs schemamanager.ParameterReferences
 	// find if there is an applicable parameter schema.
 	path, hash, err := loaders.ClosestParent(ctx, types.CatalogObjectTypeParameterSchema, p.Schema)
 	if err != nil || path == "" || hash == "" {
 		ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-	} else if !p.Default.IsNil() {
-		om, err := loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, schemamanager.ObjectMetadata{
-			Name: path[strings.LastIndex(path, "/")+1:],
-			Path: path,
+	} else {
+		refs = append(refs, schemamanager.ParameterReference{
+			Parameter: path,
 		})
-		if err != nil && om == nil {
-			ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-			return ves
-		}
-		pm := om.ParameterManager()
-		if pm == nil {
-			ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-			return ves
-		}
-		if err := pm.ValidateValue(p.Default); err != nil {
-			ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
-			return ves
+		if !p.Default.IsNil() {
+			om, err := loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, schemamanager.ObjectMetadata{
+				Name: path[strings.LastIndex(path, "/")+1:],
+				Path: path,
+			})
+			if err != nil && om == nil {
+				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
+				return nil, ves
+			}
+			pm := om.ParameterManager()
+			if pm == nil {
+				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
+				return nil, ves
+			}
+			if err := pm.ValidateValue(p.Default); err != nil {
+				ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
+				return nil, ves
+			}
 		}
 	}
 
-	return ves
+	return refs, ves
 }
 
 func validateDataTypeDependency(name string, p *Parameter, version string) schemaerr.ValidationErrors {

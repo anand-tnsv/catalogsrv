@@ -40,7 +40,7 @@ func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte
 	}
 
 	if o.ValidateDependencies {
-		ves := cs.ValidateDependencies(ctx, o.ObjectLoaders)
+		_, ves := cs.ValidateDependencies(ctx, o.ObjectLoaders)
 		if ves != nil {
 			return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 		}
@@ -73,12 +73,12 @@ func (cm *V1CollectionManager) ParameterSchemaReferences() []string {
 	return refs
 }
 
-func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) apperrors.Error {
-	ves := cm.collectionSchema.ValidateDependencies(ctx, loaders)
+func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ParameterReferences, apperrors.Error) {
+	refs, ves := cm.collectionSchema.ValidateDependencies(ctx, loaders)
 	if ves != nil {
-		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
+		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 	}
-	return nil
+	return refs, nil
 }
 
 func (cm *V1CollectionManager) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) apperrors.Error {

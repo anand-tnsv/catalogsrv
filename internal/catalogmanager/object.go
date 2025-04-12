@@ -141,6 +141,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 		hash         string                  = s.GetHash() // hash of the object's storage representation
 		path         string                  = m.Path      // path to the object in the directory
 		pathWithName string                  = ""          // fully qualified resource path with name
+		refs         schemamanager.ParameterReferences
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
@@ -188,7 +189,8 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 		if options.SkipValidationForUpdate {
 			break
 		}
-		if err := validateCollectionSchema(ctx, om, dir, hash); err != nil {
+		var err apperrors.Error
+		if refs, err = validateCollectionSchema(ctx, om, dir, hash); err != nil {
 			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
 					return ErrAlreadyExists
@@ -227,6 +229,16 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 		}
 	}
 
+	// Obtain the existing references for the collection schema before we update the collection.
+	// This is needed only for schema updates.
+	var existingRefs schemamanager.ParameterReferences
+	if t == types.CatalogObjectTypeCollectionSchema && !options.SkipValidationForUpdate {
+		omr, err := LoadObjectByPath(ctx, t, &m, WithDirectories(dir))
+		if err == nil {
+			existingRefs, _ = omr.CollectionManager().ValidateDependencies(ctx, getObjectLoaders(ctx, m, WithDirectories(dir)))
+		}
+	}
+
 	if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, t, dir.DirForType(t), pathWithName, models.ObjectRef{
 		Hash: obj.Hash,
 	}); err != nil {
@@ -234,7 +246,57 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 		return ErrCatalogError
 	}
 
+	if t == types.CatalogObjectTypeCollectionSchema && !options.SkipValidationForUpdate {
+		syncParameterReferences(ctx, dir.ParametersDir, pathWithName, existingRefs, refs)
+	}
+
 	return nil
+}
+
+func syncParameterReferences(ctx context.Context, paramDir uuid.UUID, collectionFqdp string, existingRefs, newRefs schemamanager.ParameterReferences) {
+	type refAction string
+	const (
+		actionAdd    refAction = "add"
+		actionDelete refAction = "delete"
+	)
+
+	refActions := make(map[string]refAction)
+
+	// Mark new references for addition
+	for _, newRef := range newRefs {
+		refActions[newRef.Parameter] = actionAdd
+	}
+
+	// Handle existing references (remove or keep)
+	for _, existingRef := range existingRefs {
+		if _, ok := refActions[existingRef.Parameter]; ok {
+			delete(refActions, existingRef.Parameter) // Already exists, no action needed
+		} else {
+			refActions[existingRef.Parameter] = actionDelete // Mark for deletion
+		}
+	}
+
+	// Execute actions
+	for param, action := range refActions {
+		switch action {
+		case actionAdd:
+			if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, []string{collectionFqdp}); err != nil {
+				log.Ctx(ctx).Error().
+					Str("param", param).
+					Str("collection", collectionFqdp).
+					Err(err).
+					Msg("failed to add references to collection schema")
+			}
+		case actionDelete:
+			if err := db.DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, collectionFqdp); err != nil {
+				log.Ctx(ctx).Error().
+					Str("param", param).
+					Str("collection", collectionFqdp).
+					Err(err).
+					Msg("failed to delete references from collection schema")
+			}
+		}
+	}
 }
 
 func validateParameterSchema(ctx context.Context, dir uuid.UUID, path string, hash string) apperrors.Error {
@@ -257,16 +319,17 @@ func validateParameterSchema(ctx context.Context, dir uuid.UUID, path string, ha
 	return nil
 }
 
-func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) apperrors.Error {
+func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) (schemamanager.ParameterReferences, apperrors.Error) {
+	var refs schemamanager.ParameterReferences
 	if om == nil {
 		log.Ctx(ctx).Error().Msg("object manager is nil")
-		return ErrCatalogError
+		return nil, ErrCatalogError
 	}
 
 	cm := om.CollectionManager()
 	if cm == nil {
 		log.Ctx(ctx).Error().Msg("collection manager is nil")
-		return ErrCatalogError
+		return nil, ErrCatalogError
 	}
 
 	m := om.Metadata()
@@ -276,8 +339,9 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 	loaders := getObjectLoaders(ctx, m, WithDirectories(dir))
 
 	// validate the collection schema
-	if err := cm.ValidateDependencies(ctx, loaders); err != nil {
-		return err
+	var err apperrors.Error
+	if refs, err = cm.ValidateDependencies(ctx, loaders); err != nil {
+		return nil, err
 	}
 
 	// get this objectRef from the directory
@@ -287,14 +351,14 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 			log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
 		} else {
 			log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
-			return ErrCatalogError
+			return nil, ErrCatalogError
 		}
 	}
 	if r != nil && r.Hash == hash {
 		log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
-		return ErrAlreadyExists
+		return refs, ErrAlreadyExists
 	}
-	return nil
+	return refs, nil
 }
 
 func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemamanager.ObjectMetadata, opts ...ObjectStoreOption) (schemamanager.ObjectManager, apperrors.Error) {

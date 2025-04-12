@@ -36,8 +36,11 @@ type SchemaDirectory struct {
 }
 
 type ObjectRef struct {
-	Hash string `json:"hash"`
+	Hash       string     `json:"hash"`
+	References References `json:"references"`
 }
+
+type References []string
 type Directory map[string]ObjectRef
 
 func DirectoryToJSON(directory Directory) ([]byte, error) {
