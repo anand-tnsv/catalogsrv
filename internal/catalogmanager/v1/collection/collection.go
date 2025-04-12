@@ -3,10 +3,11 @@ package collection
 import (
 	"context"
 	"encoding/json"
+	"path"
 	"reflect"
-	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/mugiliam/common/apperrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
@@ -79,16 +80,23 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 	return ves
 }
 
-func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ObjectReferences, schemaerr.ValidationErrors) {
+func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, existingRefs schemamanager.ObjectReferences) (schemamanager.ObjectReferences, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
 	var refs schemamanager.ObjectReferences
 	refMap := make(map[string]schemamanager.ObjectReference)
-	if loaders.ClosestParent == nil || loaders.ByHash == nil {
+	if loaders.ClosestParent == nil || loaders.ByHash == nil || loaders.ByPath == nil {
 		return nil, append(ves, schemaerr.ErrMissingObjectLoaders(""))
 	}
 	for n, p := range cs.Spec.Parameters {
 		if p.Schema != "" {
-			ref, ve := validateParameterSchemaDependency(ctx, loaders, n, &p)
+			var schemaPath string
+			for _, ref := range existingRefs {
+				if ref.ObjectName() == p.Schema {
+					schemaPath = ref.Name
+					break
+				}
+			}
+			ref, ve := validateParameterSchemaDependency(ctx, loaders, n, schemaPath, &p)
 			if ve != nil {
 				ves = append(ves, ve...)
 			} else {
@@ -109,7 +117,7 @@ func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemaman
 	if value.IsNil() {
 		return ves
 	}
-	if loaders.ClosestParent == nil || loaders.ByHash == nil {
+	if loaders.ClosestParent == nil || loaders.ByPath == nil || loaders.ParameterRef == nil {
 		return append(ves, schemaerr.ErrMissingObjectLoaders(""))
 	}
 	p, ok := cs.Spec.Parameters[param]
@@ -120,8 +128,13 @@ func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemaman
 	pShallowCopy := p
 	pShallowCopy.Default = value
 	if p.Schema != "" {
-		_, ve := validateParameterSchemaDependency(ctx, loaders, param, &pShallowCopy)
-		ves = append(ves, ve...)
+		schemaPath := loaders.ParameterRef(p.Schema)
+		if schemaPath == "" {
+			ves = append(ves, schemaerr.ErrInvalidParameter(param))
+		} else {
+			_, ve := validateParameterSchemaDependency(ctx, loaders, param, schemaPath, &pShallowCopy)
+			ves = append(ves, ve...)
+		}
 	} else if p.DataType != "" {
 		ves = append(ves, validateDataTypeDependency(param, &pShallowCopy, cs.Version)...)
 	}
@@ -169,23 +182,34 @@ func (cs *CollectionSchema) ParametersWithSchema(schemaName string) []schemamana
 	return params
 }
 
-func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) (schemamanager.ObjectReference, schemaerr.ValidationErrors) {
+func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, schemaPath string, p *Parameter) (schemamanager.ObjectReference, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
 	var ref schemamanager.ObjectReference
-	// find if there is an applicable parameter schema.
-	path, hash, err := loaders.ClosestParent(ctx, types.CatalogObjectTypeParameterSchema, p.Schema)
-	if err != nil || path == "" || hash == "" {
+	var hash string
+	var err apperrors.Error
+	// find if there is an applicable parameter schema
+	if schemaPath == "" {
+		schemaPath, hash, err = loaders.ClosestParent(ctx, types.CatalogObjectTypeParameterSchema, p.Schema)
+	}
+
+	if err != nil || (schemaPath == "" && hash == "") {
 		ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 	} else {
 		ref = schemamanager.ObjectReference{
-			Name: path,
-			Hash: hash,
+			Name: schemaPath,
 		}
 		if !p.Default.IsNil() {
-			om, err := loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, schemamanager.ObjectMetadata{
-				Name: path[strings.LastIndex(path, "/")+1:],
-				Path: path,
-			})
+			var om schemamanager.ObjectManager
+			var err apperrors.Error
+			// construct the object metadata for what we want to load from the self metadata
+			m := loaders.SelfMetadata()
+			m.Name = path.Base(schemaPath)
+			m.Path = path.Dir(schemaPath)
+			if len(hash) > 0 {
+				om, err = loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, &m)
+			} else {
+				om, err = loaders.ByPath(ctx, types.CatalogObjectTypeParameterSchema, &m)
+			}
 			if err != nil && om == nil {
 				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 				return ref, ves

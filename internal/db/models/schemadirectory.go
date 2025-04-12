@@ -40,9 +40,9 @@ type ObjectRef struct {
 	References References `json:"references"`
 }
 
+// we'll keep Reference as a struct for future extensibility at the cost of increased storage space
 type Reference struct {
 	Name string `json:"name"`
-	Hash string `json:"hash"`
 }
 
 type References []Reference

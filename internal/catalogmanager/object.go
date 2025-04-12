@@ -136,12 +136,12 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	var (
-		t            types.CatalogObjectType = s.Type      // object type
-		dir          Directories                           // directories for this object type
-		hash         string                  = s.GetHash() // hash of the object's storage representation
-		path         string                  = m.Path      // path to the object in the directory
-		pathWithName string                  = ""          // fully qualified resource path with name
-		refs         schemamanager.ObjectReferences
+		t                  types.CatalogObjectType = s.Type      // object type
+		dir                Directories                           // directories for this object type
+		hash               string                  = s.GetHash() // hash of the object's storage representation
+		path               string                  = m.Path      // path to the object in the directory
+		pathWithName       string                  = ""          // fully qualified resource path with name
+		refs, existingRefs schemamanager.ObjectReferences
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
@@ -182,7 +182,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 			break
 		}
 		var err apperrors.Error
-		if refs, err = validateCollectionSchema(ctx, om, dir, hash); err != nil {
+		if refs, existingRefs, err = validateCollectionSchema(ctx, om, dir, hash); err != nil {
 			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
 					return ErrAlreadyExists
@@ -224,16 +224,10 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	// For Collections, we obtain the existing references and process the delta later.
 	// For Parameters, we copy over the existing references
 
-	var existingRefs schemamanager.ObjectReferences
-	if t == types.CatalogObjectTypeCollectionSchema && !options.SkipValidationForUpdate {
-		existingRefs, _ = getObjectReferences(ctx, t, dir.CollectionsDir, pathWithName)
-	}
-
 	var refModel models.References
 	for _, ref := range refs {
 		refModel = append(refModel, models.Reference{
 			Name: ref.Name,
-			Hash: ref.Hash,
 		})
 	}
 
@@ -246,24 +240,13 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	if t == types.CatalogObjectTypeCollectionSchema && !options.SkipValidationForUpdate {
-		syncCollectionReferencesInParameters(ctx, dir.ParametersDir, models.Reference{Name: pathWithName, Hash: obj.Hash}, existingRefs, refs)
-	} else if t == types.CatalogObjectTypeParameterSchema {
-		syncParameterReferencesInCollections(ctx, dir.CollectionsDir, models.Reference{Name: pathWithName, Hash: obj.Hash}, refs)
+		syncCollectionReferencesInParameters(ctx, dir.ParametersDir, pathWithName, existingRefs, refs)
 	}
 
 	return nil
 }
 
-func syncParameterReferencesInCollections(ctx context.Context, collectionDir uuid.UUID, newParamRef models.Reference, collectionRefs schemamanager.ObjectReferences) {
-	var r = []models.Reference{newParamRef}
-	for _, collectionRef := range collectionRefs {
-		if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeCollectionSchema, collectionDir, collectionRef.Name, r); err != nil {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to add references to collection schema")
-		}
-	}
-}
-
-func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUID, collectionRef models.Reference, existingParamRefs, newParamRefs schemamanager.ObjectReferences) {
+func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUID, collectionFqp string, existingParamRefs, newParamRefs schemamanager.ObjectReferences) {
 	type refAction string
 	const (
 		actionAdd    refAction = "add"
@@ -281,6 +264,8 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 	for _, existingRef := range existingParamRefs {
 		if _, ok := refActions[existingRef.Name]; !ok {
 			refActions[existingRef.Name] = actionDelete
+		} else {
+			delete(refActions, existingRef.Name)
 		}
 	}
 
@@ -288,18 +273,18 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 	for param, action := range refActions {
 		switch action {
 		case actionAdd:
-			if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, []models.Reference{collectionRef}); err != nil {
+			if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, []models.Reference{{Name: collectionFqp}}); err != nil {
 				log.Ctx(ctx).Error().
 					Str("param", param).
-					Str("collection", collectionRef.Name).
+					Str("collection", collectionFqp).
 					Err(err).
 					Msg("failed to add references to collection schema")
 			}
 		case actionDelete:
-			if err := db.DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, collectionRef.Name); err != nil {
+			if err := db.DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, collectionFqp); err != nil {
 				log.Ctx(ctx).Error().
 					Str("param", param).
-					Str("collection", collectionRef.Name).
+					Str("collection", collectionFqp).
 					Err(err).
 					Msg("failed to delete references from collection schema")
 			}
@@ -335,7 +320,6 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 			for _, ref := range r.References {
 				refs = append(refs, schemamanager.ObjectReference{
 					Name: ref.Name,
-					Hash: ref.Hash,
 				})
 			}
 			loaders := getObjectLoaders(ctx, om.Metadata(), WithDirectories(dir))
@@ -353,30 +337,25 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 // validateCollectionSchema ensures that all the dataTypes referenced by parameters in the Spec are valid.
 // Similarly, it ensures that all the parameters referenced by the collection schema exist and also returns the
 // references to the parameter schemas.
-func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) (schemamanager.ObjectReferences, apperrors.Error) {
-	var refs schemamanager.ObjectReferences
+func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) (
+	newRefs schemamanager.ObjectReferences,
+	existingRefs schemamanager.ObjectReferences,
+	err apperrors.Error) {
 	if om == nil {
 		log.Ctx(ctx).Error().Msg("object manager is nil")
-		return nil, ErrCatalogError
+		return nil, nil, ErrCatalogError
 	}
 
 	cm := om.CollectionManager()
 	if cm == nil {
 		log.Ctx(ctx).Error().Msg("collection manager is nil")
-		return nil, ErrCatalogError
+		err = ErrCatalogError
+		return
 	}
 
 	m := om.Metadata()
 	parentPath := m.Path
 	pathWithName := parentPath + "/" + m.Name
-
-	loaders := getObjectLoaders(ctx, m, WithDirectories(dir))
-
-	// validate the collection schema
-	var err apperrors.Error
-	if refs, err = cm.ValidateDependencies(ctx, loaders); err != nil {
-		return nil, err
-	}
 
 	// get this objectRef from the directory
 	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName)
@@ -385,15 +364,33 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 			log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
 		} else {
 			log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
-			return nil, ErrCatalogError
+			err = ErrCatalogError
+			return
 		}
 	}
-	if r != nil && r.Hash == hash {
-		log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
-		return refs, ErrAlreadyExists
+	if r != nil {
+		if len(r.References) > 0 {
+			for _, ref := range r.References {
+				existingRefs = append(existingRefs, schemamanager.ObjectReference{
+					Name: ref.Name,
+				})
+			}
+		}
+		if r.Hash == hash {
+			log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
+			newRefs = existingRefs // no new references to process
+			return newRefs, existingRefs, ErrAlreadyExists
+		}
+	}
+	// validate the collection schema
+	loaders := getObjectLoaders(ctx, m, WithDirectories(dir))
+
+	// refs are updated after validation
+	if newRefs, err = cm.ValidateDependencies(ctx, loaders, existingRefs); err != nil {
+		return
 	}
 
-	return refs, nil
+	return newRefs, existingRefs, nil
 }
 
 func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemamanager.ObjectMetadata, opts ...ObjectStoreOption) (schemamanager.ObjectManager, apperrors.Error) {
@@ -415,9 +412,10 @@ func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 		return nil, ErrInvalidVersionOrWorkspace
 	}
 
-	fqrp := m.Path + "/" + m.Name
+	path := m.Path + "/" + m.Name
+	path = strings.TrimRight(path, "/")
 
-	obj, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir, fqrp)
+	obj, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir, path)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			return nil, ErrObjectNotFound
@@ -556,31 +554,19 @@ func getClosestParentObjectFinder(ctx context.Context, m schemamanager.ObjectMet
 	}
 }
 
-func getObjectLoaderByPath(ctx context.Context, m schemamanager.ObjectMetadata, opts ...ObjectStoreOption) schemamanager.ObjectLoaderByPath {
+func getObjectLoaderByPath(ctx context.Context, opts ...ObjectStoreOption) schemamanager.ObjectLoaderByPath {
 	o := &storeOptions{}
 	for _, opt := range opts {
 		opt(o)
 	}
+	var dir Directories
 
-	var paramDir, collectionDir uuid.UUID
 	if !o.Dir.IsNil() {
-
-		paramDir = o.Dir.DirForType(types.CatalogObjectTypeParameterSchema)
-		collectionDir = o.Dir.DirForType(types.CatalogObjectTypeCollectionSchema)
-
+		dir = o.Dir
 	} else if o.WorkspaceID != uuid.Nil {
-
-		var wm schemamanager.WorkspaceManager
-		var apperr apperrors.Error
-
-		if wm, apperr = LoadWorkspaceManagerByID(ctx, o.WorkspaceID); apperr != nil {
-			return nil
-		}
-
-		if paramDir = wm.ParametersDir(); paramDir == uuid.Nil {
-			return nil
-		}
-		if collectionDir = wm.CollectionsDir(); collectionDir == uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForWorkspace(ctx, o.WorkspaceID)
+		if err != nil {
 			return nil
 		}
 	} else {
@@ -588,40 +574,23 @@ func getObjectLoaderByPath(ctx context.Context, m schemamanager.ObjectMetadata, 
 	}
 
 	// We do this so load workspace never gets called again
-	opts = append(opts, WithDirectories(Directories{
-		ParametersDir:  paramDir,
-		CollectionsDir: collectionDir,
-	}))
+	opts = append(opts, WithDirectories(dir))
 
-	return func(ctx context.Context, t types.CatalogObjectType, path string) (schemamanager.ObjectManager, apperrors.Error) {
-		return LoadObjectByPath(ctx, t, &m, opts...)
+	return func(ctx context.Context, t types.CatalogObjectType, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
+		return LoadObjectByPath(ctx, t, m, opts...)
 	}
 }
 
-func getObjectLoaderByHash(m schemamanager.ObjectMetadata) schemamanager.ObjectLoaderByHash {
-	return func(ctx context.Context, t types.CatalogObjectType, hash string, mOverride ...schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
-		if len(mOverride) > 0 {
-			if mOverride[0].Name != "" {
-				m.Name = mOverride[0].Name
-			}
-			if mOverride[0].Path != "" {
-				m.Path = mOverride[0].Path
-			}
-			if mOverride[0].Catalog != "" {
-				m.Catalog = mOverride[0].Catalog
-			}
-			if !mOverride[0].Variant.IsNil() {
-				m.Variant = mOverride[0].Variant
-			}
-		}
-		return LoadObjectByHash(ctx, hash, &m)
+func getObjectLoaderByHash() schemamanager.ObjectLoaderByHash {
+	return func(ctx context.Context, t types.CatalogObjectType, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
+		return LoadObjectByHash(ctx, hash, m)
 	}
 }
 
 func getObjectLoaders(ctx context.Context, m schemamanager.ObjectMetadata, opts ...ObjectStoreOption) schemamanager.ObjectLoaders {
 	return schemamanager.ObjectLoaders{
-		ByPath:        getObjectLoaderByPath(ctx, m, opts...),
-		ByHash:        getObjectLoaderByHash(m),
+		ByPath:        getObjectLoaderByPath(ctx, opts...),
+		ByHash:        getObjectLoaderByHash(),
 		ClosestParent: getClosestParentObjectFinder(ctx, m, opts...),
 		SelfMetadata: func() schemamanager.ObjectMetadata {
 			return m
@@ -683,6 +652,17 @@ func getObjectLoaders(ctx context.Context, m schemamanager.ObjectMetadata, opts 
 		}
 	}
 */
+func getParameterRefForName(refs schemamanager.ObjectReferences) schemamanager.ParameterReferenceForName {
+	return func(name string) string {
+		for _, ref := range refs {
+			if ref.ObjectName() == name {
+				return ref.Name
+			}
+		}
+		return ""
+	}
+}
+
 func getDirectoriesForWorkspace(ctx context.Context, workspaceId uuid.UUID) (Directories, apperrors.Error) {
 	var wm schemamanager.WorkspaceManager
 	var apperr apperrors.Error
@@ -712,7 +692,6 @@ func getObjectReferences(ctx context.Context, t types.CatalogObjectType, dir uui
 	for _, ref := range r {
 		refs = append(refs, schemamanager.ObjectReference{
 			Name: ref.Name,
-			Hash: ref.Hash,
 		})
 	}
 	return refs, nil

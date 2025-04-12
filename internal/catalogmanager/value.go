@@ -115,8 +115,16 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 		return err
 	}
 
+	// get object References
+	refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, v.Metadata.Collection)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to get object references")
+		refs = schemamanager.ObjectReferences{}
+	}
+
 	// get the loaders
 	loaders := getObjectLoaders(ctx, om.Metadata(), WithDirectories(dir))
+	loaders.ParameterRef = getParameterRefForName(refs)
 
 	// validate the value against the collection
 	c := om.CollectionManager()

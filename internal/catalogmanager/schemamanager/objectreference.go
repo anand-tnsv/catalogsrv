@@ -5,9 +5,9 @@ import (
 	"path"
 )
 
+// We'll keep this a struct, so this is extensible in the future
 type ObjectReference struct {
 	Name string `json:"name"`
-	Hash string `json:"hash"`
 }
 
 func (pr ObjectReference) String() string {

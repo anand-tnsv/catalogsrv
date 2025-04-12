@@ -27,13 +27,15 @@ type ObjectManager interface {
 }
 
 type ClosestParentObjectFinder func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error)
-type ObjectLoaderByPath func(ctx context.Context, t types.CatalogObjectType, path string) (ObjectManager, apperrors.Error)
-type ObjectLoaderByHash func(ctx context.Context, t types.CatalogObjectType, hash string, m ...ObjectMetadata) (ObjectManager, apperrors.Error)
+type ParameterReferenceForName func(name string) string
+type ObjectLoaderByPath func(ctx context.Context, t types.CatalogObjectType, m *ObjectMetadata) (ObjectManager, apperrors.Error)
+type ObjectLoaderByHash func(ctx context.Context, t types.CatalogObjectType, hash string, m *ObjectMetadata) (ObjectManager, apperrors.Error)
 type SelfMetadata func() ObjectMetadata
 
 type ObjectLoaders struct {
 	ByPath        ObjectLoaderByPath
 	ByHash        ObjectLoaderByHash
 	ClosestParent ClosestParentObjectFinder
+	ParameterRef  ParameterReferenceForName
 	SelfMetadata  SelfMetadata
 }

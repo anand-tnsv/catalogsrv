@@ -105,10 +105,10 @@ func (pm *V1ParameterManager) ValidateDependencies(ctx context.Context, loaders 
 		return
 	}
 	for _, collectionRef := range collectionRefs {
-		om, err := loaders.ByHash(ctx, types.CatalogObjectTypeCollectionSchema, collectionRef.Hash, schemamanager.ObjectMetadata{
-			Name: collectionRef.ObjectName(),
-			Path: collectionRef.Path(),
-		})
+		m := loaders.SelfMetadata()
+		m.Path = collectionRef.Path()
+		m.Name = collectionRef.ObjectName()
+		om, err := loaders.ByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m)
 		if err != nil {
 			log.Ctx(ctx).Error().Str("collection", collectionRef.Name).Msg("failed to load collection")
 			continue
