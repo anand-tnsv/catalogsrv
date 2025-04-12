@@ -18,7 +18,7 @@ import (
 
 type CollectionSchema struct {
 	Version string         `json:"version" validate:"required"`
-	Spec    CollectionSpec `json:"spec" validate:"required"`
+	Spec    CollectionSpec `json:"spec"` // we can have empty collections
 }
 
 type CollectionSpec struct {

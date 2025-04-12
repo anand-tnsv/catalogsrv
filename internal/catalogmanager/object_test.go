@@ -21,6 +21,54 @@ import (
 
 func TestSaveObject(t *testing.T) {
 
+	emptyCollection1Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: valid
+		catalog: example-catalog
+		path: /
+	`
+	emptyCollection2Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: path
+		catalog: example-catalog
+		path: /valid
+	`
+	emptyCollection3Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: another
+		catalog: example-catalog
+		path: /
+	`
+	emptyCollection4Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: path
+		catalog: example-catalog
+		path: /another
+	`
+	emptyCollection5Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: collection
+		catalog: example-catalog
+		path: /another
+	`
+	emptyCollection6Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: path
+		catalog: example-catalog
+		path: /another/collection
+	`
 	validParamYaml := `
 				version: v1
 				kind: Parameter
@@ -85,6 +133,36 @@ func TestSaveObject(t *testing.T) {
 				dataType: InvalidType
 				default: 1000
 	`
+	invalidParameterPath := `
+	version: v1
+	kind: Parameter
+	metadata:
+		name: IntegerParamSchema
+		catalog: example-catalog
+		path: /invalid/path
+	spec:
+		dataType: Integer
+		validation:
+		minValue: 1
+		maxValue: 10
+		default: 5
+	`
+	invalidCollectionPath := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: AppConfigCollection
+		catalog: example-catalog
+		path: /invalid/path
+	spec:
+		parameters:
+			maxRetries:
+				schema: IntegerParamSchema
+				default: 8
+			maxDelay:
+				dataType: Integer
+				default: 1000
+	`
 
 	// Run tests
 	// Initialize context with logger and database connection
@@ -93,10 +171,18 @@ func TestSaveObject(t *testing.T) {
 		db.DB(ctx).Close(ctx)
 	})
 
+	replaceTabsWithSpaces(&emptyCollection1Yaml)
+	replaceTabsWithSpaces(&emptyCollection2Yaml)
+	replaceTabsWithSpaces(&emptyCollection3Yaml)
+	replaceTabsWithSpaces(&emptyCollection4Yaml)
+	replaceTabsWithSpaces(&emptyCollection5Yaml)
+	replaceTabsWithSpaces(&emptyCollection6Yaml)
 	replaceTabsWithSpaces(&validParamYaml)
 	replaceTabsWithSpaces(&validCollectionYaml)
 	replaceTabsWithSpaces(&nonExistentParamYaml)
 	replaceTabsWithSpaces(&nonExistentDataTypeYaml)
+	replaceTabsWithSpaces(&invalidParameterPath)
+	replaceTabsWithSpaces(&invalidCollectionPath)
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -136,8 +222,46 @@ func TestSaveObject(t *testing.T) {
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)
 
+	// create the empty collections
+	jsonData, err := yaml.YAMLToJSON([]byte(emptyCollection1Yaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection3Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection4Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection5Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection6Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
 	// Create the parameter
-	jsonData, err := yaml.YAMLToJSON([]byte(validParamYaml))
+	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml))
 	if assert.NoError(t, err) {
 		r, err := NewObject(ctx, jsonData, nil)
 		if assert.NoError(t, err) {
@@ -194,7 +318,7 @@ func TestSaveObject(t *testing.T) {
 	// create the collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
-	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
 		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		if assert.NoError(t, err) {
@@ -259,9 +383,48 @@ func TestSaveObject(t *testing.T) {
 			t.Logf("Error: %v", err)
 		}
 	}
+
+	// create a parameter with an invalid path
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidParameterPath))
+	require.NoError(t, err)
+	parameterSchema, err := NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, parameterSchema, WithWorkspaceID(ws.WorkspaceID))
+		if assert.Error(t, err) {
+			t.Logf("Error: %v", err)
+		}
+	}
+
+	// create a collection with an invalid path
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidCollectionPath))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		if assert.Error(t, err) {
+			t.Logf("Error: %v", err)
+		}
+	}
 }
 
 func TestSaveValue(t *testing.T) {
+
+	emptyCollection1Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: valid
+		catalog: example-catalog
+		path: /
+	`
+	emptyCollection2Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: path
+		catalog: example-catalog
+		path: /valid
+	`
 
 	validParamYaml := `
 				version: v1
@@ -335,6 +498,8 @@ func TestSaveValue(t *testing.T) {
 		db.DB(ctx).Close(ctx)
 	})
 
+	replaceTabsWithSpaces(&emptyCollection1Yaml)
+	replaceTabsWithSpaces(&emptyCollection2Yaml)
 	replaceTabsWithSpaces(&validParamYaml)
 	replaceTabsWithSpaces(&validCollectionYaml)
 	replaceTabsWithSpaces(&validValueYaml)
@@ -379,8 +544,22 @@ func TestSaveValue(t *testing.T) {
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)
 
+	// create the empty collections
+	jsonData, err := yaml.YAMLToJSON([]byte(emptyCollection1Yaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
 	// Create the parameter
-	jsonData, err := yaml.YAMLToJSON([]byte(validParamYaml))
+	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml))
 	if assert.NoError(t, err) {
 		r, err := NewObject(ctx, jsonData, nil)
 		require.NoError(t, err)
@@ -396,7 +575,7 @@ func TestSaveValue(t *testing.T) {
 	// create the collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
-	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
 		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
@@ -426,6 +605,22 @@ func TestSaveValue(t *testing.T) {
 }
 
 func TestReferences(t *testing.T) {
+	emptyCollection1Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: valid
+		catalog: example-catalog
+		path: /
+	`
+	emptyCollection2Yaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: path
+		catalog: example-catalog
+		path: /valid
+	`
 	validParamYaml := `
 				version: v1
 				kind: Parameter
@@ -513,6 +708,8 @@ func TestReferences(t *testing.T) {
 		db.DB(ctx).Close(ctx)
 	})
 
+	replaceTabsWithSpaces(&emptyCollection1Yaml)
+	replaceTabsWithSpaces(&emptyCollection2Yaml)
 	replaceTabsWithSpaces(&validParamYaml)
 	replaceTabsWithSpaces(&updatedParamYaml)
 	replaceTabsWithSpaces(&validParamYaml2)
@@ -561,8 +758,22 @@ func TestReferences(t *testing.T) {
 	dir, err := getDirectoriesForWorkspace(ctx, ws.WorkspaceID)
 	require.NoError(t, err)
 
+	// create the empty collections
+	jsonData, err := yaml.YAMLToJSON([]byte(emptyCollection1Yaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
 	// Create the parameter
-	jsonData, err := yaml.YAMLToJSON([]byte(validParamYaml))
+	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml))
 	var paramFqn string
 	if assert.NoError(t, err) {
 		r, err := NewObject(ctx, jsonData, nil)
@@ -580,7 +791,7 @@ func TestReferences(t *testing.T) {
 	// create the collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
-	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
 
 	if assert.NoError(t, err) {
 		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))

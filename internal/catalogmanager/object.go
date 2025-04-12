@@ -329,6 +329,11 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 				}
 			}
 		}
+	} else {
+		// This is a new object. Check if the parent path exists
+		if err := collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
+			return refs, err
+		}
 	}
 
 	return refs, nil
@@ -381,6 +386,11 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 			newRefs = existingRefs // no new references to process
 			return newRefs, existingRefs, ErrAlreadyExists
 		}
+	} else {
+		// This is a new object. Check if the parent path exists
+		if err := collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
+			return newRefs, existingRefs, err
+		}
 	}
 	// validate the collection schema
 	loaders := getObjectLoaders(ctx, m, WithDirectories(dir))
@@ -391,6 +401,23 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 	}
 
 	return newRefs, existingRefs, nil
+}
+
+func collectionExists(ctx context.Context, collectionsDir uuid.UUID, path string) apperrors.Error {
+	if path != "/" {
+		var (
+			exists bool
+			err    apperrors.Error
+		)
+		if exists, err = db.DB(ctx).PathExists(ctx, types.CatalogObjectTypeCollectionSchema, collectionsDir, path); err != nil {
+			log.Ctx(ctx).Error().Err(err).Str("path", path).Msg("failed to check if parent path exists")
+			return ErrCatalogError
+		}
+		if !exists {
+			return ErrParentCollectionNotFound.Msg(path + " does not exist")
+		}
+	}
+	return nil
 }
 
 func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemamanager.ObjectMetadata, opts ...ObjectStoreOption) (schemamanager.ObjectManager, apperrors.Error) {
@@ -598,60 +625,6 @@ func getObjectLoaders(ctx context.Context, m schemamanager.ObjectMetadata, opts 
 	}
 }
 
-/*
-	func getClosestParentObjectFromReferences(ctx context.Context, opts ...ObjectStoreOption) schemamanager.ClosestParentObjectFinder {
-		o := &storeOptions{}
-		for _, opt := range opts {
-			opt(o)
-		}
-
-		var paramDir, collectionDir uuid.UUID
-		if !o.Dir.IsNil() {
-			paramDir = o.Dir.DirForType(types.CatalogObjectTypeParameterSchema)
-			collectionDir = o.Dir.DirForType(types.CatalogObjectTypeCollectionSchema)
-		} else if o.WorkspaceID != uuid.Nil {
-			var dir Directories
-			var apperr apperrors.Error
-			dir, apperr = getDirectoriesForWorkspace(ctx, o.WorkspaceID)
-			if apperr != nil {
-				return nil
-			}
-			paramDir = dir.ParametersDir
-			collectionDir = dir.CollectionsDir
-		} else {
-			return nil
-		}
-
-		if paramDir == uuid.Nil || collectionDir == uuid.Nil {
-			return nil
-		}
-
-		return func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error) {
-			var dir uuid.UUID
-			switch t {
-			case types.CatalogObjectTypeParameterSchema:
-				dir = paramDir
-			case types.CatalogObjectTypeCollectionSchema:
-				dir = collectionDir
-			default:
-				return "", "", ErrCatalogError.Msg("invalid object type")
-			}
-
-			path, obj, err := db.DB(ctx).FindClosestObjectFromReferences(ctx, t, dir, targetName)
-			if err != nil {
-				if errors.Is(err, dberror.ErrNotFound) {
-					return "", "", ErrObjectNotFound
-				}
-				return "", "", ErrCatalogError.Err(err)
-			}
-			if obj == nil {
-				return "", "", ErrObjectNotFound
-			}
-			hash = obj.Hash
-			return
-		}
-	}
-*/
 func getParameterRefForName(refs schemamanager.ObjectReferences) schemamanager.ParameterReferenceForName {
 	return func(name string) string {
 		for _, ref := range refs {

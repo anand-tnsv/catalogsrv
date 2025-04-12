@@ -23,7 +23,7 @@ type ObjectSchema struct {
 	Version  string                       `json:"version" validate:"required"`
 	Kind     string                       `json:"kind" validate:"required,kindValidator"`
 	Metadata schemamanager.ObjectMetadata `json:"metadata" validate:"required"`
-	Spec     json.RawMessage              `json:"spec" validate:"required"`
+	Spec     json.RawMessage              `json:"spec"`
 }
 
 func (rs *ObjectSchema) Validate() schemaerr.ValidationErrors {
