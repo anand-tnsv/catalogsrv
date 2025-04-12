@@ -627,7 +627,7 @@ func TestReferences(t *testing.T) {
 				metadata:
 				  name: IntegerParamSchema
 				  catalog: example-catalog
-				  path: /valid/path
+				  path: /valid
 				spec:
 				  dataType: Integer
 				  validation:
@@ -641,7 +641,7 @@ func TestReferences(t *testing.T) {
 				metadata:
 				  name: IntegerParamSchema
 				  catalog: example-catalog
-				  path: /valid/path
+				  path: /valid
 				spec:
 				  dataType: Integer
 				  validation:
@@ -655,7 +655,7 @@ func TestReferences(t *testing.T) {
 				metadata:
 				  name: IntegerParamSchema2
 				  catalog: example-catalog
-				  path: /valid/path
+				  path: /valid
 				spec:
 				  dataType: Integer
 				  validation:

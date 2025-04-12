@@ -245,6 +245,8 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 
 	if t == types.CatalogObjectTypeCollectionSchema && !options.SkipValidationForUpdate {
 		syncCollectionReferencesInParameters(ctx, dir.ParametersDir, pathWithName, existingRefs, refs)
+	} else if t == types.CatalogObjectTypeParameterSchema && len(refs) > 0 {
+		syncParameterReferencesInCollections(ctx, dir, existingParamPath, pathWithName, existingParamRef, refs)
 	}
 
 	return nil
@@ -254,17 +256,23 @@ func syncParameterReferencesInCollections(ctx context.Context, dir Directories, 
 	var newRefsForExistingParam models.References
 	if existingParamObjRef != nil {
 		for _, ref := range existingParamObjRef.References {
+			remove := false
 			for _, newRef := range newCollectionRefs {
-				if ref.Name != newRef.Name {
-					newRefsForExistingParam = append(newRefsForExistingParam, ref)
+				if ref.Name == newRef.Name {
+					remove = true
 				}
+			}
+			if !remove {
+				newRefsForExistingParam = append(newRefsForExistingParam, ref)
 			}
 		}
 	}
-	existingParamObjRef.References = newRefsForExistingParam
-	// save the updated references for the parameter
-	if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, existingPath, *existingParamObjRef); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to update parameter references")
+	if len(newRefsForExistingParam) > 0 {
+		existingParamObjRef.References = newRefsForExistingParam
+		// save the updated references for the parameter
+		if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, existingPath, *existingParamObjRef); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to update parameter references")
+		}
 	}
 
 	// for all the collections that will now map to the new parameter, replace the old reference with the new one
@@ -359,12 +367,6 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 					Name: ref.Name,
 				})
 			}
-			loaders := getObjectLoaders(ctx, om.Metadata(), WithDirectories(dir))
-			if pm := om.ParameterManager(); pm != nil {
-				if err = pm.ValidateDependencies(ctx, loaders, newRefs); err != nil {
-					return
-				}
-			}
 		}
 	} else {
 		// This is a new object. Check if the parent collection exists
@@ -392,6 +394,16 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 			}
 		}
 	}
+	// if there are reference to this object - either new or updated - we need to validate them
+	if len(newRefs) > 0 {
+		loaders := getObjectLoaders(ctx, om.Metadata(), WithDirectories(dir))
+		if pm := om.ParameterManager(); pm != nil {
+			if err = pm.ValidateDependencies(ctx, loaders, newRefs); err != nil {
+				return
+			}
+		}
+	}
+
 	return
 }
 
