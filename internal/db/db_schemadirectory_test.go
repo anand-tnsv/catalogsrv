@@ -139,12 +139,12 @@ func TestSchemaDirectory(t *testing.T) {
 	assert.Equal(t, dirRet["/a2/b3"], dir["/a2/b3"])
 
 	// Test the GetObjectByPath function
-	object, err := DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	object, err := DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
 	assert.Equal(t, object.Hash, dir["/a/b3/c/d/e/f"].Hash)
 
 	// Non existing path
-	object, err = DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/non/existing/path")
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/non/existing/path")
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 	assert.Nil(t, object)
 
@@ -164,7 +164,7 @@ func TestSchemaDirectory(t *testing.T) {
 	}
 	err = DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", updateObj)
 	assert.NoError(t, err)
-	object, err = DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
 	assert.Equal(t, object.Hash, updateObj.Hash)
 
@@ -172,7 +172,7 @@ func TestSchemaDirectory(t *testing.T) {
 	err = DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/non/existing/path", updateObj)
 	// this should have added a new entry
 	assert.NoError(t, err)
-	object, err = DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/non/existing/path")
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/non/existing/path")
 	assert.NoError(t, err)
 	assert.Equal(t, object.Hash, updateObj.Hash)
 
@@ -239,7 +239,7 @@ func TestSchemaDirectory(t *testing.T) {
 	result, err := DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
 	assert.True(t, result)
-	object, err = DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 	assert.Nil(t, object)
 

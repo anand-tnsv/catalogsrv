@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/golang/snappy"
 	"github.com/google/uuid"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
@@ -176,7 +177,7 @@ func (h *hatchCatalogDb) GetSchemaDirectory(ctx context.Context, t types.Catalog
 	return dir, nil
 }
 
-func (h *hatchCatalogDb) GetObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.ObjectRef, apperrors.Error) {
+func (h *hatchCatalogDb) GetObjectRefByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.ObjectRef, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -210,6 +211,66 @@ func (h *hatchCatalogDb) GetObjectByPath(ctx context.Context, t types.CatalogObj
 	}
 
 	return &obj, nil
+}
+
+func (h *hatchCatalogDb) LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.CatalogObject, apperrors.Error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return nil, dberror.ErrMissingTenantID
+	}
+	tableName := getSchemaDirectoryTableName(t)
+	if tableName == "" {
+		return nil, dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	query := `
+		WITH hash_cte AS (
+			SELECT (directory-> $1 ->> 'hash') AS hash
+			FROM ` + tableName + `
+			WHERE directory_id = $2 AND tenant_id = $3
+		)
+		SELECT
+			co.hash,
+			co.type,
+			co.version,
+			co.tenant_id,
+			co.data
+		FROM
+			hash_cte
+		JOIN
+			catalog_objects co
+		ON
+			hash_cte.hash = co.hash
+		WHERE
+			co.tenant_id = $3;
+	`
+
+	var hash, version string
+	var objType types.CatalogObjectType
+	var data []byte
+	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&hash, &objType, &version, &tenantID, &data)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, dberror.ErrNotFound.Msg("object not found in directory or catalog")
+		}
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+
+	// Create and populate the CatalogObject
+	catalogObj := &models.CatalogObject{
+		Hash:     hash,
+		Type:     objType,
+		Version:  version,
+		TenantID: tenantID,
+	}
+
+	// Decompress the data
+	catalogObj.Data, err = snappy.Decode(nil, data)
+	if err != nil {
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+
+	return catalogObj, nil
 }
 
 func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, obj models.ObjectRef) apperrors.Error {
@@ -249,7 +310,7 @@ func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.Ca
 	}
 
 	// get object to verify update
-	if o, err := h.GetObjectByPath(ctx, t, directoryID, path); err != nil {
+	if o, err := h.GetObjectRefByPath(ctx, t, directoryID, path); err != nil {
 		return err
 	} else if o.Hash != obj.Hash {
 		return dberror.ErrDatabase.Msg("object hash mismatch after update")

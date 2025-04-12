@@ -247,27 +247,23 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 
 	if t == types.CatalogObjectTypeCollectionSchema && !options.SkipValidationForUpdate {
 		syncCollectionReferencesInParameters(ctx, dir.ParametersDir, models.Reference{Name: pathWithName, Hash: obj.Hash}, existingRefs, refs)
+	} else if t == types.CatalogObjectTypeParameterSchema {
+		syncParameterReferencesInCollections(ctx, dir.CollectionsDir, models.Reference{Name: pathWithName, Hash: obj.Hash}, refs)
 	}
 
 	return nil
 }
 
-var _ = syncParameterReferencesInCollection // suppress unused
-
-func syncParameterReferencesInCollection(ctx context.Context, collectionDir uuid.UUID, collectionFqdp string, refs schemamanager.ObjectReferences) {
-	var r models.References
-	for _, ref := range refs {
-		r = append(r, models.Reference{
-			Name: ref.Name,
-			Hash: ref.Hash,
-		})
-	}
-	if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeCollectionSchema, collectionDir, collectionFqdp, r); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to add references to collection schema")
+func syncParameterReferencesInCollections(ctx context.Context, collectionDir uuid.UUID, newParamRef models.Reference, collectionRefs schemamanager.ObjectReferences) {
+	var r = []models.Reference{newParamRef}
+	for _, collectionRef := range collectionRefs {
+		if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeCollectionSchema, collectionDir, collectionRef.Name, r); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to add references to collection schema")
+		}
 	}
 }
 
-func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUID, collectionRef models.Reference, existingRefs, newRefs schemamanager.ObjectReferences) {
+func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUID, collectionRef models.Reference, existingParamRefs, newParamRefs schemamanager.ObjectReferences) {
 	type refAction string
 	const (
 		actionAdd    refAction = "add"
@@ -277,12 +273,12 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 	refActions := make(map[string]refAction)
 
 	// Mark new references for addition
-	for _, newRef := range newRefs {
+	for _, newRef := range newParamRefs {
 		refActions[newRef.Name] = actionAdd
 	}
 
 	// Handle existing references (remove or keep)
-	for _, existingRef := range existingRefs {
+	for _, existingRef := range existingParamRefs {
 		if _, ok := refActions[existingRef.Name]; !ok {
 			refActions[existingRef.Name] = actionDelete
 		}
@@ -318,7 +314,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 	pathWithName := m.Path + "/" + m.Name
 
 	// get this objectRef from the directory
-	r, err := db.DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName)
+	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
@@ -383,7 +379,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 	}
 
 	// get this objectRef from the directory
-	r, err := db.DB(ctx).GetObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName)
+	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
@@ -410,31 +406,18 @@ func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 	if !o.Dir.IsNil() && o.Dir.DirForType(t) != uuid.Nil {
 		dir = o.Dir.DirForType(t)
 	} else if o.WorkspaceID != uuid.Nil {
-		var wm schemamanager.WorkspaceManager
-		var apperr apperrors.Error
-
-		if wm, apperr = LoadWorkspaceManagerByID(ctx, o.WorkspaceID); apperr != nil {
-			return nil, apperr
+		dirs, err := getDirectoriesForWorkspace(ctx, o.WorkspaceID)
+		if err != nil {
+			return nil, err
 		}
-
-		switch t {
-		case types.CatalogObjectTypeParameterSchema:
-			if dir = wm.ParametersDir(); dir == uuid.Nil {
-				return nil, ErrInvalidWorkspace.Msg("workspace does not have a parameters directory")
-			}
-		case types.CatalogObjectTypeCollectionSchema:
-			if dir = wm.CollectionsDir(); dir == uuid.Nil {
-				return nil, ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
-			}
-		default:
-			return nil, ErrCatalogError.Msg("invalid object type")
-		}
+		dir = dirs.DirForType(t)
 	} else {
 		return nil, ErrInvalidVersionOrWorkspace
 	}
 
 	fqrp := m.Path + "/" + m.Name
-	obj, err := db.DB(ctx).GetObjectByPath(ctx, t, dir, fqrp)
+
+	obj, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir, fqrp)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			return nil, ErrObjectNotFound
@@ -444,7 +427,20 @@ func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 	if obj == nil { //should never get here
 		return nil, ErrObjectNotFound
 	}
-	return LoadObjectByHash(ctx, obj.Hash, m)
+
+	s := &schemastore.SchemaStorageRepresentation{}
+	// we'll get the data from the object and not the table
+	if err := json.Unmarshal(obj.Data, s); err != nil {
+		return nil, ErrUnableToLoadObject.Err(err).Msg("failed to de-serialize catalog object data")
+	}
+	if s.Type != obj.Type {
+		log.Ctx(ctx).Error().Str("Hash", obj.Hash).Msg("type mismatch when loading resource")
+	}
+	if s.Version != obj.Version {
+		log.Ctx(ctx).Error().Str("Hash", obj.Hash).Msg("version mismatch when loading resource")
+	}
+
+	return resource.LoadV1ObjectManager(ctx, s, m)
 }
 
 func LoadObjectByHash(ctx context.Context, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
@@ -465,11 +461,9 @@ func LoadObjectByHash(ctx context.Context, hash string, m *schemamanager.ObjectM
 	if err := json.Unmarshal(obj.Data, s); err != nil {
 		return nil, ErrUnableToLoadObject.Err(err).Msg("failed to de-serialize catalog object data")
 	}
-
 	if s.Type != obj.Type {
 		log.Ctx(ctx).Error().Str("Hash", hash).Msg("type mismatch when loading resource")
 	}
-
 	if s.Version != obj.Version {
 		log.Ctx(ctx).Error().Str("Hash", hash).Msg("version mismatch when loading resource")
 	}
