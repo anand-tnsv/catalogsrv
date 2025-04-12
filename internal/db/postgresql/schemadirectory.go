@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/golang/snappy"
@@ -571,7 +570,7 @@ ORDER BY LENGTH(key) DESC;
 		if err := rows.Scan(&path, &objectData); err != nil {
 			return "", nil, dberror.ErrDatabase.Err(err)
 		}
-		fmt.Println(path)
+
 		// Check if the path is equal to or a parent of startPath
 		if isParentPath(path, startPath, targetName) {
 			closestPath = path

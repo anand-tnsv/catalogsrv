@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path"
 	"strings"
 
 	"github.com/google/uuid"
@@ -142,6 +143,8 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 		path               string                  = m.Path      // path to the object in the directory
 		pathWithName       string                  = ""          // fully qualified resource path with name
 		refs, existingRefs schemamanager.ObjectReferences
+		existingParamPath  string
+		existingParamRef   *models.ObjectRef
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
@@ -168,7 +171,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 			break
 		}
 		var err apperrors.Error
-		if refs, err = validateParameterSchema(ctx, om, dir, hash); err != nil {
+		if refs, existingParamPath, existingParamRef, err = validateParameterSchema(ctx, om, dir, hash); err != nil {
 			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
 					return ErrAlreadyExists
@@ -194,7 +197,8 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	default:
 		return ErrCatalogError.Msg("invalid object type")
 	}
-
+	_ = existingParamRef
+	_ = existingParamPath
 	// if we came here, we have a new object to save
 	data, err := s.Serialize()
 	if err != nil {
@@ -246,6 +250,34 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	return nil
 }
 
+func syncParameterReferencesInCollections(ctx context.Context, dir Directories, existingPath, newPath string, existingParamObjRef *models.ObjectRef, newCollectionRefs schemamanager.ObjectReferences) {
+	var newRefsForExistingParam models.References
+	if existingParamObjRef != nil {
+		for _, ref := range existingParamObjRef.References {
+			for _, newRef := range newCollectionRefs {
+				if ref.Name != newRef.Name {
+					newRefsForExistingParam = append(newRefsForExistingParam, ref)
+				}
+			}
+		}
+	}
+	existingParamObjRef.References = newRefsForExistingParam
+	// save the updated references for the parameter
+	if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, existingPath, *existingParamObjRef); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to update parameter references")
+	}
+
+	// for all the collections that will now map to the new parameter, replace the old reference with the new one
+	for _, newRef := range newCollectionRefs {
+		if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, newRef.Name, []models.Reference{{Name: newPath}}); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to add new param path to collection")
+		}
+		if err := db.DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, newRef.Name, existingPath); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to delete new param path from collection")
+		}
+	}
+}
+
 func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUID, collectionFqp string, existingParamRefs, newParamRefs schemamanager.ObjectReferences) {
 	type refAction string
 	const (
@@ -292,8 +324,11 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 	}
 }
 
-func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) (schemamanager.ObjectReferences, apperrors.Error) {
-	var refs schemamanager.ObjectReferences
+func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) (
+	newRefs schemamanager.ObjectReferences,
+	existingPath string,
+	existingParamRef *models.ObjectRef,
+	err apperrors.Error) {
 
 	m := om.Metadata()
 	pathWithName := m.Path + "/" + m.Name
@@ -305,7 +340,8 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 			log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
 		} else {
 			log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
-			return refs, ErrCatalogError
+			err = ErrCatalogError
+			return
 		}
 	}
 
@@ -314,29 +350,59 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 			// if the hash is the same, we don't need to save the object
 			// since there is no modification, we don't need to re-evaluate parameters
 			log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
-			return refs, ErrAlreadyExists
+			err = ErrAlreadyExists
+			return
 		}
 		if len(r.References) > 0 {
 			for _, ref := range r.References {
-				refs = append(refs, schemamanager.ObjectReference{
+				newRefs = append(newRefs, schemamanager.ObjectReference{
 					Name: ref.Name,
 				})
 			}
 			loaders := getObjectLoaders(ctx, om.Metadata(), WithDirectories(dir))
 			if pm := om.ParameterManager(); pm != nil {
-				if err := pm.ValidateDependencies(ctx, loaders, refs); err != nil {
-					return refs, err
+				if err = pm.ValidateDependencies(ctx, loaders, newRefs); err != nil {
+					return
 				}
 			}
 		}
 	} else {
-		// This is a new object. Check if the parent path exists
-		if err := collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
-			return refs, err
+		// This is a new object. Check if the parent collection exists
+		if err = collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
+			return
+		}
+
+		// If there are existing parameters with the same name and there are collections referencing those,
+		// we will need to remap them.
+		existingPath, existingParamRef, err = db.DB(ctx).FindClosestObject(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, m.Name, m.Path)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Str("path", existingPath).Msg("failed to find closest object")
+			err = ErrCatalogError
+			return
+		}
+
+		if existingPath != "" && existingParamRef != nil {
+			collectionRefs := existingParamRef.References
+			for _, ref := range collectionRefs {
+				if isParentOrSame(path.Dir(ref.Name), m.Path) {
+					newRefs = append(newRefs, schemamanager.ObjectReference{
+						Name: ref.Name,
+					})
+				}
+			}
 		}
 	}
+	return
+}
 
-	return refs, nil
+// isParentOrSame checks if p1 is a parent or the same as p2
+func isParentOrSame(p1, p2 string) bool {
+	// Clean paths to remove redundant elements
+	p1 = path.Clean(p1)
+	p2 = path.Clean(p2)
+
+	// Check if p1 is a prefix of p2
+	return p2 == p1 || strings.HasPrefix(p2, p1+"/")
 }
 
 // validateCollectionSchema ensures that all the dataTypes referenced by parameters in the Spec are valid.
@@ -387,7 +453,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 			return newRefs, existingRefs, ErrAlreadyExists
 		}
 	} else {
-		// This is a new object. Check if the parent path exists
+		// This is a new object. Check if the parent collection exists
 		if err := collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
 			return newRefs, existingRefs, err
 		}
@@ -531,22 +597,16 @@ func getClosestParentObjectFinder(ctx context.Context, m schemamanager.ObjectMet
 		opt(o)
 	}
 
-	var paramDir, collectionDir uuid.UUID
+	var dir Directories
 	if !o.Dir.IsNil() {
-
-		paramDir = o.Dir.DirForType(types.CatalogObjectTypeParameterSchema)
-		collectionDir = o.Dir.DirForType(types.CatalogObjectTypeCollectionSchema)
-
+		dir = o.Dir
 	} else if o.WorkspaceID != uuid.Nil {
-		var dir Directories
 		var apperr apperrors.Error
 		dir, apperr = getDirectoriesForWorkspace(ctx, o.WorkspaceID)
 		if apperr != nil {
 			return nil
 		}
-		paramDir = dir.DirForType(types.CatalogObjectTypeParameterSchema)
-		collectionDir = dir.DirForType(types.CatalogObjectTypeCollectionSchema)
-		if paramDir == uuid.Nil || collectionDir == uuid.Nil {
+		if o.Dir.IsNil() {
 			return nil
 		}
 	} else {
@@ -556,17 +616,7 @@ func getClosestParentObjectFinder(ctx context.Context, m schemamanager.ObjectMet
 	startPath := strings.TrimRight(m.Path, "/") // remove trailing slash if exists
 
 	return func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error) {
-		var dir uuid.UUID
-		switch t {
-		case types.CatalogObjectTypeParameterSchema:
-			dir = paramDir
-		case types.CatalogObjectTypeCollectionSchema:
-			dir = collectionDir
-		default:
-			return "", "", ErrCatalogError.Msg("invalid object type")
-		}
-
-		path, obj, err := db.DB(ctx).FindClosestObject(ctx, t, dir, targetName, startPath)
+		path, obj, err := db.DB(ctx).FindClosestObject(ctx, t, dir.DirForType(t), targetName, startPath)
 		if err != nil {
 			if errors.Is(err, dberror.ErrNotFound) {
 				return "", "", ErrObjectNotFound
