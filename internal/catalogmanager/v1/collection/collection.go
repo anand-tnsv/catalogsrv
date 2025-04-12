@@ -165,6 +165,7 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 	} else {
 		ref = schemamanager.ParameterReference{
 			Parameter: path,
+			Hash:      hash,
 		}
 		if !p.Default.IsNil() {
 			om, err := loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, schemamanager.ObjectMetadata{

@@ -232,7 +232,10 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 
 	var refModel models.References
 	for _, ref := range refs {
-		refModel = append(refModel, ref.Parameter)
+		refModel = append(refModel, models.Reference{
+			Name: ref.Parameter,
+			Hash: ref.Hash,
+		})
 	}
 
 	if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, t, dir.DirForType(t), pathWithName, models.ObjectRef{
@@ -244,7 +247,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	if t == types.CatalogObjectTypeCollectionSchema && !options.SkipValidationForUpdate {
-		syncCollectionReferencesInParameters(ctx, dir.ParametersDir, pathWithName, existingRefs, refs)
+		syncCollectionReferencesInParameters(ctx, dir.ParametersDir, models.Reference{Name: pathWithName, Hash: obj.Hash}, existingRefs, refs)
 	}
 
 	return nil
@@ -255,14 +258,17 @@ var _ = syncParameterReferencesInCollection // suppress unused
 func syncParameterReferencesInCollection(ctx context.Context, collectionDir uuid.UUID, collectionFqdp string, refs schemamanager.ParameterReferences) {
 	var r models.References
 	for _, ref := range refs {
-		r = append(r, ref.Parameter)
+		r = append(r, models.Reference{
+			Name: ref.Parameter,
+			Hash: ref.Hash,
+		})
 	}
 	if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeCollectionSchema, collectionDir, collectionFqdp, r); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to add references to collection schema")
 	}
 }
 
-func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUID, collectionFqdp string, existingRefs, newRefs schemamanager.ParameterReferences) {
+func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUID, collectionRef models.Reference, existingRefs, newRefs schemamanager.ParameterReferences) {
 	type refAction string
 	const (
 		actionAdd    refAction = "add"
@@ -278,10 +284,8 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 
 	// Handle existing references (remove or keep)
 	for _, existingRef := range existingRefs {
-		if _, ok := refActions[existingRef.Parameter]; ok {
-			delete(refActions, existingRef.Parameter) // Already exists, no action needed
-		} else {
-			refActions[existingRef.Parameter] = actionDelete // Mark for deletion
+		if _, ok := refActions[existingRef.Parameter]; !ok {
+			refActions[existingRef.Parameter] = actionDelete
 		}
 	}
 
@@ -289,18 +293,18 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 	for param, action := range refActions {
 		switch action {
 		case actionAdd:
-			if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, []string{collectionFqdp}); err != nil {
+			if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, []models.Reference{collectionRef}); err != nil {
 				log.Ctx(ctx).Error().
 					Str("param", param).
-					Str("collection", collectionFqdp).
+					Str("collection", collectionRef.Name).
 					Err(err).
 					Msg("failed to add references to collection schema")
 			}
 		case actionDelete:
-			if err := db.DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, collectionFqdp); err != nil {
+			if err := db.DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, collectionRef.Name); err != nil {
 				log.Ctx(ctx).Error().
 					Str("param", param).
-					Str("collection", collectionFqdp).
+					Str("collection", collectionRef.Name).
 					Err(err).
 					Msg("failed to delete references from collection schema")
 			}
@@ -688,7 +692,8 @@ func getObjectReferences(ctx context.Context, t types.CatalogObjectType, dir uui
 	}
 	for _, ref := range r {
 		refs = append(refs, schemamanager.ParameterReference{
-			Parameter: ref,
+			Parameter: ref.Name,
+			Hash:      ref.Hash,
 		})
 	}
 	return refs, nil

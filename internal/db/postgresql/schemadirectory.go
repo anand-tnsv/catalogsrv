@@ -258,7 +258,7 @@ func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.Ca
 	return nil
 }
 
-func (h *hatchCatalogDb) AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references []string) apperrors.Error {
+func (h *hatchCatalogDb) AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references models.References) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -268,37 +268,47 @@ func (h *hatchCatalogDb) AddReferencesToObject(ctx context.Context, t types.Cata
 		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
 
-	// JSONB query to append multiple references to the array
+	// Convert references to JSONB array of objects
+	referenceData, err := json.Marshal(references)
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
 	query := `
 		UPDATE ` + tableName + `
 		SET directory = jsonb_set(
 			directory,
 			ARRAY[$1, 'references'],
-			COALESCE(
-				(
-					SELECT jsonb_agg(DISTINCT to_jsonb(x))
+			(
+				SELECT jsonb_agg(x)
+				FROM (
+					SELECT DISTINCT x
 					FROM (
 						SELECT x
-						FROM jsonb_array_elements_text(
+						FROM jsonb_array_elements(
 							CASE
 								WHEN jsonb_typeof(directory #> ARRAY[$1, 'references']) = 'array' THEN
 									directory #> ARRAY[$1, 'references']
 								ELSE
 									'[]'::jsonb
 							END
-						) x
+						) AS x
+						WHERE x->>'name' NOT IN (
+							SELECT value->>'name'
+							FROM jsonb_array_elements($2::jsonb) AS value
+						)
 						UNION ALL
-						SELECT unnest($2::text[])
-					) combined
-				),
-				to_jsonb($2::text[])
+						SELECT value
+						FROM jsonb_array_elements($2::jsonb) AS value
+					) AS combined
+				) AS deduplicated
 			),
 			true
 		)
 		WHERE directory_id = $3 AND tenant_id = $4;`
 
 	// Execute the query
-	result, err := h.conn().ExecContext(ctx, query, path, references, directoryID, tenantID)
+	result, err := h.conn().ExecContext(ctx, query, path, referenceData, directoryID, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -340,7 +350,7 @@ func (h *hatchCatalogDb) GetAllReferences(ctx context.Context, t types.CatalogOb
 		return nil, dberror.ErrDatabase.Err(err)
 	}
 
-	// Unmarshal the JSONB data into a slice of strings
+	// Unmarshal the JSONB data into a slice of Reference structs
 	var references models.References
 	if err := json.Unmarshal(jsonbData, &references); err != nil {
 		return nil, dberror.ErrDatabase.Msg("failed to unmarshal references").Err(err)
@@ -349,7 +359,7 @@ func (h *hatchCatalogDb) GetAllReferences(ctx context.Context, t types.CatalogOb
 	return references, nil
 }
 
-func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, reference string) apperrors.Error {
+func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, refName string) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -359,7 +369,7 @@ func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.
 		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
 
-	// SQL query to remove a specific reference from the JSONB array
+	// SQL query to remove a specific reference by parameter from the JSONB array
 	query := `
 		UPDATE ` + tableName + `
 		SET directory = jsonb_set(
@@ -376,7 +386,7 @@ func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.
 								'[]'::jsonb
 						END
 					) x
-					WHERE x != to_jsonb($2::text)
+					WHERE x->>'name' != $2
 				),
 				'[]'::jsonb
 			),
@@ -385,7 +395,7 @@ func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.
 		WHERE directory_id = $3 AND tenant_id = $4;`
 
 	// Execute the query
-	result, err := h.conn().ExecContext(ctx, query, path, reference, directoryID, tenantID)
+	result, err := h.conn().ExecContext(ctx, query, path, refName, directoryID, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}

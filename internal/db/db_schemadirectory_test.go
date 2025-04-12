@@ -177,16 +177,24 @@ func TestSchemaDirectory(t *testing.T) {
 	assert.Equal(t, object.Hash, updateObj.Hash)
 
 	// Add a reference
-	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []string{"ref1", "ref2"})
+	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []models.Reference{{Name: "ref1", Hash: "hash1"}, {Name: "ref2", Hash: "hash2"}})
 	assert.NoError(t, err)
 
-	// Add more references
-	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []string{"ref3", "ref4"})
+	// Add more references with a duplicate
+	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []models.Reference{{Name: "ref2", Hash: "hash2"}, {Name: "ref4", Hash: "hash4"}})
 	assert.NoError(t, err)
 	// Get the references
 	references, err := DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, references, []string{"ref1", "ref2", "ref3", "ref4"})
+	assert.ElementsMatch(t, references, []models.Reference{{Name: "ref1", Hash: "hash1"}, {Name: "ref2", Hash: "hash2"}, {Name: "ref4", Hash: "hash4"}})
+
+	// Update a reference
+	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []models.Reference{{Name: "ref2", Hash: "hash3"}})
+	assert.NoError(t, err)
+	// Get the references
+	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, references, []models.Reference{{Name: "ref1", Hash: "hash1"}, {Name: "ref2", Hash: "hash3"}, {Name: "ref4", Hash: "hash4"}})
 
 	// Delete one of the references
 	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref2")
@@ -194,7 +202,7 @@ func TestSchemaDirectory(t *testing.T) {
 	// Get the references
 	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, references, []string{"ref1", "ref3", "ref4"})
+	assert.ElementsMatch(t, references, []models.Reference{{Name: "ref1", Hash: "hash1"}, {Name: "ref4", Hash: "hash4"}})
 
 	// Delete non-existing reference
 	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref2")
@@ -202,7 +210,7 @@ func TestSchemaDirectory(t *testing.T) {
 	// Get the references
 	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, references, []string{"ref1", "ref3", "ref4"})
+	assert.ElementsMatch(t, references, []models.Reference{{Name: "ref1", Hash: "hash1"}, {Name: "ref4", Hash: "hash4"}})
 
 	// Delete all references
 	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref1")
@@ -214,18 +222,18 @@ func TestSchemaDirectory(t *testing.T) {
 	// Get the references
 	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, references, []string{})
+	assert.ElementsMatch(t, references, []models.Reference{})
 	// Delete non-existing reference
 	err = DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", "ref1")
 	assert.NoError(t, err)
 
 	// Now add a reference
-	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []string{"ref1"})
+	err = DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f", []models.Reference{{Name: "ref1", Hash: "hash1"}})
 	assert.NoError(t, err)
 	// Get the references
 	references, err = DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, references, []string{"ref1"})
+	assert.ElementsMatch(t, references, []models.Reference{{Name: "ref1", Hash: "hash1"}})
 
 	// Delete object by path
 	result, err := DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")

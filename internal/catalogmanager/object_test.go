@@ -563,11 +563,12 @@ func TestReferences(t *testing.T) {
 
 	// Create the parameter
 	jsonData, err := yaml.YAMLToJSON([]byte(validParamYaml))
-	var paramFqn string
+	var paramFqn, paramFqnHash string
 	if assert.NoError(t, err) {
 		r, err := NewObject(ctx, jsonData, nil)
 		require.NoError(t, err)
 		paramFqn = r.FullyQualifiedName()
+		paramFqnHash = r.StorageRepresentation().GetHash()
 		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 	}
@@ -581,27 +582,30 @@ func TestReferences(t *testing.T) {
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
 	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	var collectionHash string
 	if assert.NoError(t, err) {
 		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		collectionHash = collectionSchema.StorageRepresentation().GetHash()
 		require.NoError(t, err)
 		// get all references
 		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn, Hash: paramFqnHash}})
 		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName(), Hash: collectionHash}})
 	}
 
 	// Create the parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml2))
-	var paramFqn2 string
+	var paramFqn2, paramFqn2Hash string
 	if assert.NoError(t, err) {
 		r, err := NewObject(ctx, jsonData, nil)
 		require.NoError(t, err)
 		paramFqn2 = r.FullyQualifiedName()
+		paramFqn2Hash = r.StorageRepresentation().GetHash()
 		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 	}
@@ -612,19 +616,20 @@ func TestReferences(t *testing.T) {
 	if assert.NoError(t, err) {
 		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
+		collectionHash = collectionSchema.StorageRepresentation().GetHash()
 		// get all references
 		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
 		assert.Len(t, refs, 2)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn2}, {Parameter: paramFqn}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn2, Hash: paramFqn2Hash}, {Parameter: paramFqn, Hash: paramFqnHash}})
 		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName(), Hash: collectionHash}})
 		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName(), Hash: collectionHash}})
 	}
 	// update the collection back
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
@@ -633,15 +638,16 @@ func TestReferences(t *testing.T) {
 	if assert.NoError(t, err) {
 		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
+		collectionHash = collectionSchema.StorageRepresentation().GetHash()
 		// get all references
 		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn, Hash: paramFqnHash}})
 		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName(), Hash: collectionHash}})
 		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
 		require.NoError(t, err)
 		assert.Len(t, refs, 0)
@@ -652,13 +658,16 @@ func TestReferences(t *testing.T) {
 		r, err := NewObject(ctx, jsonData, nil)
 		require.NoError(t, err)
 		paramFqn = r.FullyQualifiedName()
+		paramFqnHash = r.StorageRepresentation().GetHash()
 		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		// get all references
 		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
-		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName(), Hash: collectionHash}})
+		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		require.NoError(t, err)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn, Hash: paramFqnHash}})
 	}
 }
 

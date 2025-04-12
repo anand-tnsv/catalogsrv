@@ -40,7 +40,12 @@ type ObjectRef struct {
 	References References `json:"references"`
 }
 
-type References []string
+type Reference struct {
+	Name string `json:"name"`
+	Hash string `json:"hash"`
+}
+
+type References []Reference
 type Directory map[string]ObjectRef
 
 func DirectoryToJSON(directory Directory) ([]byte, error) {

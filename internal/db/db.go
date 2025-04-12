@@ -64,7 +64,7 @@ type DB_ interface {
 	GetSchemaDirectory(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID) (*models.SchemaDirectory, apperrors.Error)
 	GetObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.ObjectRef, apperrors.Error)
 	AddOrUpdateObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, obj models.ObjectRef) apperrors.Error
-	AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references []string) apperrors.Error
+	AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references models.References) apperrors.Error
 	GetAllReferences(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (models.References, apperrors.Error)
 	DeleteReferenceFromObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, reference string) apperrors.Error
 	DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error)

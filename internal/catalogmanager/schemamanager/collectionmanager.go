@@ -12,6 +12,7 @@ import (
 
 type ParameterReference struct {
 	Parameter string `json:"parameter"`
+	Hash      string `json:"hash"`
 }
 
 func (pr ParameterReference) String() string {
