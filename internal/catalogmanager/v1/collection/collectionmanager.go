@@ -65,12 +65,8 @@ func (cm *V1CollectionManager) StorageRepresentation() *schemastore.SchemaStorag
 	return &s
 }
 
-func (cm *V1CollectionManager) ParameterSchemaReferences() []string {
-	var refs []string
-	for _, p := range cm.collectionSchema.Spec.Parameters {
-		refs = append(refs, p.Schema)
-	}
-	return refs
+func (cm *V1CollectionManager) ParameterNames() []string {
+	return cm.collectionSchema.ParameterNames()
 }
 
 func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ParameterReferences, apperrors.Error) {

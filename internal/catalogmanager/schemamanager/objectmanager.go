@@ -17,6 +17,7 @@ type ObjectManager interface {
 	Metadata() ObjectMetadata
 	Name() string
 	Path() string
+	FullyQualifiedName() string
 	Catalog() string
 	Description() string
 	SetName(name string)

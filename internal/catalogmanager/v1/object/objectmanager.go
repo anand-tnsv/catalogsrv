@@ -115,6 +115,10 @@ func (rm *V1ObjectManager) Path() string {
 	return rm.resourceSchema.Metadata.Path
 }
 
+func (rm *V1ObjectManager) FullyQualifiedName() string {
+	return rm.resourceSchema.Metadata.Path + "/" + rm.resourceSchema.Metadata.Name
+}
+
 func (rm *V1ObjectManager) Catalog() string {
 	return rm.resourceSchema.Metadata.Catalog
 }

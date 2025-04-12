@@ -82,17 +82,24 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ParameterReferences, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
 	var refs schemamanager.ParameterReferences
+	refMap := make(map[string]schemamanager.ParameterReference)
 	if loaders.ClosestParent == nil || loaders.ByHash == nil {
 		return nil, append(ves, schemaerr.ErrMissingObjectLoaders(""))
 	}
 	for n, p := range cs.Spec.Parameters {
 		if p.Schema != "" {
-			var ve schemaerr.ValidationErrors
-			refs, ve = validateParameterSchemaDependency(ctx, loaders, n, &p)
-			ves = append(ves, ve...)
+			ref, ve := validateParameterSchemaDependency(ctx, loaders, n, &p)
+			if ve != nil {
+				ves = append(ves, ve...)
+			} else {
+				refMap[ref.Parameter] = ref
+			}
 		} else if p.DataType != "" {
 			ves = append(ves, validateDataTypeDependency(n, &p, cs.Version)...)
 		}
+	}
+	for _, ref := range refMap {
+		refs = append(refs, ref)
 	}
 	return refs, ves
 }
@@ -140,17 +147,25 @@ func (cs *CollectionSchema) SetDefaultValues(ctx context.Context) {
 	}
 }
 
-func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) (schemamanager.ParameterReferences, schemaerr.ValidationErrors) {
+func (cs *CollectionSchema) ParameterNames() []string {
+	var names []string
+	for n := range cs.Spec.Parameters {
+		names = append(names, n)
+	}
+	return names
+}
+
+func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) (schemamanager.ParameterReference, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
-	var refs schemamanager.ParameterReferences
+	var ref schemamanager.ParameterReference
 	// find if there is an applicable parameter schema.
 	path, hash, err := loaders.ClosestParent(ctx, types.CatalogObjectTypeParameterSchema, p.Schema)
 	if err != nil || path == "" || hash == "" {
 		ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 	} else {
-		refs = append(refs, schemamanager.ParameterReference{
+		ref = schemamanager.ParameterReference{
 			Parameter: path,
-		})
+		}
 		if !p.Default.IsNil() {
 			om, err := loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, schemamanager.ObjectMetadata{
 				Name: path[strings.LastIndex(path, "/")+1:],
@@ -158,21 +173,21 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 			})
 			if err != nil && om == nil {
 				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-				return nil, ves
+				return ref, ves
 			}
 			pm := om.ParameterManager()
 			if pm == nil {
 				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-				return nil, ves
+				return ref, ves
 			}
 			if err := pm.ValidateValue(p.Default); err != nil {
 				ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
-				return nil, ves
+				return ref, ves
 			}
 		}
 	}
 
-	return refs, ves
+	return ref, ves
 }
 
 func validateDataTypeDependency(name string, p *Parameter, version string) schemaerr.ValidationErrors {

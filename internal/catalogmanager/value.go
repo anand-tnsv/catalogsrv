@@ -92,19 +92,10 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 
 	// get the directories
 	if options.WorkspaceID != uuid.Nil {
-		var wm schemamanager.WorkspaceManager
-		var apperr apperrors.Error
-
-		if wm, apperr = LoadWorkspaceManagerByID(ctx, options.WorkspaceID); apperr != nil {
-			return apperr
-		}
-
-		if dir.ParametersDir = wm.ParametersDir(); dir.ParametersDir == uuid.Nil {
-			return ErrInvalidWorkspace.Msg("workspace does not have a parameters directory")
-		}
-
-		if dir.CollectionsDir = wm.CollectionsDir(); dir.CollectionsDir == uuid.Nil {
-			return ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
+		var err apperrors.Error
+		dir, err = getDirectoriesForWorkspace(ctx, options.WorkspaceID)
+		if err != nil {
+			return err
 		}
 	} else {
 		return ErrInvalidVersionOrWorkspace

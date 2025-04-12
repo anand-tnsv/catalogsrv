@@ -43,7 +43,7 @@ func DeserializeParameterReferences(b []byte) (ParameterReferences, error) {
 }
 
 type CollectionManager interface {
-	ParameterSchemaReferences() []string
+	ParameterNames() []string
 	ValidateDependencies(context.Context, ObjectLoaders) (ParameterReferences, apperrors.Error)
 	ValidateValue(ctx context.Context, loaders ObjectLoaders, param string, value types.NullableAny) apperrors.Error
 	SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error

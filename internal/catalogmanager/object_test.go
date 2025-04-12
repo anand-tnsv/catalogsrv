@@ -425,6 +425,243 @@ func TestSaveValue(t *testing.T) {
 	}
 }
 
+func TestReferences(t *testing.T) {
+	validParamYaml := `
+				version: v1
+				kind: Parameter
+				metadata:
+				  name: IntegerParamSchema
+				  catalog: example-catalog
+				  path: /valid/path
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 10
+				  default: 5
+	`
+	updatedParamYaml := `
+				version: v1
+				kind: Parameter
+				metadata:
+				  name: IntegerParamSchema
+				  catalog: example-catalog
+				  path: /valid/path
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 20
+				  default: 5
+	`
+	validParamYaml2 := `
+				version: v1
+				kind: Parameter
+				metadata:
+				  name: IntegerParamSchema2
+				  catalog: example-catalog
+				  path: /valid/path
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 10
+				  default: 5
+	`
+	validCollectionYaml := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: AppConfigCollection
+		catalog: example-catalog
+		path: /valid/path
+	spec:
+		parameters:
+			maxRetries:
+				schema: IntegerParamSchema
+				default: 8
+			maxDelay:
+				dataType: Integer
+				default: 1000
+	`
+	validCollectionYaml2 := `
+	version: v1
+	kind: Collection
+	metadata:
+		name: AppConfigCollection
+		catalog: example-catalog
+		path: /valid/path
+	spec:
+		parameters:
+			connectionAttempts:
+				schema: IntegerParamSchema2
+				default: 3
+			connectionDelay:
+				schema: IntegerParamSchema
+				default: 7	
+			maxRetries:
+				schema: IntegerParamSchema
+				default: 8
+			maxDelay:
+				dataType: Integer
+				default: 1000
+	`
+	// Run tests
+	// Initialize context with logger and database connection
+	ctx := newDb()
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
+
+	replaceTabsWithSpaces(&validParamYaml)
+	replaceTabsWithSpaces(&updatedParamYaml)
+	replaceTabsWithSpaces(&validParamYaml2)
+	replaceTabsWithSpaces(&validCollectionYaml)
+	replaceTabsWithSpaces(&validCollectionYaml2)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant and project for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+
+	// create catalog example-catalog
+	cat := &models.Catalog{
+		Name:        "example-catalog",
+		Description: "An example catalog",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		ProjectID:   projectID,
+	}
+	err = db.DB(ctx).CreateCatalog(ctx, cat)
+	assert.NoError(t, err)
+
+	varId, err := db.DB(ctx).GetVariantIDFromName(ctx, cat.CatalogID, types.DefaultVariant)
+	assert.NoError(t, err)
+
+	// create a workspace
+	ws := &models.Workspace{
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		BaseVersion: 1,
+		VariantID:   varId,
+		CatalogID:   cat.CatalogID,
+	}
+	err = db.DB(ctx).CreateWorkspace(ctx, ws)
+	assert.NoError(t, err)
+
+	// get the directories for the workspace
+	dir, err := getDirectoriesForWorkspace(ctx, ws.WorkspaceID)
+	require.NoError(t, err)
+
+	// Create the parameter
+	jsonData, err := yaml.YAMLToJSON([]byte(validParamYaml))
+	var paramFqn string
+	if assert.NoError(t, err) {
+		r, err := NewObject(ctx, jsonData, nil)
+		require.NoError(t, err)
+		paramFqn = r.FullyQualifiedName()
+		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+	}
+	// Create the collection
+	// unmarshal the yaml of the param schema
+	param := make(map[string]any)
+	yaml.Unmarshal([]byte(validParamYaml), &param)
+	collection := make(map[string]any)
+	yaml.Unmarshal([]byte(validCollectionYaml), &collection)
+	// create the collection schema
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+		// get all references
+		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		require.NoError(t, err)
+		assert.Len(t, refs, 1)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn}})
+		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		require.NoError(t, err)
+		assert.Len(t, refs, 1)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+	}
+
+	// Create the parameter
+	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml2))
+	var paramFqn2 string
+	if assert.NoError(t, err) {
+		r, err := NewObject(ctx, jsonData, nil)
+		require.NoError(t, err)
+		paramFqn2 = r.FullyQualifiedName()
+		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+	}
+	// update the collection schema to include another parameter
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml2))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+		// get all references
+		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		require.NoError(t, err)
+		assert.Len(t, refs, 2)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn2}, {Parameter: paramFqn}})
+		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		require.NoError(t, err)
+		assert.Len(t, refs, 1)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
+		require.NoError(t, err)
+		assert.Len(t, refs, 1)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+	}
+	// update the collection back
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	if assert.NoError(t, err) {
+		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+		// get all references
+		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		require.NoError(t, err)
+		assert.Len(t, refs, 1)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: paramFqn}})
+		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		require.NoError(t, err)
+		assert.Len(t, refs, 1)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
+		require.NoError(t, err)
+		assert.Len(t, refs, 0)
+	}
+	// update the parameter
+	jsonData, err = yaml.YAMLToJSON([]byte(updatedParamYaml))
+	if assert.NoError(t, err) {
+		r, err := NewObject(ctx, jsonData, nil)
+		require.NoError(t, err)
+		paramFqn = r.FullyQualifiedName()
+		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		require.NoError(t, err)
+		// get all references
+		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		require.NoError(t, err)
+		assert.Len(t, refs, 1)
+		assert.ElementsMatch(t, refs, []schemamanager.ParameterReference{{Parameter: collectionSchema.FullyQualifiedName()}})
+	}
+}
+
 func newDb() context.Context {
 	ctx := log.Logger.WithContext(context.Background())
 	ctx = db.ConnCtx(ctx)
