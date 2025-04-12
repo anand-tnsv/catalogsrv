@@ -11,6 +11,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
+	"github.com/rs/zerolog/log"
 )
 
 type V1ParameterManager struct {
@@ -91,4 +92,46 @@ func (pm *V1ParameterManager) StorageRepresentation() *schemastore.SchemaStorage
 	}
 	s.Schema, _ = json.Marshal(pm.parameterSchema.Spec)
 	return &s
+}
+
+func (pm *V1ParameterManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, collectionRefs schemamanager.ObjectReferences) (err apperrors.Error) {
+	var ves schemaerr.ValidationErrors
+	defer func() {
+		if ves != nil {
+			err = validationerrors.ErrSchemaValidation.Msg(ves.Error())
+		}
+	}()
+	if loaders.ByHash == nil {
+		return
+	}
+	for _, collectionRef := range collectionRefs {
+		om, err := loaders.ByHash(ctx, types.CatalogObjectTypeCollectionSchema, collectionRef.Hash, schemamanager.ObjectMetadata{
+			Name: collectionRef.ObjectName(),
+			Path: collectionRef.Path(),
+		})
+		if err != nil {
+			log.Ctx(ctx).Error().Str("collection", collectionRef.Name).Msg("failed to load collection")
+			continue
+		}
+		cm := om.CollectionManager()
+		if cm == nil {
+			log.Ctx(ctx).Error().Str("collection", collectionRef.Name).Msg("failed to load collection manager")
+			continue
+		}
+		p := cm.ParametersWithSchema(loaders.SelfMetadata().Name)
+		for _, param := range p {
+			attrib := collectionRef.Name + "/" + param.Name
+			if !param.Default.IsNil() {
+				if err := pm.ValidateValue(param.Default); err != nil {
+					ves = append(ves, schemaerr.ErrInvalidValue(attrib+"::default", err.Error()))
+				}
+			}
+			if !param.Value.IsNil() {
+				if err := pm.ValidateValue(param.Value); err != nil {
+					ves = append(ves, schemaerr.ErrInvalidValue(attrib, err.Error()))
+				}
+			}
+		}
+	}
+	return
 }

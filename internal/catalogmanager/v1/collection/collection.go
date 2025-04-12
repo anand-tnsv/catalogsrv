@@ -79,10 +79,10 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 	return ves
 }
 
-func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ParameterReferences, schemaerr.ValidationErrors) {
+func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ObjectReferences, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
-	var refs schemamanager.ParameterReferences
-	refMap := make(map[string]schemamanager.ParameterReference)
+	var refs schemamanager.ObjectReferences
+	refMap := make(map[string]schemamanager.ObjectReference)
 	if loaders.ClosestParent == nil || loaders.ByHash == nil {
 		return nil, append(ves, schemaerr.ErrMissingObjectLoaders(""))
 	}
@@ -92,7 +92,7 @@ func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders sc
 			if ve != nil {
 				ves = append(ves, ve...)
 			} else {
-				refMap[ref.Parameter] = ref
+				refMap[ref.Name] = ref
 			}
 		} else if p.DataType != "" {
 			ves = append(ves, validateDataTypeDependency(n, &p, cs.Version)...)
@@ -155,17 +155,31 @@ func (cs *CollectionSchema) ParameterNames() []string {
 	return names
 }
 
-func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) (schemamanager.ParameterReference, schemaerr.ValidationErrors) {
+func (cs *CollectionSchema) ParametersWithSchema(schemaName string) []schemamanager.ParameterSpec {
+	var params []schemamanager.ParameterSpec
+	for n, p := range cs.Spec.Parameters {
+		if p.Schema == schemaName {
+			params = append(params, schemamanager.ParameterSpec{
+				Name:    n,
+				Default: p.Default,
+				Value:   p.Value,
+			})
+		}
+	}
+	return params
+}
+
+func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, p *Parameter) (schemamanager.ObjectReference, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
-	var ref schemamanager.ParameterReference
+	var ref schemamanager.ObjectReference
 	// find if there is an applicable parameter schema.
 	path, hash, err := loaders.ClosestParent(ctx, types.CatalogObjectTypeParameterSchema, p.Schema)
 	if err != nil || path == "" || hash == "" {
 		ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 	} else {
-		ref = schemamanager.ParameterReference{
-			Parameter: path,
-			Hash:      hash,
+		ref = schemamanager.ObjectReference{
+			Name: path,
+			Hash: hash,
 		}
 		if !p.Default.IsNil() {
 			om, err := loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, schemamanager.ObjectMetadata{

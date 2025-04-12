@@ -69,7 +69,11 @@ func (cm *V1CollectionManager) ParameterNames() []string {
 	return cm.collectionSchema.ParameterNames()
 }
 
-func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ParameterReferences, apperrors.Error) {
+func (cm *V1CollectionManager) ParametersWithSchema(schemaName string) []schemamanager.ParameterSpec {
+	return cm.collectionSchema.ParametersWithSchema(schemaName)
+}
+
+func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders) (schemamanager.ObjectReferences, apperrors.Error) {
 	refs, ves := cm.collectionSchema.ValidateDependencies(ctx, loaders)
 	if ves != nil {
 		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
