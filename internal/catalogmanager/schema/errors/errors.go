@@ -59,9 +59,9 @@ func ErrInvalidFieldSchema(attr string, value ...any) ValidationError {
 func ErrInvalidNameFormat(attr string, value ...string) ValidationError {
 	var errStr string
 	if len(value) == 0 {
-		errStr = "invalid name format; allowed characters: [A-Za-z0-9_-]"
+		errStr = "invalid name format; allowed characters: [a-z0-9-]"
 	} else {
-		errStr = "invalid name format " + InQuotes(value[0]) + "; allowed characters: [A-Za-z0-9_-]"
+		errStr = "invalid name format " + InQuotes(value[0]) + "; allowed characters: [a-z0-9-]"
 	}
 	return ValidationError{
 		Field:  attr,

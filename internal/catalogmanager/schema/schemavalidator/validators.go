@@ -45,6 +45,31 @@ func nameFormatValidator(fl validator.FieldLevel) bool {
 	return re.MatchString(str)
 }
 
+const resourceNameRegex = `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+const resourceNameMaxLength = 63
+
+// resourceNameValidator checks if the given name follows our convention.
+func resourceNameValidator(fl validator.FieldLevel) bool {
+	var str string
+	if ns, ok := fl.Field().Interface().(types.NullableString); ok {
+		if ns.IsNil() {
+			return true
+		}
+		str = ns.String()
+	} else {
+		str = fl.Field().String()
+	}
+
+	// Check the length of the name
+	if len(str) > resourceNameMaxLength {
+		return false
+	}
+
+	// Compile and check against the Kubernetes naming convention regex
+	re := regexp.MustCompile(resourceNameRegex)
+	return re.MatchString(str)
+}
+
 // notNull checks if a nullable value is not null
 func notNull(fl validator.FieldLevel) bool {
 	nv, ok := fl.Field().Interface().(types.Nullable)
@@ -69,7 +94,7 @@ func resourcePathValidator(fl validator.FieldLevel) bool {
 
 	// Split the path by slashes and check each collection name
 	collections := strings.Split(path, "/")[1:]
-	re := regexp.MustCompile(nameRegex)
+	re := regexp.MustCompile(resourceNameRegex)
 
 	for _, collection := range collections {
 		// If a segment is empty, continue (e.g., trailing slash is allowed)
@@ -92,12 +117,13 @@ func requireVersionV1(fl validator.FieldLevel) bool {
 }
 
 func ValidateObjectName(name string) bool {
-	re := regexp.MustCompile(nameRegex)
+	re := regexp.MustCompile(resourceNameRegex)
 	return re.MatchString(name)
 }
 
 func init() {
 	V().RegisterValidation("kindValidator", kindValidator)
+	V().RegisterValidation("resourceNameValidator", resourceNameValidator)
 	V().RegisterValidation("nameFormatValidator", nameFormatValidator)
 	V().RegisterValidation("noSpaces", noSpacesValidator)
 	V().RegisterValidation("resourcePathValidator", resourcePathValidator)

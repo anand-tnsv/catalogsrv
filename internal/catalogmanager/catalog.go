@@ -28,7 +28,7 @@ type catalogSchema struct {
 }
 
 type catalogMetadata struct {
-	Name        string `json:"name" validate:"required,nameFormatValidator"`
+	Name        string `json:"name" validate:"required,resourceNameValidator"`
 	Description string `json:"description"`
 }
 
@@ -58,7 +58,7 @@ func (cs *catalogSchema) Validate() schemaerr.ValidationErrors {
 		switch e.Tag() {
 		case "required":
 			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
-		case "nameFormatValidator":
+		case "resourceNameValidator":
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
 		case "kindValidator":
@@ -139,12 +139,29 @@ func (cm *catalogManager) Save(ctx context.Context) apperrors.Error {
 	err := db.DB(ctx).CreateCatalog(ctx, &cm.c)
 	if err != nil {
 		if errors.Is(err, dberror.ErrAlreadyExists) {
-			return ErrAlreadyExists.Msg("catalog already exists")
+			return ErrAlreadyExists.New("catalog already exists")
 		}
 		log.Ctx(ctx).Error().Err(err).Msg("failed to create catalog")
 		return err
 	}
 	return nil
+}
+
+func (cm *catalogManager) ToJson(ctx context.Context) ([]byte, apperrors.Error) {
+	s := catalogSchema{
+		Version: types.VersionV1,
+		Kind:    types.CatalogKind,
+		Metadata: catalogMetadata{
+			Name:        cm.c.Name,
+			Description: cm.c.Description,
+		},
+	}
+	j, err := json.Marshal(s)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to marshal json")
+		return nil, ErrUnableToLoadObject
+	}
+	return j, nil
 }
 
 func DeleteCatalogByName(ctx context.Context, name string) apperrors.Error {

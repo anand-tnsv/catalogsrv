@@ -19,8 +19,8 @@ func TestParameterSchema_Validate(t *testing.T) {
 			name: "valid parameter schema",
 			yamlInput: `
 metadata:
-  name: validName
-  catalog: validCatalog
+  name: valid-name
+  catalog: valid-catalog
   path: /valid_path
 spec:
   dataType: Integer
@@ -31,8 +31,8 @@ spec:
 			name: "missing required data type in spec",
 			yamlInput: `
 metadata:
-  name: validName
-  catalog: validCatalog
+  name: valid-name
+  catalog: valid-catalog
   path: /valid_path
 spec:
   validation: {}

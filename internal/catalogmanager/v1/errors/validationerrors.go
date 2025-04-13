@@ -6,5 +6,5 @@ import (
 )
 
 var (
-	ErrInvalidIntegerType apperrors.Error = validationerrors.ErrInvalidType.Msg("invalid type for Integer")
+	ErrInvalidIntegerType apperrors.Error = validationerrors.ErrInvalidType.New("invalid type for Integer")
 )

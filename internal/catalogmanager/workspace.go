@@ -28,8 +28,8 @@ type workspaceSchema struct {
 }
 
 type workspaceMetadata struct {
-	Catalog     string `json:"catalog" validate:"required,nameFormatValidator"`
-	Variant     string `json:"variant" validate:"required,nameFormatValidator"`
+	Catalog     string `json:"catalog" validate:"required,resourceNameValidator"`
+	Variant     string `json:"variant" validate:"required,resourceNameValidator"`
 	BaseVersion int    `json:"base_version"`
 	Description string `json:"description"`
 }

@@ -20,8 +20,8 @@ func TestCollectionSchema_Validate(t *testing.T) {
 			yamlInput: `
 version: v1
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
@@ -39,8 +39,8 @@ spec:
 			yamlInput: `
 version: v1
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
@@ -58,8 +58,8 @@ spec:
 			yamlInput: `
 version: v1
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
@@ -79,8 +79,8 @@ spec:
 			yamlInput: `
 version: v1
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:

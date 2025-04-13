@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -40,7 +41,7 @@ func TestObjectCreate(t *testing.T) {
 	"version": "v1",
 	"kind": "Catalog",
 	"metadata": {
-		"name": "ValidCatalog",
+		"name": "valid-catalog",
 		"description": "This is a valid catalog"
 	}
 } `
@@ -50,19 +51,85 @@ func TestObjectCreate(t *testing.T) {
 	response := executeTestRequest(t, httpReq, nil)
 
 	// Check the response code
-	if !assert.Equal(t, http.StatusAccepted, response.Code) {
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
 		t.Logf("Response: %v", response.Body.String())
 		t.FailNow()
 	}
 
-	/*
-		// Check headers
-		checkHeader(t, response.Result().Header)
+	// Check Location in header
+	assert.Equal(t, "valid-catalog", response.Header().Get("Location"))
 
-		compareJson(t,
-			&api.GetVersionRsp{
-				ServerVersion: "CatalogSrv: 1.0.0", //TODO - Implement server versioning
-				ApiVersion:    api.ApiVersion_1_0,
-			}, response.Body.String())
-	*/
+}
+
+func TestGetCatalog(t *testing.T) {
+	ctx := newDb()
+	defer db.DB(ctx).Close(ctx)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+
+	// Create the project for testing
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteProject(ctx, projectID)
+
+	// Create a New Request
+	httpReq, _ := http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+
+	req := `
+{
+	"version": "v1",
+	"kind": "Catalog",
+	"metadata": {
+		"name": "valid-catalog",
+		"description": "This is a valid catalog"
+	}
+} `
+	setRequestBodyAndHeader(t, httpReq, req)
+	// Execute Request
+	response := executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// Create a New Request to get the catalog
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog", nil)
+	response = executeTestRequest(t, httpReq, nil)
+
+	// Check the response code
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	checkHeader(t, response.Header())
+
+	rspType := make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+
+	reqType := make(map[string]any)
+	err = json.Unmarshal([]byte(req), &reqType)
+	assert.NoError(t, err)
+	assert.Equal(t, reqType, rspType)
+
+	// Create a New Request to get a non-existing catalog
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/validcatalog", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	t.Logf("Response: %v", response.Body.String())
+	if !assert.Equal(t, http.StatusNotFound, response.Code) {
+		t.FailNow()
+	}
+
 }

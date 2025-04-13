@@ -25,8 +25,8 @@ type variantSchema struct {
 }
 
 type variantMetadata struct {
-	Name        string `json:"name" validate:"required,nameFormatValidator"`
-	Catalog     string `json:"catalog" validate:"required,nameFormatValidator"`
+	Name        string `json:"name" validate:"required,resourceNameValidator"`
+	Catalog     string `json:"catalog" validate:"required,resourceNameValidator"`
 	Description string `json:"description"`
 }
 

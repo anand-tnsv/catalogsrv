@@ -15,6 +15,12 @@ var resourceObjectHandlers = []httpx.RoleAuthorizedHandlerParam{
 		Handler: createObject,
 		Op:      hatchrbac.Create,
 	},
+	{
+		Method:  http.MethodGet,
+		Path:    "/{catalogName}",
+		Handler: getCatalog,
+		Op:      hatchrbac.Read,
+	},
 }
 
 func Router(r chi.Router) {

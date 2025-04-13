@@ -70,10 +70,10 @@ import (
 */
 var (
 	ErrDatabase        apperrors.Error = apperrors.New("db error")
-	ErrAlreadyExists   apperrors.Error = ErrDatabase.Msg("already exists")
-	ErrNotFound        apperrors.Error = ErrDatabase.Msg("not found")
-	ErrInvalidInput    apperrors.Error = ErrDatabase.Msg("invalid input")
-	ErrInvalidCatalog  apperrors.Error = ErrDatabase.Msg("invalid catalog")
-	ErrMissingTenantID apperrors.Error = ErrInvalidInput.Msg("missing tenant ID")
-	ErrMissingProjecID apperrors.Error = ErrInvalidInput.Msg("missing project ID")
+	ErrAlreadyExists   apperrors.Error = ErrDatabase.New("already exists")
+	ErrNotFound        apperrors.Error = ErrDatabase.New("not found")
+	ErrInvalidInput    apperrors.Error = ErrDatabase.New("invalid input")
+	ErrInvalidCatalog  apperrors.Error = ErrDatabase.New("invalid catalog")
+	ErrMissingTenantID apperrors.Error = ErrInvalidInput.New("missing tenant ID")
+	ErrMissingProjecID apperrors.Error = ErrInvalidInput.New("missing project ID")
 )

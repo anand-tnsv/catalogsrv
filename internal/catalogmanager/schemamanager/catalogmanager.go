@@ -12,4 +12,5 @@ type CatalogManager interface {
 	Name() string
 	Description() string
 	Save(context.Context) apperrors.Error
+	ToJson(context.Context) ([]byte, apperrors.Error)
 }

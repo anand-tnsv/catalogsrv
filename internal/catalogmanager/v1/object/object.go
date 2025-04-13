@@ -49,6 +49,9 @@ func (rs *ObjectSchema) Validate() schemaerr.ValidationErrors {
 		case "kindValidator":
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrUnsupportedKind(jsonFieldName, val))
+		case "resourceNameValidator":
+			val, _ := e.Value().(string)
+			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
 		case "nameFormatValidator":
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))

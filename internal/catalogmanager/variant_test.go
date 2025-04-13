@@ -26,8 +26,8 @@ func TestNewVariantManager(t *testing.T) {
     "version": "v1",
     "kind": "Variant",
     "metadata": {
-        "name": "ValidVariant",
-        "catalog": "ValidCatalog",
+        "name": "valid-variant",
+        "catalog": "validcatalog",
         "description": "This is a valid variant"
     }
 }`,
@@ -40,8 +40,8 @@ func TestNewVariantManager(t *testing.T) {
     "version": "v2",
     "kind": "Variant",
     "metadata": {
-        "name": "InvalidVersionVariant",
-        "catalog": "ValidCatalog",
+        "name": "invalid-version-variant",
+        "catalog": "validcatalog",
         "description": "Invalid version in variant"
     }
 }`,
@@ -54,8 +54,8 @@ func TestNewVariantManager(t *testing.T) {
     "version": "v1",
     "kind": "InvalidKind",
     "metadata": {
-        "name": "InvalidKindVariant",
-        "catalog": "ValidCatalog",
+        "name": "invalid-kind-variant",
+        "catalog": "validcatalog",
         "description": "Invalid kind in variant"
     }
 }`,
@@ -89,7 +89,7 @@ func TestNewVariantManager(t *testing.T) {
 	defer db.DB(ctx).DeleteProject(ctx, projectID)
 
 	// Create a catalog for testing the variants
-	catalogName := "ValidCatalog"
+	catalogName := "validcatalog"
 	err = db.DB(ctx).CreateCatalog(ctx, &models.Catalog{
 		Name:        catalogName,
 		Description: "Test catalog",
@@ -118,7 +118,7 @@ func TestNewVariantManager(t *testing.T) {
 			} else if tt.expected == "" {
 				// If no error is expected, validate variant properties
 				assert.NotNil(t, vm)
-				assert.Equal(t, "ValidVariant", vm.Name())
+				assert.Equal(t, "valid-variant", vm.Name())
 				assert.Equal(t, "This is a valid variant", vm.Description())
 
 				// Save the variant

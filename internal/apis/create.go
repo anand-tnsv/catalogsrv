@@ -10,11 +10,8 @@ import (
 )
 
 // Create a new resource object
-func createObject(r *http.Request) (rspRet *httpx.Response, errRet error) {
+func createObject(r *http.Request) (*httpx.Response, error) {
 	ctx := r.Context()
-	defer func() {
-		errRet = ToHttpxError(errRet)
-	}()
 
 	if r.Body == nil {
 		return nil, httpx.ErrInvalidRequest()
@@ -46,7 +43,7 @@ func createObject(r *http.Request) (rspRet *httpx.Response, errRet error) {
 	}
 
 	rsp := &httpx.Response{
-		StatusCode: http.StatusAccepted,
+		StatusCode: http.StatusCreated,
 		Location:   resourceName, //TODO: Implement location
 		Response:   nil,
 	}

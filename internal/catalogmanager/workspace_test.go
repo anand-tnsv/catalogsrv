@@ -25,8 +25,8 @@ func TestNewWorkspaceManager(t *testing.T) {
     "version": "v1",
     "kind": "Workspace",
     "metadata": {
-        "catalog": "ValidCatalog",
-        "variant": "ValidVariant",
+        "catalog": "valid-catalog",
+        "variant": "valid-variant",
         "description": "This is a valid workspace"
     }
 }`,
@@ -40,8 +40,8 @@ func TestNewWorkspaceManager(t *testing.T) {
 		       "version": "v2",
 		       "kind": "Workspace",
 		       "metadata": {
-		           "catalog": "ValidCatalog",
-		           "variant": "ValidVariant",
+		           "catalog": "valid-catalog",
+		           "variant": "valid-variant",
 		           "description": "Invalid version in workspace"
 		       }
 		   }`,
@@ -55,8 +55,8 @@ func TestNewWorkspaceManager(t *testing.T) {
 			       "version": "v1",
 			       "kind": "InvalidKind",
 			       "metadata": {
-			           "catalog": "ValidCatalog",
-			           "variant": "ValidVariant",
+			           "catalog": "valid-catalog",
+			           "variant": "valid-variant",
 			           "description": "Invalid kind in workspace"
 			       }
 			   }`,
@@ -93,7 +93,7 @@ func TestNewWorkspaceManager(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Create a catalog and variant for testing the workspace
-	catalogName := "ValidCatalog"
+	catalogName := "valid-catalog"
 	c := models.Catalog{
 		Name:        catalogName,
 		Description: "Test catalog",
@@ -103,7 +103,7 @@ func TestNewWorkspaceManager(t *testing.T) {
 	err = db.DB(ctx).CreateCatalog(ctx, &c)
 	assert.NoError(t, err)
 
-	variantName := "ValidVariant"
+	variantName := "valid-variant"
 	variant := models.Variant{
 		Name:        variantName,
 		Description: "Test variant",

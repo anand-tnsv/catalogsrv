@@ -10,9 +10,9 @@ import (
 )
 
 type ObjectMetadata struct {
-	Name        string               `json:"name" validate:"required,nameFormatValidator"`
-	Catalog     string               `json:"catalog" validate:"required,nameFormatValidator"`
-	Variant     types.NullableString `json:"variant,omitempty" validate:"nameFormatValidator"`
+	Name        string               `json:"name" validate:"required,resourceNameValidator"`
+	Catalog     string               `json:"catalog" validate:"required,resourceNameValidator"`
+	Variant     types.NullableString `json:"variant,omitempty" validate:"resourceNameValidator"`
 	Path        string               `json:"path" validate:"required,resourcePathValidator"`
 	Description string               `json:"description"`
 }
@@ -37,7 +37,7 @@ func (rs *ObjectMetadata) Validate() schemaerr.ValidationErrors {
 		switch e.Tag() {
 		case "required":
 			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
-		case "nameFormatValidator":
+		case "resourceNameValidator":
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
 		case "resourcePathValidator":

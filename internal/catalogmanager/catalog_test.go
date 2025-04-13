@@ -23,7 +23,7 @@ func TestNewCatalogManager(t *testing.T) {
     "version": "v1",
     "kind": "Catalog",
     "metadata": {
-        "name": "ValidCatalog",
+        "name": "valid-catalog",
         "description": "This is a valid catalog"
     }
 }`,
@@ -36,7 +36,7 @@ func TestNewCatalogManager(t *testing.T) {
     "version": "v2",
     "kind": "Catalog",
     "metadata": {
-        "name": "InvalidVersionCatalog",
+        "name": "invalid-version-catalog",
         "description": "Invalid version in catalog"
     }
 }`,
@@ -49,7 +49,7 @@ func TestNewCatalogManager(t *testing.T) {
     "version": "v1",
     "kind": "InvalidKind",
     "metadata": {
-        "name": "InvalidKindCatalog",
+        "name": "invalid-kind-catalog",
         "description": "Invalid kind in catalog"
     }
 }`,
@@ -99,7 +99,7 @@ func TestNewCatalogManager(t *testing.T) {
 			} else if tt.expected == nil {
 				// If no error is expected, validate catalog properties
 				assert.NotNil(t, cm)
-				assert.Equal(t, "ValidCatalog", cm.Name())
+				assert.Equal(t, "valid-catalog", cm.Name())
 				assert.Equal(t, "This is a valid catalog", cm.Description())
 
 				// Save the catalog
@@ -112,7 +112,7 @@ func TestNewCatalogManager(t *testing.T) {
 				assert.ErrorIs(t, err, ErrAlreadyExists)
 
 				// Load the catalog
-				loadedCatalog, loadErr := LoadCatalogManagerByName(ctx, "ValidCatalog")
+				loadedCatalog, loadErr := LoadCatalogManagerByName(ctx, "valid-catalog")
 				assert.NoError(t, loadErr)
 				assert.Equal(t, cm.Name(), loadedCatalog.Name())
 				assert.Equal(t, cm.Description(), loadedCatalog.Description())

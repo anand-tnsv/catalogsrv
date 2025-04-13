@@ -73,7 +73,7 @@ func TestSaveObject(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema
+				  name: integer-param-schema
 				  catalog: example-catalog
 				  path: /valid/path
 				spec:
@@ -87,13 +87,13 @@ func TestSaveObject(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /valid/path
 	spec:
 		parameters:
 			maxRetries:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 8
 			maxDelay:
 				dataType: Integer
@@ -104,13 +104,13 @@ func TestSaveObject(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /valid/path
 	spec:
 		parameters:
 			maxRetries:
-				schema: NonExistentParamSchema
+				schema: non-existent-param-schema
 				default: 8
 			maxDelay:
 				dataType: Integer
@@ -121,13 +121,13 @@ func TestSaveObject(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /valid/path
 	spec:
 		parameters:
 			maxRetries:
-				schema: NonExistentParamSchema
+				schema: non-existent-param-schema
 				default: 8
 			maxDelay:
 				dataType: InvalidType
@@ -137,7 +137,7 @@ func TestSaveObject(t *testing.T) {
 	version: v1
 	kind: Parameter
 	metadata:
-		name: IntegerParamSchema
+		name: integer-param-schema
 		catalog: example-catalog
 		path: /invalid/path
 	spec:
@@ -151,13 +151,13 @@ func TestSaveObject(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /invalid/path
 	spec:
 		parameters:
 			maxRetries:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 8
 			maxDelay:
 				dataType: Integer
@@ -274,7 +274,7 @@ func TestSaveObject(t *testing.T) {
 				}
 				// create another object with same spec but at different path. Should not create a duplicate hash
 				rNew, err := NewObject(ctx, jsonData, &schemamanager.ObjectMetadata{
-					Name: "example_new",
+					Name: "example-new",
 					Path: "/another/path",
 				})
 				if assert.NoError(t, err) {
@@ -430,7 +430,7 @@ func TestSaveValue(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema
+				  name: integer-param-schema
 				  catalog: example-catalog
 				  path: /valid/path
 				spec:
@@ -444,13 +444,13 @@ func TestSaveValue(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /valid/path
 	spec:
 		parameters:
 			maxRetries:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 8
 			maxDelay:
 				dataType: Integer
@@ -462,7 +462,7 @@ func TestSaveValue(t *testing.T) {
 	metadata:
 		catalog: example-catalog
 		variant: default
-		collection: /valid/path/AppConfigCollection
+		collection: /valid/path/app-config-collection
 	spec:
 		maxRetries: 5
 		maxDelay: 2000
@@ -474,7 +474,7 @@ func TestSaveValue(t *testing.T) {
 	metadata:
 		catalog: example-catalog
 		variant: default
-		collection: /valid/path/AppConfigCollection
+		collection: /valid/path/app-config-collection
 	spec:
 		maxRetries: 5
 		maxDelay: two_thousand
@@ -485,7 +485,7 @@ func TestSaveValue(t *testing.T) {
 	metadata:
 		catalog: example-catalog
 		variant: default
-		collection: /valid/path/AppConfigCollection
+		collection: /valid/path/app-config-collection
 	spec:
 		maxRetries: 5000
 		maxDelay: 2000
@@ -496,7 +496,7 @@ func TestSaveValue(t *testing.T) {
 	metadata:
 		catalog: example-catalog
 		variant: default
-		collection: /invalidpath/AppConfigCollection
+		collection: /invalidpath/app-config-collection
 	spec:
 		maxRetries: 5
 		maxDelay: 1000
@@ -661,7 +661,7 @@ func TestReferences(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema
+				  name: integer-param-schema
 				  catalog: example-catalog
 				  path: /valid
 				spec:
@@ -675,7 +675,7 @@ func TestReferences(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema
+				  name: integer-param-schema
 				  catalog: example-catalog
 				  path: /valid
 				spec:
@@ -689,7 +689,7 @@ func TestReferences(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema2
+				  name: integer-param-schema2
 				  catalog: example-catalog
 				  path: /valid
 				spec:
@@ -703,7 +703,7 @@ func TestReferences(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema
+				  name: integer-param-schema
 				  catalog: example-catalog
 				  path: /valid/path
 				spec:
@@ -717,7 +717,7 @@ func TestReferences(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema
+				  name: integer-param-schema
 				  catalog: example-catalog
 				  path: /valid/path
 				spec:
@@ -731,7 +731,7 @@ func TestReferences(t *testing.T) {
 				version: v1
 				kind: Parameter
 				metadata:
-				  name: IntegerParamSchema
+				  name: integer-param-schema
 				  catalog: example-catalog
 				  path: /
 				spec:
@@ -745,13 +745,13 @@ func TestReferences(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /valid/path
 	spec:
 		parameters:
 			maxRetries:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 8
 			maxDelay:
 				dataType: Integer
@@ -761,19 +761,19 @@ func TestReferences(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /valid/path
 	spec:
 		parameters:
 			connectionAttempts:
-				schema: IntegerParamSchema2
+				schema: integer-param-schema2
 				default: 3
 			connectionDelay:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 7	
 			maxRetries:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 8
 			maxDelay:
 				dataType: Integer
@@ -783,19 +783,19 @@ func TestReferences(t *testing.T) {
 	version: v1
 	kind: Collection
 	metadata:
-		name: AppConfigCollection
+		name: app-config-collection
 		catalog: example-catalog
 		path: /valid/anotherpath
 	spec:
 		parameters:
 			connectionAttempts:
-				schema: IntegerParamSchema2
+				schema: integer-param-schema2
 				default: 3
 			connectionDelay:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 7	
 			maxRetries:
-				schema: IntegerParamSchema
+				schema: integer-param-schema
 				default: 8
 			maxDelay:
 				dataType: Integer

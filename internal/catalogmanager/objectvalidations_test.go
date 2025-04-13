@@ -234,17 +234,17 @@ func TestNewCollectionSchema(t *testing.T) {
 version: v1
 kind: Collection
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
     maxRetries:
-      schema: IntegerParamSchema
+      schema: integer-param-schema
       default: 5
   collections:
     databaseConfig:
-      schema: DatabaseConfigCollection
+      schema: database-config-collection
 `,
 			expected: "",
 		},
@@ -254,8 +254,8 @@ spec:
 version: v1
 kind: Collection
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
@@ -264,7 +264,7 @@ spec:
       default: 5
   collections:
     databaseConfig:
-      schema: DatabaseConfigCollection
+      schema: database-config-collection
 `,
 			expected: "",
 		},
@@ -273,8 +273,8 @@ spec:
 			yamlData: `
 kind: Collection
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
@@ -283,7 +283,7 @@ spec:
       default: 5
   collections:
     databaseConfig:
-      schema: DatabaseConfigCollection
+      schema: database-config-collection
 `,
 			expected: schemaerr.ErrMissingRequiredAttribute("version").Error(),
 		},
@@ -293,8 +293,8 @@ spec:
 version: v1
 kind: Collection
 metadata:
-  name: AppConfigCollection
-  catalog: myCatalog
+  name: app-config-collection
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
@@ -302,7 +302,7 @@ spec:
       default: 5
   collections:
     databaseConfig:
-      schema: DatabaseConfigCollection
+      schema: database-config-collection
 `,
 			expected: schemaerr.ValidationErrors{
 				schemaerr.ErrMissingSchemaOrType("spec.parameters.maxRetries.schema"),
@@ -316,16 +316,16 @@ version: v1
 kind: Collection
 metadata:
   name: Invalid Name!
-  catalog: myCatalog
+  catalog: my-catalog
   path: /valid/path
 spec:
   parameters:
     maxRetries:
-      schema: IntegerParamSchema
+      schema: integer-param-schema
       default: 5
   collections:
     databaseConfig:
-      schema: DatabaseConfigCollection
+      schema: database-config-collection
 `,
 			expected: schemaerr.ValidationErrors{
 				schemaerr.ErrInvalidNameFormat("metadata.name", "Invalid Name!"),
@@ -355,7 +355,7 @@ spec:
 
 	// create catalog example-catalog
 	cat := &models.Catalog{
-		Name:        "myCatalog",
+		Name:        "my-catalog",
 		Description: "An example catalog",
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		ProjectID:   projectID,

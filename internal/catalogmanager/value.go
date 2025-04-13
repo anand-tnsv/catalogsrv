@@ -29,8 +29,8 @@ type valueSchema struct {
 }
 
 type ValueMetadata struct {
-	Catalog    string               `json:"catalog" validate:"required,nameFormatValidator"`
-	Variant    types.NullableString `json:"variant" validate:"required,nameFormatValidator"`
+	Catalog    string               `json:"catalog" validate:"required,resourceNameValidator"`
+	Variant    types.NullableString `json:"variant" validate:"required,resourceNameValidator"`
 	Collection string               `json:"collection" validate:"required,resourcePathValidator"`
 }
 

@@ -22,8 +22,8 @@ func TestObjectSchema_Validate(t *testing.T) {
 version: v1
 kind: Parameter
 metadata:
-  name: validName
-  catalog: validCatalog
+  name: valid-name
+  catalog: valid-catalog
   path: /valid/path
 spec:
   description: example spec
@@ -37,7 +37,7 @@ version: v1
 kind: Parameter
 metadata:
   name: "Invalid Name!" # contains spaces and special characters
-  catalog: validCatalog
+  catalog: valid-catalog
   path: /valid/path
 spec:
   description: example spec
@@ -52,7 +52,7 @@ spec:
 version: v1
 kind: Parameter
 metadata:
-  name: validName
+  name: valid-name
   catalog: "Invalid Catalog!" # contains spaces and special characters
   path: /valid/path
 spec:
@@ -68,8 +68,8 @@ spec:
 version: v1
 kind: Parameter
 metadata:
-  name: validName
-  catalog: validCatalog
+  name: valid-name
+  catalog: valid-catalog
   path: "invalid/path" # does not start with a slash
 spec:
   description: example spec
@@ -83,8 +83,8 @@ spec:
 			yamlInput: `
 kind: Parameter
 metadata:
-  name: validName
-  catalog: validCatalog
+  name: valid-name
+  catalog: valid-catalog
   path: /valid/path
 spec:
   description: example spec
@@ -99,7 +99,7 @@ spec:
 version: v1
 kind: Parameter
 metadata:
-  catalog: validCatalog
+  catalog: valid-catalog
   path: /valid/path
 spec:
   description: example spec
@@ -114,7 +114,7 @@ spec:
 version: v1
 kind: Parameter
 metadata:
-  name: validName
+  name: valid-name
   path: /valid/path
 spec:
   description: example spec
@@ -129,8 +129,8 @@ spec:
 version: v1
 kind: Parameter
 metadata:
-  name: validName
-  catalog: validCatalog
+  name: valid-name
+  catalog: valid-catalog
 spec:
   description: example spec
 `,

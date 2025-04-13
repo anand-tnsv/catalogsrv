@@ -14,12 +14,12 @@ func TestResourcePathValidator(t *testing.T) {
 		input   string
 		isValid bool
 	}{
-		{input: "/valid_path/with-collections", isValid: true},
-		{input: "/valid_collection", isValid: true},
+		{input: "/valid-path/with-collections", isValid: true},
+		{input: "/valid-collection", isValid: true},
 		{input: "/invalid-path/with@chars", isValid: false},
 		{input: "relative/path", isValid: false},
-		{input: "/another_valid-collection/", isValid: true},
-		{input: "/collection_with_underscore/anotherCollection", isValid: true},
+		{input: "/another-valid-collection/", isValid: true},
+		{input: "/collection_with_underscore/anotherCollection", isValid: false},
 		{input: "/invalid-collection//double-slash", isValid: true},
 		{input: "/", isValid: true},
 		{input: "", isValid: false},
