@@ -4,21 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/mugiliam/common/apperrors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
 type catalogSchema struct {
-	Version  string          `json:"version" validate:"required"`
+	Version  string          `json:"version" validate:"required,requireVersionV1"`
 	Kind     string          `json:"kind" validate:"required,kindValidator"`
 	Metadata catalogMetadata `json:"metadata" validate:"required"`
 }
@@ -34,6 +38,45 @@ type catalogManager struct {
 
 var _ schemamanager.CatalogManager = (*catalogManager)(nil)
 
+func (cs *catalogSchema) Validate() schemaerr.ValidationErrors {
+	var ves schemaerr.ValidationErrors
+	err := schemavalidator.V().Struct(cs)
+	if err == nil {
+		return nil
+	}
+	ve, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return append(ves, schemaerr.ErrInvalidSchema)
+	}
+
+	value := reflect.ValueOf(cs).Elem()
+	typeOfCS := value.Type()
+
+	for _, e := range ve {
+		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
+
+		switch e.Tag() {
+		case "required":
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
+		case "nameFormatValidator":
+			val, _ := e.Value().(string)
+			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
+		case "kindValidator":
+			ves = append(ves, schemaerr.ErrUnsupportedKind(jsonFieldName))
+		case "requireVersionV1":
+			ves = append(ves, schemaerr.ErrInvalidVersion(jsonFieldName))
+		default:
+			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
+		}
+	}
+
+	if cs.Kind != types.CatalogKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
+
+	return ves
+}
+
 func NewCatalogManager(ctx context.Context, rsrcJson []byte, name string) (schemamanager.CatalogManager, apperrors.Error) {
 	projectID := common.ProjectIdFromContext(ctx)
 	if projectID == "" {
@@ -48,11 +91,10 @@ func NewCatalogManager(ctx context.Context, rsrcJson []byte, name string) (schem
 	if err := json.Unmarshal(rsrcJson, cs); err != nil {
 		return nil, ErrInvalidSchema.Err(err)
 	}
-	if cs.Version != "v1" {
-		return nil, validationerrors.ErrInvalidVersion
-	}
-	if cs.Kind != "Catalog" {
-		return nil, validationerrors.ErrInvalidKind
+
+	ves := cs.Validate()
+	if ves != nil {
+		return nil, ErrInvalidSchema.Err(ves)
 	}
 
 	c := models.Catalog{

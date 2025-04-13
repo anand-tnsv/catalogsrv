@@ -102,7 +102,7 @@ func ErrUnsupportedKind(attr string, value ...string) ValidationError {
 		errStr = "unsupported kind " + InQuotes(value[0])
 	}
 	return ValidationError{
-		Field:  attr,
+		Field:  "",
 		Value:  value,
 		ErrStr: errStr,
 	}

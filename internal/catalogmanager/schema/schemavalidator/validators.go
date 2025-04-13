@@ -8,22 +8,13 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-const (
-	CatalogKind    = "Catalog"
-	VariantKind    = "Variant"
-	WorkspaceKind  = "Workspace"
-	ParameterKind  = "Parameter"
-	CollectionKind = "Collection"
-	ValueKind      = "Value"
-)
-
 var validKinds = []string{
-	CatalogKind,
-	VariantKind,
-	WorkspaceKind,
-	ParameterKind,
-	CollectionKind,
-	ValueKind,
+	types.CatalogKind,
+	types.VariantKind,
+	types.WorkspaceKind,
+	types.ParameterKind,
+	types.CollectionKind,
+	types.ValueKind,
 }
 
 // kindValidator checks if the given kind is a valid resource kind.
@@ -97,7 +88,7 @@ func resourcePathValidator(fl validator.FieldLevel) bool {
 
 func requireVersionV1(fl validator.FieldLevel) bool {
 	version := fl.Field().String()
-	return version == "v1"
+	return version == types.VersionV1
 }
 
 func ValidateObjectName(name string) bool {

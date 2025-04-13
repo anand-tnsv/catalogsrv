@@ -17,6 +17,19 @@ func (u CatalogId) IsNil() bool {
 	return u == CatalogId(uuid.Nil)
 }
 
+const (
+	CatalogKind    = "Catalog"
+	VariantKind    = "Variant"
+	WorkspaceKind  = "Workspace"
+	ParameterKind  = "Parameter"
+	CollectionKind = "Collection"
+	ValueKind      = "Value"
+)
+
+const (
+	VersionV1 = "v1"
+)
+
 type CatalogObjectType string
 
 const (

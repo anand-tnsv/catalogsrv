@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// Get the JSON tag for a given field, or fallback to field name if not found
+// GetJSONTag retrieves the JSON tag for a given struct field.
+// If the JSON tag is not found or is explicitly ignored, it falls back to the field name.
 func GetJSONTag(field reflect.StructField) string {
 	jsonTag := field.Tag.Get("json")
 	if jsonTag == "" || jsonTag == "-" {
@@ -14,7 +15,9 @@ func GetJSONTag(field reflect.StructField) string {
 	return strings.Split(jsonTag, ",")[0]
 }
 
-// Recursively fetch the JSON field path for a given field in a struct
+// GetJSONFieldPath recursively fetches the JSON field path for a given field in a struct.
+// It iterates through all the fields in the struct, checking if each field matches the target field name.
+// If the field is a nested struct, it recurses into its fields to find the target field name and constructs the full JSON path.
 func GetJSONFieldPath(structVal reflect.Value, structType reflect.Type, fieldName string) string {
 	// Iterate through all the fields in the struct
 	for i := 0; i < structType.NumField(); i++ {

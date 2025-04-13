@@ -3,14 +3,15 @@ package middleware
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 func LoadContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tenantId := r.URL.Query().Get("tenantId")
-		projectId := r.URL.Query().Get("projectId")
+		tenantId := chi.URLParam(r, "tenantId")
+		projectId := chi.URLParam(r, "projectId")
 		r = r.WithContext(
 			common.SetProjectIdInContext(
 				common.SetTenantIdInContext(r.Context(), types.TenantId(tenantId)),

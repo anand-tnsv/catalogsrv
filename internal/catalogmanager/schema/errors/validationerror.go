@@ -46,5 +46,5 @@ func (ves ValidationErrors) Error() string {
 
 // inQuotes returns the string s surrounded by double quotes.
 func InQuotes(s string) string {
-	return "\"" + s + "\""
+	return "'" + s + "'"
 }

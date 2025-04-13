@@ -1,6 +1,10 @@
 package catalogmanager
 
-import "github.com/mugiliam/common/apperrors"
+import (
+	"net/http"
+
+	"github.com/mugiliam/common/apperrors"
+)
 
 var (
 	ErrCatalogError              apperrors.Error = apperrors.New("error in processing catalog")
@@ -9,7 +13,7 @@ var (
 	ErrParentCollectionNotFound  apperrors.Error = ErrCatalogError.Msg("collection not found")
 	ErrUnableToLoadObject        apperrors.Error = ErrCatalogError.Msg("unable to load object")
 	ErrAlreadyExists             apperrors.Error = ErrCatalogError.Msg("object already exists")
-	ErrInvalidSchema             apperrors.Error = ErrCatalogError.Msg("invalid schema")
+	ErrInvalidSchema             apperrors.Error = ErrCatalogError.Msg("invalid schema").SetExpandError(true).SetStatusCode(http.StatusBadRequest)
 	ErrEmptyMetadata             apperrors.Error = ErrCatalogError.Msg("empty metadata")
 	ErrInvalidProject            apperrors.Error = ErrCatalogError.Msg("invalid project")
 	ErrInvalidCatalog            apperrors.Error = ErrCatalogError.Msg("invalid catalog")

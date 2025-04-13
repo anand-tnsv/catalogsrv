@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/mugiliam/common/hatchservicemiddleware"
 	"github.com/mugiliam/common/httpx"
 	"github.com/mugiliam/common/logtrace"
+	"github.com/mugiliam/hatchcatalogsrv/internal/apis"
 	"github.com/mugiliam/hatchcatalogsrv/internal/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/server/middleware"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api"
@@ -49,6 +50,7 @@ func (s *HatchCatalogServer) mountResourceHandlers(r chi.Router) {
 		middleware.LoadContext,  // Load the context variables
 	)
 	r.Get("/version", s.getVersion)
+	apis.Router(r)
 }
 
 func (s *HatchCatalogServer) getVersion(w http.ResponseWriter, r *http.Request) {

@@ -1,9 +1,9 @@
 package catalogmanager
 
 import (
+	"errors"
 	"testing"
 
-	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
@@ -14,7 +14,7 @@ func TestNewCatalogManager(t *testing.T) {
 	tests := []struct {
 		name     string
 		jsonData string
-		expected string
+		expected error
 	}{
 		{
 			name: "valid catalog",
@@ -27,7 +27,7 @@ func TestNewCatalogManager(t *testing.T) {
         "description": "This is a valid catalog"
     }
 }`,
-			expected: "",
+			expected: nil,
 		},
 		{
 			name: "invalid version",
@@ -40,7 +40,7 @@ func TestNewCatalogManager(t *testing.T) {
         "description": "Invalid version in catalog"
     }
 }`,
-			expected: validationerrors.ErrInvalidVersion.Error(),
+			expected: ErrInvalidSchema,
 		},
 		{
 			name: "invalid kind",
@@ -53,12 +53,12 @@ func TestNewCatalogManager(t *testing.T) {
         "description": "Invalid kind in catalog"
     }
 }`,
-			expected: validationerrors.ErrInvalidKind.Error(),
+			expected: ErrInvalidSchema,
 		},
 		{
 			name:     "empty JSON data",
 			jsonData: "",
-			expected: ErrInvalidSchema.Error(),
+			expected: ErrInvalidSchema,
 		},
 	}
 
@@ -92,15 +92,11 @@ func TestNewCatalogManager(t *testing.T) {
 
 			// Create a new catalog manager
 			cm, err := NewCatalogManager(ctx, jsonData, "CatalogName")
-			errStr := ""
-			if err != nil {
-				errStr = err.Error()
-			}
 
 			// Check if the error string matches the expected error string
-			if errStr != tt.expected {
+			if !errors.Is(tt.expected, err) {
 				t.Errorf("got error %v, expected error %v", err, tt.expected)
-			} else if tt.expected == "" {
+			} else if tt.expected == nil {
 				// If no error is expected, validate catalog properties
 				assert.NotNil(t, cm)
 				assert.Equal(t, "ValidCatalog", cm.Name())

@@ -1,8 +1,6 @@
 package api
 
-import (
-	hatchapi "github.com/mugiliam/hatchsrv/pkg/api"
-)
+import "github.com/mugiliam/common/types"
 
 const ApiVersion_1_0 = "1.0"
 
@@ -14,8 +12,8 @@ func (r GetVersionReq) RequestMethod() (string, string) {
 	return "GET", "/catalogs/version"
 }
 
-func (r GetVersionReq) AuthMethod() hatchapi.AuthMethod {
-	return hatchapi.AuthMethodIdToken
+func (r GetVersionReq) AuthMethod() types.AuthMethod {
+	return types.AuthMethodIdToken
 }
 
 type GetVersionRsp struct {
