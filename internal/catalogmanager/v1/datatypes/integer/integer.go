@@ -102,7 +102,7 @@ func init() {
 	schemavalidator.V().RegisterValidation("stepValidator", integerStepValidator)
 	schemavalidator.V().RegisterValidation("integerBoundsValidator", integerBoundsValidator)
 
-	datatyperegistry.RegisterDataType(datatyperegistry.DataTypeKey{
+	datatyperegistry.RegisterDataType(schemamanager.ParamDataType{
 		Type:    dataType,
 		Version: version,
 	}, LoadIntegerSpec)

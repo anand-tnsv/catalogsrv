@@ -42,7 +42,7 @@ func NewV1ParameterManager(ctx context.Context, version string, rsrcJson []byte,
 	}
 
 	// load the parameter spec
-	loader := datatyperegistry.GetLoader(datatyperegistry.DataTypeKey{
+	loader := datatyperegistry.GetLoader(schemamanager.ParamDataType{
 		Type:    ps.Spec.DataType,
 		Version: version,
 	})
@@ -73,8 +73,11 @@ func NewV1ParameterManager(ctx context.Context, version string, rsrcJson []byte,
 	}, nil
 }
 
-func (pm *V1ParameterManager) DataType() string {
-	return pm.parameterSchema.Spec.DataType
+func (pm *V1ParameterManager) DataType() schemamanager.ParamDataType {
+	return schemamanager.ParamDataType{
+		Type:    pm.parameterSchema.Spec.DataType,
+		Version: pm.version,
+	}
 }
 
 func (pm *V1ParameterManager) Default() interface{} {

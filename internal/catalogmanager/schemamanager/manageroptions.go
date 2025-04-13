@@ -1,10 +1,13 @@
 package schemamanager
 
+import "encoding/json"
+
 type OptionsConfig struct {
 	Validate             bool
 	ValidateDependencies bool
 	SetDefaultValues     bool
 	ObjectLoaders        ObjectLoaders
+	ParamValues          json.RawMessage
 }
 
 type Options func(*OptionsConfig)
@@ -42,5 +45,11 @@ func WithDefaultValues(set ...bool) Options {
 		} else {
 			cfg.SetDefaultValues = true
 		}
+	}
+}
+
+func WithParamValues(values json.RawMessage) Options {
+	return func(cfg *OptionsConfig) {
+		cfg.ParamValues = values
 	}
 }

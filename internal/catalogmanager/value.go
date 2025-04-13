@@ -3,6 +3,7 @@ package catalogmanager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path"
 	"reflect"
 
@@ -13,6 +14,9 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
@@ -112,8 +116,14 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 		},
 		WithDirectories(dir))
 	if err != nil {
-		return err
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load object manager")
+		if errors.Is(err, ErrObjectNotFound) {
+			return ErrInvalidCollection.Msg("invalid collection " + v.Metadata.Collection)
+		}
+		return ErrCatalogError.Err(err)
 	}
+
+	oldHash := om.StorageRepresentation().GetHash()
 
 	// get object References
 	refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, v.Metadata.Collection)
@@ -132,15 +142,63 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 		return validationerrors.ErrSchemaValidation.Msg("failed to load collection manager")
 	}
 	for param, value := range v.Spec {
+		v := c.GetValue(ctx, param)
+		if v.Value.IsEqualTo(value) {
+			continue
+		}
 		if err := c.ValidateValue(ctx, loaders, param, value); err != nil {
 			return err
 		}
 		c.SetValue(ctx, param, value)
 	}
 
+	s := c.StorageRepresentation()
+	hash := s.GetHash()
+
+	if hash == oldHash {
+		return nil
+	}
+
 	// save the collection object
-	if err := SaveObject(ctx, om, WithDirectories(dir), SkipValidationForUpdate()); err != nil {
-		return err
+	data, e := s.Serialize()
+	if e != nil {
+		return validationerrors.ErrSchemaSerialization
+	}
+	obj := models.CatalogObject{
+		Type:    s.Type,
+		Version: s.Version,
+		Data:    data,
+		Hash:    hash,
+	}
+	// Save obj to the database
+	dberr := db.DB(ctx).CreateCatalogObject(ctx, &obj)
+	if dberr != nil {
+		if errors.Is(dberr, dberror.ErrAlreadyExists) {
+			log.Ctx(ctx).Debug().Str("hash", obj.Hash).Msg("catalog object already exists")
+			// in this case, we don't return. If we came here it means the object is not in the directory,
+			// so we'll keep chugging along and save the object to the directory
+		} else {
+			log.Ctx(ctx).Error().Err(dberr).Msg("failed to save catalog object")
+			return dberr
+		}
+	}
+	var refModel models.References
+	for _, ref := range refs {
+		refModel = append(refModel, models.Reference{
+			Name: ref.Name,
+		})
+	}
+
+	if err := db.DB(ctx).AddOrUpdateObjectByPath(
+		ctx, types.CatalogObjectTypeCollectionSchema,
+		dir.DirForType(types.CatalogObjectTypeCollectionSchema),
+		v.Metadata.Collection,
+		models.ObjectRef{
+			Hash:       obj.Hash,
+			References: refModel,
+		}); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to save object to directory")
+		return ErrCatalogError
 	}
 
 	return nil

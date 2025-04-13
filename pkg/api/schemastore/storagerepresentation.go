@@ -11,6 +11,7 @@ type SchemaStorageRepresentation struct {
 	Type        types.CatalogObjectType `json:"type"`
 	Description string                  `json:"description"`
 	Schema      json.RawMessage         `json:"schema"`
+	Values      json.RawMessage         `json:"values"`
 }
 
 // Serialize converts the SchemaStorageRepresentation to a JSON byte array

@@ -60,9 +60,13 @@ func LoadV1ObjectManager(ctx context.Context, s *schemastore.SchemaStorageRepres
 	if ves != nil {
 		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 	}
+	var opts []schemamanager.Options
+	if s.Values != nil && len(s.Values) > 0 && json.Valid(s.Values) {
+		opts = append(opts, schemamanager.WithParamValues(s.Values))
+	}
 
 	rs.Metadata.Description = s.Description
-	return buildObjectManager(ctx, rs, nil)
+	return buildObjectManager(ctx, rs, nil, opts...)
 }
 
 func buildObjectManager(ctx context.Context, rs *ObjectSchema, rsrcJson []byte, options ...schemamanager.Options) (*V1ObjectManager, apperrors.Error) {
@@ -103,6 +107,16 @@ func (rm *V1ObjectManager) Kind() string {
 	return rm.resourceSchema.Kind
 }
 
+func (rm *V1ObjectManager) Type() types.CatalogObjectType {
+	switch rm.Kind() {
+	case "Parameter":
+		return types.CatalogObjectTypeParameterSchema
+	case "Collection":
+		return types.CatalogObjectTypeCollectionSchema
+	default:
+		return types.CatalogObjectTypeInvalid
+	}
+}
 func (rm *V1ObjectManager) Metadata() schemamanager.ObjectMetadata {
 	return rm.resourceSchema.Metadata
 }

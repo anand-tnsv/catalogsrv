@@ -490,6 +490,17 @@ func TestSaveValue(t *testing.T) {
 		maxRetries: 5000
 		maxDelay: 2000
 	`
+	invalidPathYaml := `
+	version: v1
+	kind: Value
+	metadata:
+		catalog: example-catalog
+		variant: default
+		collection: /invalidpath/AppConfigCollection
+	spec:
+		maxRetries: 5
+		maxDelay: 1000
+	`
 
 	// Run tests
 	// Initialize context with logger and database connection
@@ -505,6 +516,7 @@ func TestSaveValue(t *testing.T) {
 	replaceTabsWithSpaces(&validValueYaml)
 	replaceTabsWithSpaces(&invalidDataTypeYaml)
 	replaceTabsWithSpaces(&invalidParamYaml)
+	replaceTabsWithSpaces(&invalidPathYaml)
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -580,12 +592,20 @@ func TestSaveValue(t *testing.T) {
 		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 	}
+	collectionHash := collectionSchema.StorageRepresentation().GetHash()
 
 	// create a value
 	jsonData, err = yaml.YAMLToJSON([]byte(validValueYaml))
 	require.NoError(t, err)
 	err = SaveValue(ctx, jsonData, nil, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
+
+	// load collection by path
+	m := collectionSchema.Metadata()
+	lr, err := LoadObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	require.NotNil(t, lr)
+	assert.NotEqual(t, collectionHash, lr.StorageRepresentation().GetHash())
 
 	// create a value with invalid data type
 	jsonData, err = yaml.YAMLToJSON([]byte(invalidDataTypeYaml))
@@ -597,6 +617,14 @@ func TestSaveValue(t *testing.T) {
 
 	// create a value with invalid parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(invalidParamYaml))
+	require.NoError(t, err)
+	err = SaveValue(ctx, jsonData, nil, WithWorkspaceID(ws.WorkspaceID))
+	if assert.Error(t, err) {
+		t.Logf("Error: %v", err)
+	}
+
+	// create a value with invalid path
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidPathYaml))
 	require.NoError(t, err)
 	err = SaveValue(ctx, jsonData, nil, WithWorkspaceID(ws.WorkspaceID))
 	if assert.Error(t, err) {

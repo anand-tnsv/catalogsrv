@@ -11,6 +11,7 @@ import (
 type ObjectManager interface {
 	Version() string
 	Kind() string
+	Type() types.CatalogObjectType
 	ParameterManager() ParameterManager
 	CollectionManager() CollectionManager
 	StorageRepresentation() *schemastore.SchemaStorageRepresentation

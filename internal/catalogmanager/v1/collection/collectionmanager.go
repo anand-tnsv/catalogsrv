@@ -50,6 +50,13 @@ func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte
 		cs.SetDefaultValues(ctx)
 	}
 
+	if o.ParamValues != nil {
+		err := json.Unmarshal(o.ParamValues, &cs.Values)
+		if err != nil {
+			return nil, validationerrors.ErrSchemaValidation.Msg("failed to read parameter values")
+		}
+	}
+
 	return &V1CollectionManager{
 		version:          version,
 		collectionSchema: *cs,
@@ -61,6 +68,7 @@ func (cm *V1CollectionManager) StorageRepresentation() *schemastore.SchemaStorag
 		Version: cm.version,
 		Type:    types.CatalogObjectTypeCollectionSchema,
 	}
+	s.Values, _ = json.Marshal(cm.collectionSchema.Values)
 	s.Schema, _ = json.Marshal(cm.collectionSchema.Spec)
 	return &s
 }
@@ -89,10 +97,18 @@ func (cm *V1CollectionManager) ValidateValue(ctx context.Context, loaders schema
 	return nil
 }
 
+func (cm *V1CollectionManager) GetValue(ctx context.Context, param string) schemamanager.ParamValue {
+	return cm.collectionSchema.GetValue(ctx, param)
+}
+
 func (cm *V1CollectionManager) SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error {
 	err := cm.collectionSchema.SetValue(ctx, param, value)
 	if err != nil {
 		return validationerrors.ErrSchemaValidation.Msg(err.Error())
 	}
 	return nil
+}
+
+func (cm *V1CollectionManager) SetDefaultValues(ctx context.Context) {
+	cm.collectionSchema.SetDefaultValues(ctx)
 }

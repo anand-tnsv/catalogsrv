@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 )
@@ -67,6 +68,13 @@ func (ns *NullableAny) Get() any {
 		return v
 	}
 	return nil
+}
+
+func (ns *NullableAny) IsEqualTo(value NullableAny) bool {
+	if ns.valid && value.valid {
+		return bytes.Equal(ns.value, value.value)
+	}
+	return ns.valid == value.valid
 }
 
 func (ns *NullableAny) GetAs(v any) error {

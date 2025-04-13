@@ -20,4 +20,5 @@ var (
 	ErrVariantNotFound           apperrors.Error = ErrCatalogError.Msg("variant not found")
 	ErrWorkspaceNotFound         apperrors.Error = ErrCatalogError.Msg("workspace not found")
 	ErrInvalidVersionOrWorkspace apperrors.Error = ErrCatalogError.Msg("invalid version or workspace")
+	ErrInvalidCollection         apperrors.Error = ErrCatalogError.Msg("invalid collection")
 )

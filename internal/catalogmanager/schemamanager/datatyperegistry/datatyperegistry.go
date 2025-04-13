@@ -7,22 +7,17 @@ import (
 
 type Loader func([]byte) (schemamanager.Parameter, apperrors.Error)
 
-type DataTypeKey struct {
-	Type    string
-	Version string
-}
+var registry = make(map[schemamanager.ParamDataType]Loader)
 
-var registry = make(map[DataTypeKey]Loader)
-
-func RegisterDataType(k DataTypeKey, ld Loader) {
+func RegisterDataType(k schemamanager.ParamDataType, ld Loader) {
 	registry[k] = ld
 }
 
-func GetLoader(k DataTypeKey) Loader {
+func GetLoader(k schemamanager.ParamDataType) Loader {
 	return registry[k]
 }
 
-func DataTypeExists(k DataTypeKey) bool {
+func DataTypeExists(k schemamanager.ParamDataType) bool {
 	_, exists := registry[k]
 	return exists
 }

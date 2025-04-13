@@ -63,6 +63,7 @@ type storeOptions struct {
 	ErrorIfExists           bool
 	WorkspaceID             uuid.UUID
 	Dir                     Directories
+	SetDefaultValues        bool
 	SkipValidationForUpdate bool
 	VersionNum              int
 }
@@ -119,12 +120,14 @@ func SkipValidationForUpdate() ObjectStoreOption {
 	}
 }
 
+func SetDefaultValues() ObjectStoreOption {
+	return func(o *storeOptions) {
+		o.SetDefaultValues = true
+	}
+}
+
 func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...ObjectStoreOption) apperrors.Error {
 	if om == nil {
-		return validationerrors.ErrEmptySchema
-	}
-	s := om.StorageRepresentation()
-	if s == nil {
 		return validationerrors.ErrEmptySchema
 	}
 
@@ -137,14 +140,15 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	var (
-		t                  types.CatalogObjectType = s.Type      // object type
-		dir                Directories                           // directories for this object type
-		hash               string                  = s.GetHash() // hash of the object's storage representation
-		path               string                  = m.Path      // path to the object in the directory
-		pathWithName       string                  = ""          // fully qualified resource path with name
+		t                  types.CatalogObjectType = om.Type() // object type
+		dir                Directories                         // directories for this object type
+		hash               string                              // hash of the object's storage representation
+		path               string                  = m.Path    // path to the object in the directory
+		pathWithName       string                  = ""        // fully qualified resource path with name
 		refs, existingRefs schemamanager.ObjectReferences
 		existingParamPath  string
 		existingParamRef   *models.ObjectRef
+		existingObjHash    string // Hash of the existing object with same path in the directory
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
@@ -171,7 +175,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 			break
 		}
 		var err apperrors.Error
-		if refs, existingParamPath, existingParamRef, err = validateParameterSchema(ctx, om, dir, hash); err != nil {
+		if existingObjHash, refs, existingParamPath, existingParamRef, err = validateParameterSchema(ctx, om, dir); err != nil {
 			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
 					return ErrAlreadyExists
@@ -185,7 +189,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 			break
 		}
 		var err apperrors.Error
-		if refs, existingRefs, err = validateCollectionSchema(ctx, om, dir, hash); err != nil {
+		if existingObjHash, refs, existingRefs, err = validateCollectionSchema(ctx, om, dir); err != nil {
 			if errors.Is(err, ErrAlreadyExists) {
 				if options.ErrorIfExists {
 					return ErrAlreadyExists
@@ -197,6 +201,24 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	default:
 		return ErrCatalogError.Msg("invalid object type")
 	}
+
+	if om.Type() == types.CatalogObjectTypeCollectionSchema {
+		om.CollectionManager().SetDefaultValues(ctx)
+	}
+
+	s := om.StorageRepresentation()
+	if s == nil {
+		return validationerrors.ErrEmptySchema
+	}
+
+	hash = s.GetHash()
+	if hash == existingObjHash {
+		if options.ErrorIfExists {
+			return ErrAlreadyExists
+		}
+		return nil
+	}
+
 	_ = existingParamRef
 	_ = existingParamPath
 	// if we came here, we have a new object to save
@@ -224,9 +246,6 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 			return dberr
 		}
 	}
-
-	// For Collections, we obtain the existing references and process the delta later.
-	// For Parameters, we copy over the existing references
 
 	var refModel models.References
 	for _, ref := range refs {
@@ -337,7 +356,8 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 	}
 }
 
-func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) (
+func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories) (
+	existingObjHash string,
 	newRefs schemamanager.ObjectReferences,
 	existingPath string,
 	existingParamRef *models.ObjectRef,
@@ -359,13 +379,6 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 	}
 
 	if r != nil {
-		if r.Hash == hash {
-			// if the hash is the same, we don't need to save the object
-			// since there is no modification, we don't need to re-evaluate parameters
-			log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
-			err = ErrAlreadyExists
-			return
-		}
 		if len(r.References) > 0 {
 			for _, ref := range r.References {
 				newRefs = append(newRefs, schemamanager.ObjectReference{
@@ -373,6 +386,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 				})
 			}
 		}
+		existingObjHash = r.Hash
 	} else {
 		// This is a new object. Check if the parent collection exists
 		if err = collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
@@ -425,13 +439,15 @@ func isParentOrSame(p1, p2 string) bool {
 // validateCollectionSchema ensures that all the dataTypes referenced by parameters in the Spec are valid.
 // Similarly, it ensures that all the parameters referenced by the collection schema exist and also returns the
 // references to the parameter schemas.
-func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories, hash string) (
+func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories) (
+	existingObjHash string,
 	newRefs schemamanager.ObjectReferences,
 	existingRefs schemamanager.ObjectReferences,
 	err apperrors.Error) {
 	if om == nil {
 		log.Ctx(ctx).Error().Msg("object manager is nil")
-		return nil, nil, ErrCatalogError
+		err = ErrCatalogError
+		return
 	}
 
 	cm := om.CollectionManager()
@@ -464,15 +480,11 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 				})
 			}
 		}
-		if r.Hash == hash {
-			log.Ctx(ctx).Debug().Str("hash", hash).Msg("object already exists")
-			newRefs = existingRefs // no new references to process
-			return newRefs, existingRefs, ErrAlreadyExists
-		}
+		existingObjHash = r.Hash
 	} else {
 		// This is a new object. Check if the parent collection exists
-		if err := collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
-			return newRefs, existingRefs, err
+		if err = collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
+			return
 		}
 	}
 	// validate the collection schema
@@ -483,7 +495,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 		return
 	}
 
-	return newRefs, existingRefs, nil
+	return
 }
 
 func collectionExists(ctx context.Context, collectionsDir uuid.UUID, path string) apperrors.Error {

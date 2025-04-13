@@ -17,8 +17,9 @@ import (
 )
 
 type CollectionSchema struct {
-	Version string         `json:"version" validate:"required"`
-	Spec    CollectionSpec `json:"spec"` // we can have empty collections
+	Version string                    `json:"version" validate:"required"`
+	Spec    CollectionSpec            `json:"spec"` // we can have empty collections
+	Values  schemamanager.ParamValues `json:"-"`
 }
 
 type CollectionSpec struct {
@@ -31,7 +32,7 @@ type Parameter struct {
 	DataType    string            `json:"dataType" validate:"required_without=Schema,excluded_unless=Schema '',omitempty,nameFormatValidator"`
 	Default     types.NullableAny `json:"default"`
 	Annotations Annotations       `json:"annotations" validate:"omitempty,dive,keys,noSpaces,endkeys,noSpaces"`
-	Value       types.NullableAny `json:"value"`
+	// Value       types.NullableAny `json:"value"`
 }
 
 type Annotations map[string]string
@@ -83,10 +84,16 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, existingRefs schemamanager.ObjectReferences) (schemamanager.ObjectReferences, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
 	var refs schemamanager.ObjectReferences
+	var dataType schemamanager.ParamDataType
 	refMap := make(map[string]schemamanager.ObjectReference)
 	if loaders.ClosestParent == nil || loaders.ByHash == nil || loaders.ByPath == nil {
 		return nil, append(ves, schemaerr.ErrMissingObjectLoaders(""))
 	}
+
+	if cs.Values == nil {
+		cs.Values = make(schemamanager.ParamValues)
+	}
+
 	for n, p := range cs.Spec.Parameters {
 		if p.Schema != "" {
 			var schemaPath string
@@ -96,7 +103,9 @@ func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders sc
 					break
 				}
 			}
-			ref, ve := validateParameterSchemaDependency(ctx, loaders, n, schemaPath, &p)
+			var ref schemamanager.ObjectReference
+			var ve schemaerr.ValidationErrors
+			dataType, ref, ve = validateParameterSchemaDependency(ctx, loaders, n, schemaPath, &p)
 			if ve != nil {
 				ves = append(ves, ve...)
 			} else {
@@ -104,6 +113,15 @@ func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders sc
 			}
 		} else if p.DataType != "" {
 			ves = append(ves, validateDataTypeDependency(n, &p, cs.Version)...)
+			dataType = schemamanager.ParamDataType{
+				Type:    p.DataType,
+				Version: cs.Version,
+			}
+		}
+		if dataType.Type != "" {
+			cs.Values[n] = schemamanager.ParamValue{
+				DataType: dataType,
+			}
 		}
 	}
 	for _, ref := range refMap {
@@ -132,7 +150,7 @@ func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemaman
 		if schemaPath == "" {
 			ves = append(ves, schemaerr.ErrInvalidParameter(param))
 		} else {
-			_, ve := validateParameterSchemaDependency(ctx, loaders, param, schemaPath, &pShallowCopy)
+			_, _, ve := validateParameterSchemaDependency(ctx, loaders, param, schemaPath, &pShallowCopy)
 			ves = append(ves, ve...)
 		}
 	} else if p.DataType != "" {
@@ -141,13 +159,27 @@ func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemaman
 	return ves
 }
 
+func (cs *CollectionSchema) GetValue(ctx context.Context, param string) schemamanager.ParamValue {
+	if cs.Values == nil {
+		return schemamanager.ParamValue{}
+	}
+	p, ok := cs.Values[param]
+	if !ok {
+		return schemamanager.ParamValue{}
+	}
+	return p
+}
+
 func (cs *CollectionSchema) SetValue(ctx context.Context, param string, value types.NullableAny) error {
-	p, ok := cs.Spec.Parameters[param]
+	if cs.Values == nil {
+		return schemaerr.ErrInvalidParameter(param)
+	}
+	p, ok := cs.Values[param]
 	if !ok {
 		return schemaerr.ErrInvalidParameter(param)
 	}
 	p.Value = value
-	cs.Spec.Parameters[param] = p
+	cs.Values[param] = p
 	return nil
 }
 
@@ -172,21 +204,28 @@ func (cs *CollectionSchema) ParametersWithSchema(schemaName string) []schemamana
 	var params []schemamanager.ParameterSpec
 	for n, p := range cs.Spec.Parameters {
 		if p.Schema == schemaName {
-			params = append(params, schemamanager.ParameterSpec{
+			ps := schemamanager.ParameterSpec{
 				Name:    n,
 				Default: p.Default,
-				Value:   p.Value,
-			})
+			}
+			if cs.Values != nil {
+				if v, ok := cs.Values[n]; ok {
+					ps.Value = v.Value
+				}
+			}
+			params = append(params, ps)
 		}
 	}
 	return params
 }
 
-func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, schemaPath string, p *Parameter) (schemamanager.ObjectReference, schemaerr.ValidationErrors) {
+func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, schemaPath string, p *Parameter) (schemamanager.ParamDataType, schemamanager.ObjectReference, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
 	var ref schemamanager.ObjectReference
 	var hash string
 	var err apperrors.Error
+	var dataType schemamanager.ParamDataType
+
 	// find if there is an applicable parameter schema
 	if schemaPath == "" {
 		schemaPath, hash, err = loaders.ClosestParent(ctx, types.CatalogObjectTypeParameterSchema, p.Schema)
@@ -212,28 +251,29 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 			}
 			if err != nil && om == nil {
 				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-				return ref, ves
+				return dataType, ref, ves
 			}
 			pm := om.ParameterManager()
 			if pm == nil {
 				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-				return ref, ves
+				return dataType, ref, ves
 			}
 			if err := pm.ValidateValue(p.Default); err != nil {
 				ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
-				return ref, ves
+				return dataType, ref, ves
 			}
+			dataType = pm.DataType()
 		}
 	}
 
-	return ref, ves
+	return dataType, ref, ves
 }
 
 func validateDataTypeDependency(name string, p *Parameter, version string) schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 
 	//check if the DataType is supported
-	loader := datatyperegistry.GetLoader(datatyperegistry.DataTypeKey{
+	loader := datatyperegistry.GetLoader(schemamanager.ParamDataType{
 		Type:    p.DataType,
 		Version: version,
 	})
