@@ -152,7 +152,7 @@ func (h *hatchCatalogDb) GetCatalog(ctx context.Context, catalogID uuid.UUID, na
 
 // UpdateCatalog updates an existing catalog in the database.
 // If both catalogID and name are provided, catalogID takes precedence.
-func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catalog) apperrors.Error {
+func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error {
 	// Retrieve tenant and project IDs from context
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
@@ -160,7 +160,7 @@ func (h *hatchCatalogDb) UpdateCatalog(ctx context.Context, catalog models.Catal
 	}
 
 	// Validate input to ensure either catalogID or name is provided
-	if catalog.CatalogID == uuid.Nil && catalog.Name == "" {
+	if catalog == nil || (catalog.CatalogID == uuid.Nil && catalog.Name == "") {
 		log.Ctx(ctx).Error().Msg("catalogID or name must be provided")
 		return dberror.ErrInvalidInput.Msg("catalogID or name must be provided")
 	}

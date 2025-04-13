@@ -351,7 +351,7 @@ func TestUpdateCatalog(t *testing.T) {
 
 	// Update the catalog
 	catalog.Description = "An updated description"
-	err = DB(ctx).UpdateCatalog(ctx, catalog)
+	err = DB(ctx).UpdateCatalog(ctx, &catalog)
 	assert.NoError(t, err)
 
 	// Retrieve the updated catalog and verify the changes
@@ -364,7 +364,7 @@ func TestUpdateCatalog(t *testing.T) {
 	invalidCatalog := models.Catalog{
 		Description: "Should fail",
 	}
-	err = DB(ctx).UpdateCatalog(ctx, invalidCatalog)
+	err = DB(ctx).UpdateCatalog(ctx, &invalidCatalog)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
@@ -375,7 +375,7 @@ func TestUpdateCatalog(t *testing.T) {
 		Description: "This catalog does not exist",
 		Info:        info,
 	}
-	err = DB(ctx).UpdateCatalog(ctx, nonExistentCatalog)
+	err = DB(ctx).UpdateCatalog(ctx, &nonExistentCatalog)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }

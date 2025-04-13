@@ -12,6 +12,7 @@ var (
 	ErrObjectNotFound            apperrors.Error = ErrCatalogError.New("object not found")
 	ErrParentCollectionNotFound  apperrors.Error = ErrCatalogError.New("collection not found")
 	ErrUnableToLoadObject        apperrors.Error = ErrCatalogError.New("unable to load object")
+	ErrUnableToUpdateObject      apperrors.Error = ErrCatalogError.New("unable to update object").SetStatusCode(http.StatusInternalServerError)
 	ErrAlreadyExists             apperrors.Error = ErrCatalogError.New("object already exists")
 	ErrInvalidSchema             apperrors.Error = ErrCatalogError.New("invalid schema").SetExpandError(true).SetStatusCode(http.StatusBadRequest)
 	ErrEmptyMetadata             apperrors.Error = ErrCatalogError.New("empty metadata")

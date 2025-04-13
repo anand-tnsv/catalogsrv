@@ -18,8 +18,20 @@ var resourceObjectHandlers = []httpx.RoleAuthorizedHandlerParam{
 	{
 		Method:  http.MethodGet,
 		Path:    "/{catalogName}",
-		Handler: getCatalog,
+		Handler: getObject,
 		Op:      hatchrbac.Read,
+	},
+	{
+		Method:  http.MethodPut,
+		Path:    "/{catalogName}",
+		Handler: updateObject,
+		Op:      hatchrbac.Update,
+	},
+	{
+		Method:  http.MethodDelete,
+		Path:    "/{catalogName}",
+		Handler: deleteObject,
+		Op:      hatchrbac.Delete,
 	},
 }
 

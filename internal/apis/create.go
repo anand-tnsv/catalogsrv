@@ -6,7 +6,6 @@ import (
 
 	"github.com/mugiliam/common/httpx"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager"
-	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 // Create a new resource object
@@ -22,26 +21,14 @@ func createObject(r *http.Request) (*httpx.Response, error) {
 		return nil, httpx.ErrUnableToReadRequest()
 	}
 
-	kind, err := catalogmanager.RequestType(req)
+	rm, err := catalogmanager.ResourceManagerFromRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
-	var resourceName string = ""
-
-	switch kind {
-	case types.CatalogKind:
-		catalog, err := catalogmanager.NewCatalogManager(ctx, req, "")
-		if err != nil {
-			return nil, err
-		}
-		err = catalog.Save(ctx)
-		if err != nil {
-			return nil, err
-		}
-		resourceName = catalog.Name()
+	resourceName, err := rm.Create(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	rsp := &httpx.Response{
 		StatusCode: http.StatusCreated,
 		Location:   resourceName, //TODO: Implement location

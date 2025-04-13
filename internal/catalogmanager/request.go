@@ -1,6 +1,7 @@
 package catalogmanager
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 
@@ -8,8 +9,14 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
+
+type ResourceName struct {
+	Catalog string
+	Variant string
+}
 
 // Header of all resource requests
 type resourceRequest struct {
@@ -69,4 +76,24 @@ func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
 	}
 
 	return rr.Kind, nil
+}
+
+func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte) (schemamanager.ResourceManager, apperrors.Error) {
+	kind, err := RequestType(rsrcJson)
+	if err != nil {
+		return nil, err
+	}
+	switch kind {
+	case types.CatalogKind:
+		return NewCatalogResource(ctx, rsrcJson, ResourceName{})
+	}
+	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
+}
+
+func ResourceManagerFromName(ctx context.Context, kind string, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	switch kind {
+	case types.CatalogKind:
+		return NewCatalogResource(ctx, nil, name)
+	}
+	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }

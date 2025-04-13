@@ -175,3 +175,90 @@ func DeleteCatalogByName(ctx context.Context, name string) apperrors.Error {
 	}
 	return nil
 }
+
+type catalogResource struct {
+	name     ResourceName
+	rsrcJson []byte
+	cm       schemamanager.CatalogManager
+}
+
+func (cr *catalogResource) Name() string {
+	return cr.name.Catalog
+}
+
+func (cr *catalogResource) Location() string {
+	return cr.name.Catalog
+}
+
+func (cr *catalogResource) ResourceJson() []byte {
+	return cr.rsrcJson
+}
+
+func (cr *catalogResource) Manager() schemamanager.CatalogManager {
+	return cr.cm
+}
+
+func (cr *catalogResource) Create(ctx context.Context) (string, apperrors.Error) {
+	catalog, err := NewCatalogManager(ctx, cr.rsrcJson, "")
+	if err != nil {
+		return "", err
+	}
+	err = catalog.Save(ctx)
+	if err != nil {
+		return "", err
+	}
+	cr.name.Catalog = catalog.Name()
+	return cr.name.Catalog, nil
+}
+
+func (cr *catalogResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
+	catalog, err := LoadCatalogManagerByName(ctx, cr.name.Catalog)
+	if err != nil {
+		return nil, err
+	}
+	return catalog.ToJson(ctx)
+}
+
+func (cr *catalogResource) Delete(ctx context.Context) apperrors.Error {
+	err := DeleteCatalogByName(ctx, cr.name.Catalog)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cr *catalogResource) Update(ctx context.Context, rsrcJson []byte) apperrors.Error {
+	cs := &catalogSchema{}
+	if err := json.Unmarshal(rsrcJson, cs); err != nil {
+		return ErrInvalidSchema.Err(err)
+	}
+
+	ves := cs.Validate()
+	if ves != nil {
+		return ErrInvalidSchema.Err(ves)
+	}
+
+	c, err := db.DB(ctx).GetCatalog(ctx, uuid.Nil, cs.Metadata.Name)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			return ErrCatalogNotFound
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+		return err
+	}
+	c.Description = cs.Metadata.Description
+
+	err = db.DB(ctx).UpdateCatalog(ctx, c)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to update catalog")
+		return ErrUnableToUpdateObject.Msg("failed to update catalog")
+	}
+	return nil
+}
+
+func NewCatalogResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	return &catalogResource{
+		name:     name,
+		rsrcJson: rsrcJson,
+	}, nil
+}

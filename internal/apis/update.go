@@ -1,6 +1,7 @@
 package apis
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -9,7 +10,8 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-func getObject(r *http.Request) (*httpx.Response, error) {
+// Create a new resource object
+func updateObject(r *http.Request) (*httpx.Response, error) {
 	ctx := r.Context()
 	var kind string
 
@@ -22,6 +24,15 @@ func getObject(r *http.Request) (*httpx.Response, error) {
 		kind = types.CatalogKind
 	}
 
+	if r.Body == nil {
+		return nil, httpx.ErrInvalidRequest()
+	}
+
+	req, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, httpx.ErrUnableToReadRequest()
+	}
+
 	rm, err := catalogmanager.ResourceManagerFromName(ctx, kind, catalogmanager.ResourceName{
 		Catalog: catalogName,
 		Variant: variantName,
@@ -30,14 +41,14 @@ func getObject(r *http.Request) (*httpx.Response, error) {
 		return nil, err
 	}
 
-	rsrc, err := rm.Get(ctx)
+	err = rm.Update(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	rsp := &httpx.Response{
 		StatusCode: http.StatusOK,
-		Response:   rsrc,
+		Response:   nil,
 	}
 	return rsp, nil
 }

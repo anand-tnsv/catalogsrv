@@ -9,7 +9,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-func getObject(r *http.Request) (*httpx.Response, error) {
+func deleteObject(r *http.Request) (*httpx.Response, error) {
 	ctx := r.Context()
 	var kind string
 
@@ -30,14 +30,14 @@ func getObject(r *http.Request) (*httpx.Response, error) {
 		return nil, err
 	}
 
-	rsrc, err := rm.Get(ctx)
+	err = rm.Delete(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	rsp := &httpx.Response{
-		StatusCode: http.StatusOK,
-		Response:   rsrc,
+		StatusCode: http.StatusNoContent,
+		Response:   nil,
 	}
 	return rsp, nil
 }

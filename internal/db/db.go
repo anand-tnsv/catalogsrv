@@ -27,7 +27,7 @@ type DB_ interface {
 	CreateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error
 	GetCatalogIDByName(ctx context.Context, catalogName string) (uuid.UUID, apperrors.Error)
 	GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, apperrors.Error)
-	UpdateCatalog(ctx context.Context, catalog models.Catalog) apperrors.Error
+	UpdateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error
 	DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) apperrors.Error
 
 	// Variant
