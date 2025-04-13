@@ -275,6 +275,11 @@ func syncParameterReferencesInCollections(ctx context.Context, dir Directories, 
 		}
 	}
 
+	// if there are no existing references, we don't need to do anything
+	if existingParamObjRef == nil {
+		return
+	}
+
 	// for all the collections that will now map to the new parameter, replace the old reference with the new one
 	for _, newRef := range newCollectionRefs {
 		if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, newRef.Name, []models.Reference{{Name: newPath}}); err != nil {
@@ -386,7 +391,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 		if existingPath != "" && existingParamRef != nil {
 			collectionRefs := existingParamRef.References
 			for _, ref := range collectionRefs {
-				if isParentOrSame(path.Dir(ref.Name), m.Path) {
+				if isParentOrSame(m.Path, path.Dir(ref.Name)) {
 					newRefs = append(newRefs, schemamanager.ObjectReference{
 						Name: ref.Name,
 					})
