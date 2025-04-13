@@ -21,6 +21,7 @@ type CollectionManager interface {
 	ValidateValue(ctx context.Context, loaders ObjectLoaders, param string, value types.NullableAny) apperrors.Error
 	SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error
 	GetValue(ctx context.Context, param string) ParamValue
+	GetValues(ctx context.Context) map[string]ParamValue
 	StorageRepresentation() *schemastore.SchemaStorageRepresentation
 	SetDefaultValues(ctx context.Context)
 }

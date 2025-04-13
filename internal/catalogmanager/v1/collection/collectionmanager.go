@@ -101,6 +101,10 @@ func (cm *V1CollectionManager) GetValue(ctx context.Context, param string) schem
 	return cm.collectionSchema.GetValue(ctx, param)
 }
 
+func (cm *V1CollectionManager) GetValues(ctx context.Context) map[string]schemamanager.ParamValue {
+	return cm.collectionSchema.Values
+}
+
 func (cm *V1CollectionManager) SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error {
 	err := cm.collectionSchema.SetValue(ctx, param, value)
 	if err != nil {
