@@ -502,6 +502,131 @@ func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.Catalog
 	return wasRemoved, nil
 }
 
+func (h *hatchCatalogDb) DeleteTree(ctx context.Context, directoryIds models.DirectoryIDs, path string) ([]string, apperrors.Error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return nil, dberror.ErrMissingTenantID
+	}
+
+	var paramDirID, collectionDirID uuid.UUID
+	for _, dirId := range directoryIds {
+		if dirId.Type == types.CatalogObjectTypeCollectionSchema {
+			collectionDirID = dirId.ID
+		} else if dirId.Type == types.CatalogObjectTypeParameterSchema {
+			paramDirID = dirId.ID
+		}
+	}
+	if collectionDirID == uuid.Nil || paramDirID == uuid.Nil {
+		return nil, dberror.ErrInvalidInput.Msg("invalid directory ids")
+	}
+
+	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+	})
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to start transaction")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+	defer func() {
+		tx.Rollback()
+	}()
+
+	// get the collection directory
+	query := `SELECT directory FROM collections_directory WHERE directory_id = $1 AND tenant_id = $2 FOR UPDATE;`
+	var b []byte
+	err = tx.QueryRowContext(ctx, query, collectionDirID, tenantID).Scan(&b)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, dberror.ErrNotFound.Msg("collection directory not found")
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to get collection directory")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+	collectionDir, err := models.JSONToDirectory(b)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal collection directory")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+	// get the parameter directory
+	query = `SELECT directory FROM parameters_directory WHERE directory_id = $1 AND tenant_id = $2 FOR UPDATE;`
+	b = nil
+	err = tx.QueryRowContext(ctx, query, paramDirID, tenantID).Scan(&b)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, dberror.ErrNotFound.Msg("parameter directory not found")
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to get parameter directory")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+	parameterDir, err := models.JSONToDirectory(b)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal parameter directory")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+	// define a function to delete paths
+	deletePaths := func(t types.CatalogObjectType, dir models.Directory, path string) ([]string, apperrors.Error) {
+		/*
+			We remove all objects that start with the path
+			We also remove all references that start with the path
+		*/
+		var removedObjects []string
+		for p, objRef := range dir {
+			if strings.HasPrefix(p, path) {
+				removedObjects = append(removedObjects, objRef.Hash)
+				delete(dir, p)
+			} else {
+				newRefs := []models.Reference{}
+				for _, ref := range objRef.References {
+					if !strings.HasPrefix(ref.Name, path) {
+						newRefs = append(newRefs, ref)
+					}
+				}
+				objRef.References = newRefs
+				dir[p] = objRef
+			}
+		}
+		b, err = models.DirectoryToJSON(dir)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to marshal collection directory")
+			return nil, dberror.ErrDatabase.Err(err)
+		}
+		var query string
+		if t == types.CatalogObjectTypeCollectionSchema {
+			query = `UPDATE collections_directory SET directory = $1 WHERE directory_id = $2 AND tenant_id = $3;`
+			_, err = tx.ExecContext(ctx, query, b, collectionDirID, tenantID)
+		} else {
+			query = `UPDATE parameters_directory SET directory = $1 WHERE directory_id = $2 AND tenant_id = $3;`
+			_, err = tx.ExecContext(ctx, query, b, paramDirID, tenantID)
+		}
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to update collection directory")
+			return nil, dberror.ErrDatabase.Err(err)
+		}
+		return removedObjects, nil
+	}
+
+	// delete the paths
+	var removedObjects []string
+	if objects, err := deletePaths(types.CatalogObjectTypeCollectionSchema, collectionDir, path); err != nil {
+		return nil, err
+	} else {
+		removedObjects = objects
+	}
+	if objects, err := deletePaths(types.CatalogObjectTypeParameterSchema, parameterDir, path); err != nil {
+		return nil, err
+	} else {
+		removedObjects = append(removedObjects, objects...)
+	}
+
+	// commit the transaction
+	if err := tx.Commit(); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to commit transaction")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+
+	return removedObjects, nil
+}
+
 // FindClosestObject searches for an object in a JSONB directory that is associated with the specified targetName
 // and located at the closest matching path to the provided startPath. It traverses outward from the startPath
 // to the nearest parent paths until it finds a match.

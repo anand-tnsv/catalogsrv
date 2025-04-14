@@ -500,6 +500,45 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 	return
 }
 
+func deleteCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories) apperrors.Error {
+	m := om.Metadata()
+	pathWithName := m.Path + "/" + m.Name
+
+	// get this objectRef from the directory
+	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
+		} else {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
+			return ErrCatalogError
+		}
+	}
+
+	existingRefs := make(schemamanager.ObjectReferences, 0)
+	existingObjHash := ""
+
+	if r != nil {
+		if len(r.References) > 0 {
+			for _, ref := range r.References {
+				existingRefs = append(existingRefs, schemamanager.ObjectReference{
+					Name: ref.Name,
+				})
+			}
+		}
+		existingObjHash = r.Hash
+	} else {
+		return ErrObjectNotFound
+	}
+
+	if err := db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to delete object from directory")
+		return ErrCatalogError
+	}
+
+	return nil
+}
+
 func collectionExists(ctx context.Context, collectionsDir uuid.UUID, path string) apperrors.Error {
 	if path != "/" {
 		var (
@@ -563,6 +602,14 @@ func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 	}
 
 	return resource.LoadV1ObjectManager(ctx, s, m)
+}
+
+func DeleteObject(ctx context.Context, om schemamanager.ObjectManager) apperrors.Error {
+	if om == nil {
+		return validationerrors.ErrEmptySchema
+	}
+	//m := om.Metadata()
+	return nil
 }
 
 func LoadObjectByHash(ctx context.Context, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {

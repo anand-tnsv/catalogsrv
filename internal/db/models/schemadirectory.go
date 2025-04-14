@@ -35,6 +35,13 @@ type SchemaDirectory struct {
 	Directory   []byte         `db:"directory"` // JSONB
 }
 
+type DirectoryID struct {
+	ID   uuid.UUID
+	Type types.CatalogObjectType
+}
+
+type DirectoryIDs []DirectoryID
+
 type ObjectRef struct {
 	Hash       string     `json:"hash"`
 	References References `json:"references"`

@@ -75,6 +75,21 @@ func (p *postgresPool) Conn(ctx context.Context) (ScopedConn, error) {
 		return nil, err
 	}
 
+	// set lock timeout for conn
+	_, err = conn.ExecContext(ctx, "SET lock_timeout = '5s'")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to set lock timeout")
+		cancel()
+		return nil, err
+	}
+	// set statement timeout for conn
+	_, err = conn.ExecContext(ctx, "SET statement_timeout = '5s'")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to set statement timeout")
+		cancel()
+		return nil, err
+	}
+	// TODO: set idle_in_transaction_session_timeout for conn
 	// Create a new PostgresConn instance with the configured scopes and the obtained connection.
 	h := &postgresConn{
 		configuredScopes: p.configuredScopes,

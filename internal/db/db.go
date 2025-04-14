@@ -73,6 +73,7 @@ type DB_ interface {
 	DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error)
 	FindClosestObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, targetName, startPath string) (string, *models.ObjectRef, apperrors.Error)
 	PathExists(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error)
+	DeleteTree(ctx context.Context, directoryIds models.DirectoryIDs, path string) ([]string, apperrors.Error)
 
 	// Scope Management
 	AddScopes(ctx context.Context, scopes map[string]string)

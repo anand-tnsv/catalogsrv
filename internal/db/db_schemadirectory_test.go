@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSchemaDirectory(t *testing.T) {
@@ -260,4 +262,73 @@ func TestSchemaDirectory(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "/m/n/p/s", closestPath)
 	assert.Equal(t, closestObj.Hash, dir["/m/n/p/s"].Hash)
+
+	// add some new objects
+	cd := workspace.CollectionsDir
+	// add a new object
+	paths := []string{"/col/a/b", "/col/a/b/c", "/col/a/b/c/d/e/f", "/col/a/b/c/d", "/col/a/b/d/e", "/col/a/c", "/col/a/c/e/f"}
+	refsP := models.References{
+		{Name: "/par/a/b"}, {Name: "/par/a/b/c"}, {Name: "/par/a/b/c/d/e/f"}, {Name: "/par/a/b/c/d"}, {Name: "/par/a/b/d/e"}, {Name: "/par/a/c"}, {Name: "/par/a/c/e/f"},
+	}
+	for _, path := range paths {
+		err = DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, path, models.ObjectRef{Hash: "hash", References: refsP})
+		assert.NoError(t, err)
+	}
+
+	paths = []string{"/par/a/b", "/par/a/b/c", "/par/a/b/c/d/e/f", "/par/a/b/c/d", "/par/a/b/d/e", "/par/a/c", "/par/a/c/e/f"}
+	refsC := models.References{
+		{Name: "/col/a/b"}, {Name: "/col/a/b/c"}, {Name: "/col/a/b/c/d/e/f"}, {Name: "/col/a/b/c/d"}, {Name: "/col/a/b/d/e"}, {Name: "/col/a/c"}, {Name: "/col/a/c/e/f"},
+	}
+	for _, path := range paths {
+		err = DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, path, models.ObjectRef{Hash: "hash", References: refsC})
+		assert.NoError(t, err)
+	}
+
+	// get an object
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b/c/d/e/f")
+	require.NoError(t, err)
+	require.Equal(t, object.Hash, "hash")
+	// get object at root
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b")
+	require.NoError(t, err)
+	require.Equal(t, object.Hash, "hash")
+	// get object at root
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/c")
+	require.NoError(t, err)
+	require.Equal(t, object.Hash, "hash")
+	// delete the tree at /a/b
+	deletePath := "/col/a/b"
+	objs, err := DB(ctx).DeleteTree(ctx, models.DirectoryIDs{
+		{ID: cd, Type: types.CatalogObjectTypeCollectionSchema},
+		{ID: pd, Type: types.CatalogObjectTypeParameterSchema},
+	}, deletePath)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(objs))
+	// get the object again
+	_, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b/c/d/e/f")
+	require.Error(t, err, dberror.ErrNotFound)
+	_, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b")
+	require.Error(t, err, dberror.ErrNotFound)
+	obj, err := DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/c")
+	require.NoError(t, err)
+	require.Equal(t, obj.Hash, "hash")
+	require.Equal(t, refsP, obj.References)
+	// retrieve a parameter
+	obj, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/c/d/e/f")
+	require.NoError(t, err)
+	require.Equal(t, obj.Hash, "hash")
+	newRefsC := models.References{}
+	for _, ref := range refsC {
+		if !strings.HasPrefix(ref.Name, deletePath) {
+			newRefsC = append(newRefsC, ref)
+		}
+	}
+	require.Equal(t, newRefsC, obj.References)
+
+	// delete tree with invalid root
+	_, err = DB(ctx).DeleteTree(ctx, models.DirectoryIDs{
+		{ID: cd, Type: types.CatalogObjectTypeCollectionSchema},
+		{ID: pd, Type: types.CatalogObjectTypeParameterSchema},
+	}, "/col/x/y")
+	require.NoError(t, err)
 }
