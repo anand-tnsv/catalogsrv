@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/mugiliam/common/apperrors"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
@@ -14,8 +15,11 @@ import (
 )
 
 type ResourceName struct {
-	Catalog string
-	Variant string
+	Catalog        string
+	Variant        string
+	WorkspaceID    uuid.UUID
+	WorkspaceLabel string
+	Workspace      string
 }
 
 // Header of all resource requests
@@ -85,9 +89,11 @@ func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name Resou
 	}
 	switch kind {
 	case types.CatalogKind:
-		return NewCatalogResource(ctx, rsrcJson, ResourceName{})
+		return NewCatalogResource(ctx, rsrcJson, name)
 	case types.VariantKind:
-		return NewVariantResource(ctx, rsrcJson, ResourceName{})
+		return NewVariantResource(ctx, rsrcJson, name)
+	case types.WorkspaceKind:
+		return NewWorkspaceResource(ctx, rsrcJson, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }
@@ -98,6 +104,8 @@ func ResourceManagerFromName(ctx context.Context, kind string, name ResourceName
 		return NewCatalogResource(ctx, nil, name)
 	case types.VariantKind:
 		return NewVariantResource(ctx, nil, name)
+	case types.WorkspaceKind:
+		return NewWorkspaceResource(ctx, nil, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }

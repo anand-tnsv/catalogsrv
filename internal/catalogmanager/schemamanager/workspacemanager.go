@@ -9,6 +9,7 @@ import (
 
 type WorkspaceManager interface {
 	ID() uuid.UUID
+	Label() string
 	Description() string
 	CatalogID() uuid.UUID
 	VariantID() uuid.UUID
@@ -16,4 +17,5 @@ type WorkspaceManager interface {
 	ParametersDir() uuid.UUID
 	CollectionsDir() uuid.UUID
 	Save(context.Context) apperrors.Error
+	ToJson(context.Context) ([]byte, apperrors.Error)
 }

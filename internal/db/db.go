@@ -51,7 +51,9 @@ type DB_ interface {
 	CreateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
 	DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) apperrors.Error
 	GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*models.Workspace, apperrors.Error)
+	GetWorkspaceByLabel(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, label string) (*models.Workspace, apperrors.Error)
 	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) apperrors.Error
+	UpdateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
 
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error

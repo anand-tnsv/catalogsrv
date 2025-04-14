@@ -205,6 +205,92 @@ func (h *hatchCatalogDb) GetWorkspace(ctx context.Context, workspaceID uuid.UUID
 	return workspace, nil
 }
 
+func (h *hatchCatalogDb) GetWorkspaceByLabel(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, label string) (*models.Workspace, apperrors.Error) {
+	// Retrieve tenantID from the context
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return nil, dberror.ErrMissingTenantID
+	}
+	if catalogID == uuid.Nil {
+		return nil, dberror.ErrInvalidCatalog
+	}
+	if variantID == uuid.Nil {
+		return nil, dberror.ErrInvalidVariant
+	}
+	if label == "" {
+		return nil, dberror.ErrInvalidInput.Msg("label cannot be empty")
+	}
+
+	query := `
+		SELECT workspace_id, label, description, info, base_version, parameters_directory, collections_directory, variant_id, catalog_id, tenant_id, created_at, updated_at
+		FROM workspaces
+		WHERE label = $1 AND catalog_id = $2 AND variant_id = $3 AND tenant_id = $4;
+	`
+
+	row := h.conn().QueryRowContext(ctx, query, label, catalogID, variantID, tenantID)
+	workspace := &models.Workspace{}
+	err := row.Scan(
+		&workspace.WorkspaceID, &workspace.Label, &workspace.Description, &workspace.Info,
+		&workspace.BaseVersion, &workspace.ParametersDir, &workspace.CollectionsDir,
+		&workspace.VariantID, &workspace.CatalogID, &workspace.TenantID,
+		&workspace.CreatedAt, &workspace.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Ctx(ctx).Info().Str("label", label).Str("tenant_id", string(tenantID)).Str("catalog_id", catalogID.String()).Msg("workspace not found")
+			return nil, dberror.ErrNotFound.Msg("workspace not found")
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve workspace")
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+	return workspace, nil
+}
+
+func (h *hatchCatalogDb) UpdateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	var label sql.NullString
+	if workspace.Label != "" {
+		label = sql.NullString{String: workspace.Label, Valid: true}
+	}
+
+	query := `
+		UPDATE workspaces
+		SET label = $1, description = $2, info = $3, base_version = $4, parameters_directory = $5, collections_directory = $6
+		WHERE workspace_id = $7 AND tenant_id = $8;
+	`
+
+	result, err := h.conn().ExecContext(ctx, query,
+		label,
+		workspace.Description,
+		workspace.Info,
+		workspace.BaseVersion,
+		workspace.ParametersDir,
+		workspace.CollectionsDir,
+		workspace.WorkspaceID,
+		tenantID,
+	)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to update workspace")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve result information")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	if rowsAffected == 0 {
+		log.Ctx(ctx).Info().Str("workspace_id", workspace.WorkspaceID.String()).Str("tenant_id", string(tenantID)).Msg("no rows updated")
+		return dberror.ErrNotFound.Msg("workspace not found")
+	}
+
+	return nil
+}
+
 // UpdateWorkspaceLabel updates the label of a workspace based on its workspace_id and tenant_id.
 // Returns an error if the new label already exists, the label format is invalid, or there is a database error.
 func (h *hatchCatalogDb) UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) apperrors.Error {

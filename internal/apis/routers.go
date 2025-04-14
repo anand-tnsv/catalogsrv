@@ -51,6 +51,24 @@ var resourceObjectHandlers = []httpx.RoleAuthorizedHandlerParam{
 		Handler: deleteObject,
 		Op:      hatchrbac.Delete,
 	},
+	{
+		Method:  http.MethodGet,
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceName}",
+		Handler: getObject,
+		Op:      hatchrbac.Read,
+	},
+	{
+		Method:  http.MethodPut,
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceName}",
+		Handler: updateObject,
+		Op:      hatchrbac.Update,
+	},
+	{
+		Method:  http.MethodDelete,
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceName}",
+		Handler: deleteObject,
+		Op:      hatchrbac.Delete,
+	},
 }
 
 func Router(r chi.Router) {

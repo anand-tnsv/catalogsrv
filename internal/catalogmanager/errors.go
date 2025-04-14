@@ -13,6 +13,7 @@ var (
 	ErrParentCollectionNotFound  apperrors.Error = ErrCatalogError.New("collection not found").SetStatusCode(http.StatusNotFound)
 	ErrUnableToLoadObject        apperrors.Error = ErrCatalogError.New("unable to load object").SetStatusCode(http.StatusInternalServerError)
 	ErrUnableToUpdateObject      apperrors.Error = ErrCatalogError.New("unable to update object").SetStatusCode(http.StatusInternalServerError)
+	ErrUnableToDeleteObject      apperrors.Error = ErrCatalogError.New("unable to delete object").SetStatusCode(http.StatusInternalServerError)
 	ErrAlreadyExists             apperrors.Error = ErrCatalogError.New("object already exists").SetStatusCode(http.StatusConflict)
 	ErrInvalidSchema             apperrors.Error = ErrCatalogError.New("invalid schema").SetExpandError(true).SetStatusCode(http.StatusBadRequest)
 	ErrEmptyMetadata             apperrors.Error = ErrCatalogError.New("empty metadata").SetStatusCode(http.StatusBadRequest)
@@ -26,4 +27,5 @@ var (
 	ErrWorkspaceNotFound         apperrors.Error = ErrCatalogError.New("workspace not found").SetStatusCode(http.StatusNotFound)
 	ErrInvalidVersionOrWorkspace apperrors.Error = ErrCatalogError.New("invalid version or workspace").SetStatusCode(http.StatusBadRequest)
 	ErrInvalidCollection         apperrors.Error = ErrCatalogError.New("invalid collection").SetStatusCode(http.StatusBadRequest)
+	ErrInvalidUUID               apperrors.Error = ErrCatalogError.New("invalid uuid")
 )

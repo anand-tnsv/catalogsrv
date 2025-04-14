@@ -15,16 +15,20 @@ func getObject(r *http.Request) (*httpx.Response, error) {
 
 	catalogName := chi.URLParam(r, "catalogName")
 	variantName := chi.URLParam(r, "variantName")
+	workspaceName := chi.URLParam(r, "workspaceName")
 
-	if variantName != "" {
+	if workspaceName != "" {
+		kind = types.WorkspaceKind
+	} else if variantName != "" {
 		kind = types.VariantKind
 	} else if catalogName != "" {
 		kind = types.CatalogKind
 	}
 
 	rm, err := catalogmanager.ResourceManagerFromName(ctx, kind, catalogmanager.ResourceName{
-		Catalog: catalogName,
-		Variant: variantName,
+		Catalog:   catalogName,
+		Variant:   variantName,
+		Workspace: workspaceName, // either label or workspace ID is accepted and will be parsed later
 	})
 	if err != nil {
 		return nil, err

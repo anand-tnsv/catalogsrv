@@ -259,11 +259,10 @@ func (vr *variantResource) Create(ctx context.Context) (string, apperrors.Error)
 		return "", err
 	}
 	vr.name.Variant = variant.Name()
+	vs := &variantSchema{}
+	json.Unmarshal(vr.rsrcJson, vs)
 	if vr.name.Catalog == "" {
-		c, err := db.DB(ctx).GetCatalog(ctx, variant.CatalogID(), "")
-		if err == nil {
-			vr.name.Catalog = c.Name
-		}
+		vr.name.Catalog = vs.Metadata.Catalog
 	}
 	return vr.Location(), nil
 }

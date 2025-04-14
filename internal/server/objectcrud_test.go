@@ -3,8 +3,10 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
@@ -342,4 +344,284 @@ func TestVariantCrud(t *testing.T) {
 		t.Logf("Response: %v", response.Body.String())
 		t.FailNow()
 	}
+}
+
+func TestWorkspaceCrud(t *testing.T) {
+	ctx := newDb()
+	defer db.DB(ctx).Close(ctx)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+
+	// Create the project for testing
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteProject(ctx, projectID)
+
+	// Create a catalog
+	// Create a New Request
+	httpReq, _ := http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req := `
+		{
+			"version": "v1",
+			"kind": "Catalog",
+			"metadata": {
+				"name": "valid-catalog",
+				"description": "This is a valid catalog"
+			}
+		} `
+	setRequestBodyAndHeader(t, httpReq, req)
+	// Execute Request
+	response := executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// Create a variant
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req = `
+		{
+			"version": "v1",
+			"kind": "Variant",
+			"metadata": {
+				"name": "valid-variant",
+				"catalog": "valid-catalog",
+				"description": "This is a valid variant"
+			}
+		}`
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// Create a workspace
+	// Create a New Request
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req = `
+		{
+			"version": "v1",
+			"kind": "Workspace",
+			"metadata": {
+				"label": "valid-workspace",
+				"catalog": "valid-catalog",
+				"variant": "valid-variant",
+				"base_version": 1,
+				"description": "This is a valid workspace"
+			}
+	}`
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// check the location header in response. should contain the workspace id. Test for if the id is a valid uuid
+	loc := response.Header().Get("Location")
+	assert.NotEmpty(t, loc)
+	id := loc[strings.LastIndex(loc, "/")+1:]
+	_, err = uuid.Parse(id)
+	assert.Nil(t, err)
+
+	// get this workspace
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	checkHeader(t, response.Header())
+	rspType := make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+	reqType := make(map[string]any)
+	err = json.Unmarshal([]byte(req), &reqType)
+	assert.NoError(t, err)
+	assert.Equal(t, reqType, rspType)
+
+	// update the workspace
+	req = `
+	{
+		"version": "v1",
+		"kind": "Workspace",
+		"metadata": {
+			"label": "valid-workspace",
+			"catalog": "valid-catalog",
+			"variant": "valid-variant",
+			"base_version": 1,
+			"description": "This is a new description"
+		}
+	}`
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Get the updated workspace
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	checkHeader(t, response.Header())
+	rspType = make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+	reqType = make(map[string]any)
+	err = json.Unmarshal([]byte(req), &reqType)
+	assert.NoError(t, err)
+	assert.Equal(t, reqType, rspType)
+	// Delete the workspace
+	httpReq, _ = http.NewRequest("DELETE", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusNoContent, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// try to get the deleted workspace
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusNotFound, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// Create a workspace without a label
+	// Create a New Request
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req = `
+	{
+		"version": "v1",
+		"kind": "Workspace",
+		"metadata": {
+			"catalog": "valid-catalog",
+			"variant": "valid-variant",
+			"base_version": 1,
+			"description": "This is a valid workspace"
+		}
+	}`
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// check the location header in response. should contain the workspace id. Test for if the id is a valid uuid
+	loc = response.Header().Get("Location")
+	assert.NotEmpty(t, loc)
+	id = loc[strings.LastIndex(loc, "/")+1:]
+	_, err = uuid.Parse(id)
+	assert.Nil(t, err)
+
+	// set a valid label for the workspace
+	req = `
+	{
+		"version": "v1",
+		"kind": "Workspace",
+		"metadata": {
+			"label": "valid-workspace",
+			"catalog": "valid-catalog",
+			"variant": "valid-variant",
+			"base_version": 1,
+			"description": "This is a valid workspace"
+		}
+	}`
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Get the updated workspace
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	checkHeader(t, response.Header())
+	rspType = make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+	reqType = make(map[string]any)
+	err = json.Unmarshal([]byte(req), &reqType)
+	assert.NoError(t, err)
+	assert.Equal(t, reqType, rspType)
+
+	// Set the label to empty
+	req = `
+	{
+		"version": "v1",
+		"kind": "Workspace",
+		"metadata": {
+			"label": "",
+			"catalog": "valid-catalog",
+			"variant": "valid-variant",
+			"base_version": 1,
+			"description": ""
+		}
+	}`
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Get the updated workspace
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	checkHeader(t, response.Header())
+	rspType = make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+	reqType = make(map[string]any)
+	err = json.Unmarshal([]byte(req), &reqType)
+	assert.NoError(t, err)
+	assert.Equal(t, reqType, rspType)
+
+	// Delete the workspace
+	httpReq, _ = http.NewRequest("DELETE", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusNoContent, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// delete again
+	httpReq, _ = http.NewRequest("DELETE", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id, nil)
+	response = executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusNoContent, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
 }
