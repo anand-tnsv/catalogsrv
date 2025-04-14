@@ -15,13 +15,12 @@ func (ns NullableString) String() string {
 }
 
 func (ns NullableString) IsNil() bool {
-	return !ns.Valid
+	return !ns.Valid || ns.Value == ""
 }
 
-func (ns NullableString) Set(value string) {
+func (ns *NullableString) Set(value string) {
 	ns.Value = value
 	ns.Valid = true
-	_ = ns
 }
 
 var _ json.Marshaler = &NullableString{}   // Ensure NullableString implements json.Marshaler
@@ -44,4 +43,8 @@ func (ns *NullableString) UnmarshalJSON(data []byte) error {
 	}
 	ns.Valid = true
 	return json.Unmarshal(data, &ns.Value)
+}
+
+func NullableStringFrom(s string) NullableString {
+	return NullableString{Value: s, Valid: true}
 }

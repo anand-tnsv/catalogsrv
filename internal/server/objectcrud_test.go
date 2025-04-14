@@ -11,9 +11,11 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/yaml"
 )
 
-func TestObjectCreate(t *testing.T) {
+func TestCatalogCreate(t *testing.T) {
 
 	ctx := newDb()
 	defer db.DB(ctx).Close(ctx)
@@ -624,4 +626,145 @@ func TestWorkspaceCrud(t *testing.T) {
 		t.FailNow()
 	}
 
+}
+
+func TestObjectCrud(t *testing.T) {
+	ctx := newDb()
+	defer db.DB(ctx).Close(ctx)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+
+	// Create the project for testing
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteProject(ctx, projectID)
+
+	// Create a catalog
+	// Create a New Request
+	httpReq, _ := http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req := `
+		{
+			"version": "v1",
+			"kind": "Catalog",
+			"metadata": {
+				"name": "valid-catalog",
+				"description": "This is a valid catalog"
+			}
+		} `
+	setRequestBodyAndHeader(t, httpReq, req)
+	// Execute Request
+	response := executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// Create a variant
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req = `
+		{
+			"version": "v1",
+			"kind": "Variant",
+			"metadata": {
+				"name": "valid-variant",
+				"catalog": "valid-catalog",
+				"description": "This is a valid variant"
+			}
+		}`
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// Create a workspace
+	// Create a New Request
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req = `
+		{
+			"version": "v1",
+			"kind": "Workspace",
+			"metadata": {
+				"label": "valid-workspace",
+				"catalog": "valid-catalog",
+				"variant": "valid-variant",
+				"base_version": 1,
+				"description": "This is a valid workspace"
+			}
+		}`
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// check the location header in response. should contain the workspace id. Test for if the id is a valid uuid
+	loc := response.Header().Get("Location")
+	assert.NotEmpty(t, loc)
+	id := loc[strings.LastIndex(loc, "/")+1:]
+	_, err = uuid.Parse(id)
+	assert.Nil(t, err)
+
+	// Create an object
+	// Create a New Request
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/create", nil)
+	reqYaml := `
+			version: v1
+			kind: Collection
+			metadata:
+				name: valid
+				catalog: valid-catalog
+				variant: valid-variant
+				path: /
+				description: This is a valid collection
+			spec: {}
+		`
+	replaceTabsWithSpaces(&reqYaml)
+	reqJson, err := yaml.YAMLToJSON([]byte(reqYaml))
+	require.NoError(t, err)
+	setRequestBodyAndHeader(t, httpReq, string(reqJson))
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// check the location header in response. should contain the workspace id. Test for if the id is a valid uuid
+	loc = response.Header().Get("Location")
+	assert.NotEmpty(t, loc)
+
+	// Get the object
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	checkHeader(t, response.Header())
+	rspType := make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+	reqType := make(map[string]any)
+	err = json.Unmarshal(reqJson, &reqType)
+	assert.NoError(t, err)
+	if !assert.Equal(t, reqType, rspType) {
+		b, _ := yaml.JSONToYAML(response.Body.Bytes())
+		t.Logf("Response: %s", string(b))
+		t.FailNow()
+	}
+}
+
+func replaceTabsWithSpaces(s *string) {
+	*s = strings.ReplaceAll(*s, "\t", "    ")
 }

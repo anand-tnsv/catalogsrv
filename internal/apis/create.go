@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/mugiliam/common/httpx"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager"
 )
@@ -21,7 +22,21 @@ func createObject(r *http.Request) (*httpx.Response, error) {
 		return nil, httpx.ErrUnableToReadRequest()
 	}
 
-	rm, err := catalogmanager.ResourceManagerFromRequest(ctx, req, catalogmanager.ResourceName{})
+	catalogName := chi.URLParam(r, "catalogName")
+	variantName := chi.URLParam(r, "variantName")
+	workspace := chi.URLParam(r, "workspaceRef")
+	n := catalogmanager.ResourceName{}
+	if workspace != "" {
+		n.Workspace = workspace
+	}
+	if variantName != "" {
+		n.Variant = variantName
+	}
+	if catalogName != "" {
+		n.Catalog = catalogName
+	}
+
+	rm, err := catalogmanager.ResourceManagerFromRequest(ctx, req, n)
 	if err != nil {
 		return nil, err
 	}

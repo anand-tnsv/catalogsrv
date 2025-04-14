@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
+	log "github.com/rs/zerolog/log"
+
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/collection"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/parameter"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
@@ -54,7 +57,7 @@ func LoadV1ObjectManager(ctx context.Context, s *schemastore.SchemaStorageRepres
 		rs.Kind = "Collection"
 	}
 	rs.Metadata = *m
-	rs.Spec, _ = json.Marshal(s.Schema)
+	rs.Spec = s.Schema
 
 	ves := rs.Validate()
 	if ves != nil {
@@ -179,4 +182,13 @@ func (rm *V1ObjectManager) StorageRepresentation() *schemastore.SchemaStorageRep
 	}
 	s.Description = rm.resourceSchema.Metadata.Description
 	return s
+}
+
+func (rm *V1ObjectManager) ToJson(ctx context.Context) ([]byte, apperrors.Error) {
+	j, err := json.Marshal(rm.resourceSchema)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to marshal object schema")
+		return j, errors.ErrUnableToLoadObject
+	}
+	return j, nil
 }

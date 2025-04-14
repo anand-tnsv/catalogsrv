@@ -27,6 +27,23 @@ const (
 )
 
 const (
+	ObjectTypeParameter  = "parameter"
+	ObjectTypeCollection = "collection"
+	ObjectTypeValue      = "value"
+)
+
+var validObjTypes = []string{ObjectTypeCollection, ObjectTypeParameter, ObjectTypeValue}
+
+func InValidObjectTypes(s string) bool {
+	for _, v := range validObjTypes {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+const (
 	VersionV1 = "v1"
 )
 
@@ -34,6 +51,7 @@ type CatalogObjectType string
 
 const (
 	CatalogObjectTypeInvalid                CatalogObjectType = "invalid"
+	CatalogObjectTypeUnknown                CatalogObjectType = "unknown"
 	CatalogObjectTypeParameterSchema        CatalogObjectType = "parameter_schema"
 	CatalogObjectTypeCollectionSchema       CatalogObjectType = "collection_schema"
 	CatalogObjectTypeCatalogCollectionValue CatalogObjectType = "collection_value"

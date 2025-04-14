@@ -14,7 +14,7 @@ import (
 )
 
 type ParameterSchema struct {
-	Spec ParameterSpec `json:"spec" validate:"required"`
+	Spec ParameterSpec `json:"spec,omitempty" validate:"required"`
 }
 
 type ParameterSpec struct {

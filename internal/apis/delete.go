@@ -15,7 +15,7 @@ func deleteObject(r *http.Request) (*httpx.Response, error) {
 
 	catalogName := chi.URLParam(r, "catalogName")
 	variantName := chi.URLParam(r, "variantName")
-	workspaceName := chi.URLParam(r, "workspaceName")
+	workspaceName := chi.URLParam(r, "workspaceRef")
 
 	if workspaceName != "" {
 		kind = types.WorkspaceKind

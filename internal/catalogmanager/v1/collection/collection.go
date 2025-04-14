@@ -18,12 +18,12 @@ import (
 
 type CollectionSchema struct {
 	Version string                    `json:"version" validate:"required"`
-	Spec    CollectionSpec            `json:"spec"` // we can have empty collections
+	Spec    CollectionSpec            `json:"spec,omitempty"` // we can have empty collections
 	Values  schemamanager.ParamValues `json:"-"`
 }
 
 type CollectionSpec struct {
-	Parameters map[string]Parameter `json:"parameters" validate:"omitempty,dive,keys,nameFormatValidator,endkeys,required"`
+	Parameters map[string]Parameter `json:"parameters,omitempty" validate:"omitempty,dive,keys,nameFormatValidator,endkeys,required"`
 	//Collections map[string]Collection `json:"collections" validate:"omitempty,dive,keys,nameFormatValidator,endkeys,required"` // We don't maintain collection hierarcy here
 }
 

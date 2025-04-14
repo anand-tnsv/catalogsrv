@@ -25,6 +25,7 @@ type ObjectManager interface {
 	SetPath(path string)
 	SetCatalog(catalog string)
 	SetDescription(description string)
+	ToJson(ctx context.Context) ([]byte, apperrors.Error)
 }
 
 type ClosestParentObjectFinder func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error)

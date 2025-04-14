@@ -20,6 +20,9 @@ type ResourceName struct {
 	WorkspaceID    uuid.UUID
 	WorkspaceLabel string
 	Workspace      string
+	ObjectName     string
+	ObjectType     types.CatalogObjectType
+	ObjectPath     string
 }
 
 // Header of all resource requests
@@ -94,6 +97,12 @@ func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name Resou
 		return NewVariantResource(ctx, rsrcJson, name)
 	case types.WorkspaceKind:
 		return NewWorkspaceResource(ctx, rsrcJson, name)
+	case types.CollectionKind:
+		name.ObjectType = types.CatalogObjectTypeCollectionSchema
+		return NewObjectResource(ctx, rsrcJson, name)
+	case types.ParameterKind:
+		name.ObjectType = types.CatalogObjectTypeParameterSchema
+		return NewObjectResource(ctx, rsrcJson, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }
@@ -106,6 +115,10 @@ func ResourceManagerFromName(ctx context.Context, kind string, name ResourceName
 		return NewVariantResource(ctx, nil, name)
 	case types.WorkspaceKind:
 		return NewWorkspaceResource(ctx, nil, name)
+	case types.CollectionKind:
+		return NewObjectResource(ctx, nil, name)
+	case types.ParameterKind:
+		return NewObjectResource(ctx, nil, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }

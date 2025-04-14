@@ -53,21 +53,33 @@ var resourceObjectHandlers = []httpx.RoleAuthorizedHandlerParam{
 	},
 	{
 		Method:  http.MethodGet,
-		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceName}",
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceRef}",
 		Handler: getObject,
 		Op:      hatchrbac.Read,
 	},
 	{
 		Method:  http.MethodPut,
-		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceName}",
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceRef}",
 		Handler: updateObject,
 		Op:      hatchrbac.Update,
 	},
 	{
 		Method:  http.MethodDelete,
-		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceName}",
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceRef}",
 		Handler: deleteObject,
 		Op:      hatchrbac.Delete,
+	},
+	{
+		Method:  http.MethodPost,
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceRef}/create",
+		Handler: createObject,
+		Op:      hatchrbac.Create,
+	},
+	{
+		Method:  http.MethodGet,
+		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceRef}/{objectType}/*",
+		Handler: getObject,
+		Op:      hatchrbac.Read,
 	},
 }
 
