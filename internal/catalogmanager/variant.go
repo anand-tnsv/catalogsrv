@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/mugiliam/common/apperrors"
+	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
@@ -15,6 +18,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -35,6 +39,45 @@ type variantManager struct {
 }
 
 var _ schemamanager.VariantManager = (*variantManager)(nil)
+
+func (vs *variantSchema) Validate() schemaerr.ValidationErrors {
+	var ves schemaerr.ValidationErrors
+	err := schemavalidator.V().Struct(vs)
+	if err == nil {
+		return nil
+	}
+	ve, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return append(ves, schemaerr.ErrInvalidSchema)
+	}
+
+	value := reflect.ValueOf(vs).Elem()
+	typeOfCS := value.Type()
+
+	for _, e := range ve {
+		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
+
+		switch e.Tag() {
+		case "required":
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
+		case "resourceNameValidator":
+			val, _ := e.Value().(string)
+			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
+		case "kindValidator":
+			ves = append(ves, schemaerr.ErrUnsupportedKind(jsonFieldName))
+		case "requireVersionV1":
+			ves = append(ves, schemaerr.ErrInvalidVersion(jsonFieldName))
+		default:
+			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
+		}
+	}
+
+	if vs.Kind != types.CatalogKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
+
+	return ves
+}
 
 func NewVariantManager(ctx context.Context, rsrcJson []byte, name string, catalog string) (schemamanager.VariantManager, apperrors.Error) {
 	projectID := common.ProjectIdFromContext(ctx)
@@ -139,6 +182,36 @@ func (cv *variantManager) Save(ctx context.Context) apperrors.Error {
 	return nil
 }
 
+func (vm *variantManager) ToJson(ctx context.Context) ([]byte, apperrors.Error) {
+	// Get name of the catalog
+	catalog, err := db.DB(ctx).GetCatalog(ctx, vm.v.CatalogID, "")
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			return nil, ErrCatalogNotFound
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+		return nil, err
+	}
+
+	s := variantSchema{
+		Version: types.VersionV1,
+		Kind:    types.VariantKind,
+		Metadata: variantMetadata{
+			Name:        vm.v.Name,
+			Catalog:     catalog.Name,
+			Description: vm.v.Description,
+		},
+	}
+
+	j, e := json.Marshal(s)
+	if e != nil {
+		log.Ctx(ctx).Error().Err(e).Msg("failed to marshal json")
+		return nil, ErrUnableToLoadObject
+	}
+
+	return j, nil
+}
+
 func DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name string) apperrors.Error {
 	err := db.DB(ctx).DeleteVariant(ctx, catalogID, variantID, name)
 	if err != nil {
@@ -152,3 +225,127 @@ func DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name str
 }
 
 // TODO Handle base variant and copy of data
+
+type variantResource struct {
+	name      ResourceName
+	catalogID uuid.UUID
+	rsrcJson  []byte
+	vm        schemamanager.VariantManager
+}
+
+func (vr *variantResource) Name() string {
+	return vr.name.Catalog
+}
+
+func (vr *variantResource) Location() string {
+	return vr.name.Catalog + "/variants/" + vr.name.Variant
+}
+
+func (vr *variantResource) ResourceJson() []byte {
+	return vr.rsrcJson
+}
+
+func (vr *variantResource) Manager() schemamanager.VariantManager {
+	return vr.vm
+}
+
+func (vr *variantResource) Create(ctx context.Context) (string, apperrors.Error) {
+	variant, err := NewVariantManager(ctx, vr.rsrcJson, "", vr.name.Catalog)
+	if err != nil {
+		return "", err
+	}
+	err = variant.Save(ctx)
+	if err != nil {
+		return "", err
+	}
+	vr.name.Variant = variant.Name()
+	if vr.name.Catalog == "" {
+		c, err := db.DB(ctx).GetCatalog(ctx, variant.CatalogID(), "")
+		if err == nil {
+			vr.name.Catalog = c.Name
+		}
+	}
+	return vr.Location(), nil
+}
+
+func (vr *variantResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
+	variant, err := LoadVariantManagerByName(ctx, vr.catalogID, vr.name.Variant)
+	if err != nil {
+		return nil, err
+	}
+	return variant.ToJson(ctx)
+}
+
+func (vr *variantResource) Delete(ctx context.Context) apperrors.Error {
+	err := DeleteVariant(ctx, vr.catalogID, uuid.Nil, vr.name.Variant)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (vr *variantResource) Update(ctx context.Context, rsrcJson []byte) apperrors.Error {
+	vs := &variantSchema{}
+	if err := json.Unmarshal(rsrcJson, vs); err != nil {
+		return ErrInvalidSchema.Err(err)
+	}
+
+	ves := vs.Validate()
+	if ves != nil {
+		return ErrInvalidSchema.Err(ves)
+	}
+
+	if vr.catalogID == uuid.Nil {
+		cid, err := db.DB(ctx).GetCatalogIDByName(ctx, vs.Metadata.Catalog)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return ErrCatalogNotFound
+			}
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+			return err
+		}
+		vr.catalogID = cid
+	}
+
+	v, err := db.DB(ctx).GetVariant(ctx, vr.catalogID, uuid.Nil, vs.Metadata.Name)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			return ErrCatalogNotFound
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+		return err
+	}
+	v.Description = vs.Metadata.Description
+
+	err = db.DB(ctx).UpdateVariant(ctx, uuid.Nil, vr.name.Variant, v)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to update variant")
+		return ErrUnableToUpdateObject.Msg("failed to update variant")
+	}
+
+	return nil
+}
+
+func NewVariantResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	cid := uuid.Nil
+	if len(rsrcJson) == 0 || len(name.Catalog) > 0 {
+		if len(name.Catalog) > 0 && schemavalidator.ValidateObjectName(name.Catalog) {
+			var err apperrors.Error
+			cid, err = db.DB(ctx).GetCatalogIDByName(ctx, name.Catalog)
+			if err != nil {
+				if errors.Is(err, dberror.ErrNotFound) {
+					return nil, ErrCatalogNotFound
+				}
+				log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+				return nil, ErrUnableToLoadObject.Msg("failed to load catalog")
+			}
+		} else {
+			return nil, ErrInvalidCatalog.Msg("invalid catalog name")
+		}
+	}
+	return &variantResource{
+		name:      name,
+		catalogID: cid,
+		rsrcJson:  rsrcJson,
+	}, nil
+}

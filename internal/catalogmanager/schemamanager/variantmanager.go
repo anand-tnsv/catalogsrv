@@ -13,4 +13,5 @@ type VariantManager interface {
 	Description() string
 	CatalogID() uuid.UUID
 	Save(context.Context) apperrors.Error
+	ToJson(context.Context) ([]byte, apperrors.Error)
 }

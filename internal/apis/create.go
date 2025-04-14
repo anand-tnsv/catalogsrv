@@ -21,17 +21,17 @@ func createObject(r *http.Request) (*httpx.Response, error) {
 		return nil, httpx.ErrUnableToReadRequest()
 	}
 
-	rm, err := catalogmanager.ResourceManagerFromRequest(ctx, req)
+	rm, err := catalogmanager.ResourceManagerFromRequest(ctx, req, catalogmanager.ResourceName{})
 	if err != nil {
 		return nil, err
 	}
-	resourceName, err := rm.Create(ctx)
+	resourceLoc, err := rm.Create(ctx)
 	if err != nil {
 		return nil, err
 	}
 	rsp := &httpx.Response{
 		StatusCode: http.StatusCreated,
-		Location:   resourceName, //TODO: Implement location
+		Location:   resourceLoc, //TODO: Implement location
 		Response:   nil,
 	}
 

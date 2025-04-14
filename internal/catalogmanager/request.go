@@ -78,7 +78,7 @@ func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
 	return rr.Kind, nil
 }
 
-func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte) (schemamanager.ResourceManager, apperrors.Error) {
+func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	kind, err := RequestType(rsrcJson)
 	if err != nil {
 		return nil, err
@@ -86,6 +86,8 @@ func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte) (schemaman
 	switch kind {
 	case types.CatalogKind:
 		return NewCatalogResource(ctx, rsrcJson, ResourceName{})
+	case types.VariantKind:
+		return NewVariantResource(ctx, rsrcJson, ResourceName{})
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }
@@ -94,6 +96,8 @@ func ResourceManagerFromName(ctx context.Context, kind string, name ResourceName
 	switch kind {
 	case types.CatalogKind:
 		return NewCatalogResource(ctx, nil, name)
+	case types.VariantKind:
+		return NewVariantResource(ctx, nil, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }
