@@ -953,6 +953,32 @@ func TestObjectCrud(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, reqType, rspType)
 
+	// modify the parameter to a smaller max value
+	reqYaml = `
+				version: v1
+				kind: Parameter
+				metadata:
+				  name: integer-param-schema
+				  catalog: valid-catalog
+				  path: /
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 5
+				  default: 5
+			`
+	replaceTabsWithSpaces(&reqYaml)
+	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
+	require.NoError(t, err)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/parameter/integer-param-schema", nil)
+	setRequestBodyAndHeader(t, httpReq, string(reqJson))
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.NotEqual(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
 }
 
 func replaceTabsWithSpaces(s *string) {
