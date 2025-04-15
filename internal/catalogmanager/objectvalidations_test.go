@@ -19,7 +19,7 @@ import (
 func TestYamlToJson(t *testing.T) {
 	y := `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: example
   catalog: example-catalog
@@ -57,7 +57,7 @@ func TestNewParameterSchema(t *testing.T) {
 			name: "valid resource",
 			yamlData: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: example
   catalog: example-catalog
@@ -74,7 +74,7 @@ spec:
 		{
 			name: "missing required version",
 			yamlData: `
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: example
   catalog: example-catalog
@@ -92,7 +92,7 @@ spec:
 			name: "bad name format",
 			yamlData: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: Invalid Name!
   catalog: example-catalog
@@ -110,7 +110,7 @@ spec:
 			name: "bad dataType",
 			yamlData: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: example
   catalog: example-catalog
@@ -128,7 +128,7 @@ spec:
 			name: "bad default value",
 			yamlData: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: example
   catalog: example-catalog
@@ -149,7 +149,7 @@ spec:
 			name: "bad validation values",
 			yamlData: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: example
   catalog: example-catalog
@@ -232,7 +232,7 @@ func TestNewCollectionSchema(t *testing.T) {
 			name: "valid collection schema with schema",
 			yamlData: `
 version: v1
-kind: Collection
+kind: CollectionSchema
 metadata:
   name: app-config-collection
   catalog: my-catalog
@@ -252,7 +252,7 @@ spec:
 			name: "valid collection schema with dataType",
 			yamlData: `
 version: v1
-kind: Collection
+kind: CollectionSchema
 metadata:
   name: app-config-collection
   catalog: my-catalog
@@ -271,7 +271,7 @@ spec:
 		{
 			name: "missing required version",
 			yamlData: `
-kind: Collection
+kind: CollectionSchema
 metadata:
   name: app-config-collection
   catalog: my-catalog
@@ -291,7 +291,7 @@ spec:
 			name: "missing both schema and dataType",
 			yamlData: `
 version: v1
-kind: Collection
+kind: CollectionSchema
 metadata:
   name: app-config-collection
   catalog: my-catalog
@@ -313,7 +313,7 @@ spec:
 			name: "invalid name format in metadata",
 			yamlData: `
 version: v1
-kind: Collection
+kind: CollectionSchema
 metadata:
   name: Invalid Name!
   catalog: my-catalog

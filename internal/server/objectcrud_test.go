@@ -722,7 +722,7 @@ func TestObjectCrud(t *testing.T) {
 	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/create", nil)
 	reqYaml := `
 			version: v1
-			kind: Collection
+			kind: CollectionSchema
 			metadata:
 				name: valid
 				catalog: valid-catalog
@@ -745,7 +745,7 @@ func TestObjectCrud(t *testing.T) {
 	assert.NotEmpty(t, loc)
 
 	// Get the object
-	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
 		t.Logf("Response: %v", response.Body.String())
@@ -767,7 +767,7 @@ func TestObjectCrud(t *testing.T) {
 	// Update the object
 	reqYaml = `
 		version: v1
-		kind: Collection
+		kind: CollectionSchema
 		metadata:
 			name: valid
 			catalog: valid-catalog
@@ -779,7 +779,7 @@ func TestObjectCrud(t *testing.T) {
 	replaceTabsWithSpaces(&reqYaml)
 	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
 	require.NoError(t, err)
-	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	setRequestBodyAndHeader(t, httpReq, string(reqJson))
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
@@ -787,7 +787,7 @@ func TestObjectCrud(t *testing.T) {
 		t.FailNow()
 	}
 	// Get the updated object
-	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
 		t.Logf("Response: %v", response.Body.String())
@@ -797,7 +797,7 @@ func TestObjectCrud(t *testing.T) {
 	// update just description
 	reqYaml = `
 		version: v1
-		kind: Collection
+		kind: CollectionSchema
 		metadata:
 			name: valid
 			catalog: valid-catalog
@@ -809,7 +809,7 @@ func TestObjectCrud(t *testing.T) {
 	replaceTabsWithSpaces(&reqYaml)
 	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
 	require.NoError(t, err)
-	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	setRequestBodyAndHeader(t, httpReq, string(reqJson))
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
@@ -817,7 +817,7 @@ func TestObjectCrud(t *testing.T) {
 		t.FailNow()
 	}
 	// Get the updated object
-	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
 		t.Logf("Response: %v", response.Body.String())
@@ -827,7 +827,7 @@ func TestObjectCrud(t *testing.T) {
 	// update the collection with a dataType
 	reqYaml = `
 		version: v1
-		kind: Collection
+		kind: CollectionSchema
 		metadata:
 			name: valid
 			catalog: valid-catalog
@@ -845,7 +845,7 @@ func TestObjectCrud(t *testing.T) {
 	replaceTabsWithSpaces(&reqYaml)
 	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
 	require.NoError(t, err)
-	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	setRequestBodyAndHeader(t, httpReq, string(reqJson))
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
@@ -853,7 +853,7 @@ func TestObjectCrud(t *testing.T) {
 		t.FailNow()
 	}
 	// Get the updated object
-	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
 		t.Logf("Response: %v", response.Body.String())
@@ -870,7 +870,7 @@ func TestObjectCrud(t *testing.T) {
 	// create a valid parameter
 	reqYaml = `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: valid-catalog
@@ -897,7 +897,7 @@ func TestObjectCrud(t *testing.T) {
 	assert.NotEmpty(t, loc)
 
 	// Get the parameter
-	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/parameter/integer-param-schema", nil)
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/parameterschema/integer-param-schema", nil)
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
 		t.Logf("Response: %v", response.Body.String())
@@ -907,7 +907,7 @@ func TestObjectCrud(t *testing.T) {
 	// update the collection with an the newly created parameter
 	reqYaml = `
 		version: v1
-		kind: Collection
+		kind: CollectionSchema
 		metadata:
 			name: valid
 			catalog: valid-catalog
@@ -931,7 +931,7 @@ func TestObjectCrud(t *testing.T) {
 	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
 	require.NoError(t, err)
 
-	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	setRequestBodyAndHeader(t, httpReq, string(reqJson))
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
@@ -939,7 +939,7 @@ func TestObjectCrud(t *testing.T) {
 		t.FailNow()
 	}
 	// Get the updated object
-	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collectionschema/valid", nil)
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
 		t.Logf("Response: %v", response.Body.String())
@@ -956,7 +956,7 @@ func TestObjectCrud(t *testing.T) {
 	// modify the parameter to a smaller max value
 	reqYaml = `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: valid-catalog
@@ -971,7 +971,7 @@ func TestObjectCrud(t *testing.T) {
 	replaceTabsWithSpaces(&reqYaml)
 	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
 	require.NoError(t, err)
-	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/parameter/integer-param-schema", nil)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/parameterschema/integer-param-schema", nil)
 	setRequestBodyAndHeader(t, httpReq, string(reqJson))
 	response = executeTestRequest(t, httpReq, nil)
 	if !assert.NotEqual(t, http.StatusOK, response.Code) {

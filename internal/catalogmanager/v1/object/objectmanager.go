@@ -52,9 +52,9 @@ func LoadV1ObjectManager(ctx context.Context, s *schemastore.SchemaStorageRepres
 	rs.Version = s.Version
 	switch s.Type {
 	case types.CatalogObjectTypeParameterSchema:
-		rs.Kind = "Parameter"
+		rs.Kind = "ParameterSchema"
 	case types.CatalogObjectTypeCollectionSchema:
-		rs.Kind = "Collection"
+		rs.Kind = "CollectionSchema"
 	}
 	rs.Metadata = *m
 	rs.Spec = s.Schema
@@ -86,11 +86,11 @@ func buildObjectManager(ctx context.Context, rs *ObjectSchema, rsrcJson []byte, 
 	// Initialize the appropriate manager based on the kind
 	var err apperrors.Error
 	switch rs.Kind {
-	case "Parameter":
+	case "ParameterSchema":
 		if rm.parameterManager, err = parameter.NewV1ParameterManager(ctx, rs.Version, rsrcJson, options...); err != nil {
 			return nil, err
 		}
-	case "Collection":
+	case "CollectionSchema":
 		if rm.collectionManager, err = collection.NewV1CollectionManager(ctx, rs.Version, rsrcJson, options...); err != nil {
 			return nil, err
 		}
@@ -112,9 +112,9 @@ func (rm *V1ObjectManager) Kind() string {
 
 func (rm *V1ObjectManager) Type() types.CatalogObjectType {
 	switch rm.Kind() {
-	case "Parameter":
+	case "ParameterSchema":
 		return types.CatalogObjectTypeParameterSchema
-	case "Collection":
+	case "CollectionSchema":
 		return types.CatalogObjectTypeCollectionSchema
 	default:
 		return types.CatalogObjectTypeInvalid
@@ -171,11 +171,11 @@ func (rm *V1ObjectManager) CollectionManager() schemamanager.CollectionManager {
 func (rm *V1ObjectManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	var s *schemastore.SchemaStorageRepresentation = nil
 	switch rm.Kind() {
-	case "Parameter":
+	case "ParameterSchema":
 		if rm.parameterManager != nil {
 			s = rm.parameterManager.StorageRepresentation()
 		}
-	case "Collection":
+	case "CollectionSchema":
 		if rm.collectionManager != nil {
 			s = rm.collectionManager.StorageRepresentation()
 		}

@@ -113,12 +113,12 @@ func (pm *V1ParameterManager) ValidateDependencies(ctx context.Context, loaders 
 		m.Name = collectionRef.ObjectName()
 		om, err := loaders.ByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m)
 		if err != nil {
-			log.Ctx(ctx).Error().Str("collection", collectionRef.Name).Msg("failed to load collection")
+			log.Ctx(ctx).Error().Str("collectionschema", collectionRef.Name).Msg("failed to load collection")
 			continue
 		}
 		cm := om.CollectionManager()
 		if cm == nil {
-			log.Ctx(ctx).Error().Str("collection", collectionRef.Name).Msg("failed to load collection manager")
+			log.Ctx(ctx).Error().Str("collectionschema", collectionRef.Name).Msg("failed to load collection manager")
 			continue
 		}
 		p := cm.ParametersWithSchema(loaders.SelfMetadata().Name)

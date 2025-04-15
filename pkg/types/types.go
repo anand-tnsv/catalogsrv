@@ -18,17 +18,17 @@ func (u CatalogId) IsNil() bool {
 }
 
 const (
-	CatalogKind    = "Catalog"
-	VariantKind    = "Variant"
-	WorkspaceKind  = "Workspace"
-	ParameterKind  = "Parameter"
-	CollectionKind = "Collection"
-	ValueKind      = "Value"
+	CatalogKind          = "Catalog"
+	VariantKind          = "Variant"
+	WorkspaceKind        = "Workspace"
+	ParameterSchemaKind  = "ParameterSchema"
+	CollectionSchemaKind = "CollectionSchema"
+	ValueKind            = "Value"
 )
 
 const (
-	ObjectTypeParameter  = "parameter"
-	ObjectTypeCollection = "collection"
+	ObjectTypeParameter  = "parameterschema"
+	ObjectTypeCollection = "collectionschema"
 	ObjectTypeValue      = "value"
 )
 

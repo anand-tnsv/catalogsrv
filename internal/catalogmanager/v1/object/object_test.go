@@ -20,7 +20,7 @@ func TestObjectSchema_Validate(t *testing.T) {
 			name: "valid resource schema",
 			yamlInput: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: valid-name
   catalog: valid-catalog
@@ -34,7 +34,7 @@ spec:
 			name: "invalid name in metadata",
 			yamlInput: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: "Invalid Name!" # contains spaces and special characters
   catalog: valid-catalog
@@ -50,7 +50,7 @@ spec:
 			name: "invalid catalog in metadata",
 			yamlInput: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: valid-name
   catalog: "Invalid Catalog!" # contains spaces and special characters
@@ -66,7 +66,7 @@ spec:
 			name: "invalid path in metadata",
 			yamlInput: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: valid-name
   catalog: valid-catalog
@@ -81,7 +81,7 @@ spec:
 		{
 			name: "missing required version",
 			yamlInput: `
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: valid-name
   catalog: valid-catalog
@@ -97,7 +97,7 @@ spec:
 			name: "missing required metadata.name",
 			yamlInput: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   catalog: valid-catalog
   path: /valid/path
@@ -112,7 +112,7 @@ spec:
 			name: "missing required metadata.catalog",
 			yamlInput: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: valid-name
   path: /valid/path
@@ -127,7 +127,7 @@ spec:
 			name: "missing required metadata.path",
 			yamlInput: `
 version: v1
-kind: Parameter
+kind: ParameterSchema
 metadata:
   name: valid-name
   catalog: valid-catalog
@@ -174,7 +174,7 @@ func TestValidateJsonSchema(t *testing.T) {
 			name: "valid resource schema",
 			input: `{
 				"version": "v1",
-				"kind": "Parameter",
+				"kind": "ParameterSchema",
 				"metadata": {"name": "example"},
 				"spec": {"description": "example spec"}
 			}`,
@@ -183,7 +183,7 @@ func TestValidateJsonSchema(t *testing.T) {
 		{
 			name: "missing required version",
 			input: `{
-				"kind": "Parameter",
+				"kind": "ParameterSchema",
 				"metadata": {"name": "example"},
 				"spec": {"description": "example spec"}
 			}`,
@@ -207,7 +207,7 @@ func TestValidateJsonSchema(t *testing.T) {
 			name: "missing required metadata",
 			input: `{
 				"version": "v1",
-				"kind": "Parameter",
+				"kind": "ParameterSchema",
 				"spec": {"description": "example spec"}
 			}`,
 			expected: schemaerr.ValidationErrors{
@@ -218,7 +218,7 @@ func TestValidateJsonSchema(t *testing.T) {
 			name: "missing required spec",
 			input: `{
 				"version": "v1",
-				"kind": "Parameter",
+				"kind": "ParameterSchema",
 				"metadata": {"name": "example"}
 			}`,
 			expected: schemaerr.ValidationErrors{
@@ -229,7 +229,7 @@ func TestValidateJsonSchema(t *testing.T) {
 			name: "invalid metadata type",
 			input: `{
 				"version": "v1",
-				"kind": "Parameter",
+				"kind": "ParameterSchema",
 				"metadata": "this should be an object",
 				"spec": {"description": "example spec"}
 			}`,
@@ -241,7 +241,7 @@ func TestValidateJsonSchema(t *testing.T) {
 			name: "invalid spec type",
 			input: `{
 				"version": "v1",
-				"kind": "Parameter",
+				"kind": "ParameterSchema",
 				"metadata": {"name": "example"},
 				"spec": "this should be an object"
 			}`,

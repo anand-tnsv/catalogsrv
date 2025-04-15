@@ -23,7 +23,7 @@ func TestSaveObject(t *testing.T) {
 
 	emptyCollection1Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: valid
 		catalog: example-catalog
@@ -31,7 +31,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	emptyCollection2Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: path
 		catalog: example-catalog
@@ -39,7 +39,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	emptyCollection3Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: another
 		catalog: example-catalog
@@ -47,7 +47,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	emptyCollection4Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: path
 		catalog: example-catalog
@@ -55,7 +55,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	emptyCollection5Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: collection
 		catalog: example-catalog
@@ -63,7 +63,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	emptyCollection6Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: path
 		catalog: example-catalog
@@ -71,7 +71,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	validParamYaml := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: example-catalog
@@ -85,7 +85,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	validCollectionYaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog
@@ -102,7 +102,7 @@ func TestSaveObject(t *testing.T) {
 
 	nonExistentParamYaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog
@@ -119,7 +119,7 @@ func TestSaveObject(t *testing.T) {
 
 	nonExistentDataTypeYaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog
@@ -135,7 +135,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	invalidParameterPath := `
 	version: v1
-	kind: Parameter
+	kind: ParameterSchema
 	metadata:
 		name: integer-param-schema
 		catalog: example-catalog
@@ -149,7 +149,7 @@ func TestSaveObject(t *testing.T) {
 	`
 	invalidCollectionPath := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog
@@ -294,9 +294,9 @@ func TestSaveObject(t *testing.T) {
 				}
 				// load object by path
 				var tp types.CatalogObjectType
-				if r.Kind() == "Collection" {
+				if r.Kind() == "CollectionSchema" {
 					tp = types.CatalogObjectTypeCollectionSchema
-				} else if r.Kind() == "Parameter" {
+				} else if r.Kind() == "ParameterSchema" {
 					tp = types.CatalogObjectTypeParameterSchema
 				}
 				lr, err = LoadObjectByPath(ctx, tp, &m, WithWorkspaceID(ws.WorkspaceID))
@@ -411,7 +411,7 @@ func TestSaveValue(t *testing.T) {
 
 	emptyCollection1Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: valid
 		catalog: example-catalog
@@ -419,7 +419,7 @@ func TestSaveValue(t *testing.T) {
 	`
 	emptyCollection2Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: path
 		catalog: example-catalog
@@ -428,7 +428,7 @@ func TestSaveValue(t *testing.T) {
 
 	validParamYaml := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: example-catalog
@@ -442,7 +442,7 @@ func TestSaveValue(t *testing.T) {
 	`
 	validCollectionYaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog
@@ -647,7 +647,7 @@ func TestSaveValue(t *testing.T) {
 func TestReferences(t *testing.T) {
 	emptyCollection1Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: valid
 		catalog: example-catalog
@@ -655,7 +655,7 @@ func TestReferences(t *testing.T) {
 	`
 	emptyCollection2Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: path
 		catalog: example-catalog
@@ -663,7 +663,7 @@ func TestReferences(t *testing.T) {
 	`
 	emptyCollection3Yaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: anotherpath
 		catalog: example-catalog
@@ -671,7 +671,7 @@ func TestReferences(t *testing.T) {
 	`
 	validParamYaml := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: example-catalog
@@ -685,7 +685,7 @@ func TestReferences(t *testing.T) {
 	`
 	updatedParamYaml := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: example-catalog
@@ -699,7 +699,7 @@ func TestReferences(t *testing.T) {
 	`
 	validParamYaml2 := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema2
 				  catalog: example-catalog
@@ -713,7 +713,7 @@ func TestReferences(t *testing.T) {
 	`
 	updatedParamAtNewPathYaml := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: example-catalog
@@ -727,7 +727,7 @@ func TestReferences(t *testing.T) {
 	`
 	updatedParamAtNewPathYaml2 := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: example-catalog
@@ -741,7 +741,7 @@ func TestReferences(t *testing.T) {
 	`
 	updatedParamYamlAtGrandparent := `
 				version: v1
-				kind: Parameter
+				kind: ParameterSchema
 				metadata:
 				  name: integer-param-schema
 				  catalog: example-catalog
@@ -755,7 +755,7 @@ func TestReferences(t *testing.T) {
 	`
 	validCollectionYaml := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog
@@ -771,7 +771,7 @@ func TestReferences(t *testing.T) {
 	`
 	validCollectionYaml2 := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog
@@ -793,7 +793,7 @@ func TestReferences(t *testing.T) {
 	`
 	validCollectionYamlAtNewPath := `
 	version: v1
-	kind: Collection
+	kind: CollectionSchema
 	metadata:
 		name: app-config-collection
 		catalog: example-catalog

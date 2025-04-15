@@ -342,7 +342,7 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 			if err := db.DB(ctx).AddReferencesToObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, []models.Reference{{Name: collectionFqp}}); err != nil {
 				log.Ctx(ctx).Error().
 					Str("param", param).
-					Str("collection", collectionFqp).
+					Str("collectionschema", collectionFqp).
 					Err(err).
 					Msg("failed to add references to collection schema")
 			}
@@ -350,7 +350,7 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 			if err := db.DB(ctx).DeleteReferenceFromObject(ctx, types.CatalogObjectTypeParameterSchema, paramDir, param, collectionFqp); err != nil {
 				log.Ctx(ctx).Error().
 					Str("param", param).
-					Str("collection", collectionFqp).
+					Str("collectionschema", collectionFqp).
 					Err(err).
 					Msg("failed to delete references from collection schema")
 			}
@@ -391,7 +391,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 		existingObjHash = r.Hash
 	} else {
 		// This is a new object. Check if the parent collection exists
-		if err = collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
+		if err = collectionSchemaExists(ctx, dir.CollectionsDir, m.Path); err != nil {
 			return
 		}
 
@@ -485,7 +485,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 		existingObjHash = r.Hash
 	} else {
 		// This is a new object. Check if the parent collection exists
-		if err = collectionExists(ctx, dir.CollectionsDir, m.Path); err != nil {
+		if err = collectionSchemaExists(ctx, dir.CollectionsDir, m.Path); err != nil {
 			return
 		}
 	}
@@ -565,7 +565,7 @@ func deleteParameterSchema(ctx context.Context, pathWithName string, dir Directo
 	return nil
 }
 
-func collectionExists(ctx context.Context, collectionsDir uuid.UUID, path string) apperrors.Error {
+func collectionSchemaExists(ctx context.Context, collectionsDir uuid.UUID, path string) apperrors.Error {
 	if path != "/" {
 		var (
 			exists bool
@@ -576,7 +576,7 @@ func collectionExists(ctx context.Context, collectionsDir uuid.UUID, path string
 			return ErrCatalogError
 		}
 		if !exists {
-			return ErrParentCollectionNotFound.Msg(path + " does not exist")
+			return ErrParentCollectionSchemaNotFound.Msg(path + " does not exist")
 		}
 	}
 	return nil
@@ -850,9 +850,9 @@ func (or *objectResource) Location() string {
 	}
 	var objType string
 	if or.name.ObjectType == types.CatalogObjectTypeCollectionSchema {
-		objType = "collection"
+		objType = "collectionschema"
 	} else {
-		objType = "parameter"
+		objType = "parameterschema"
 	}
 	return path.Clean(or.name.Catalog + "/variants/" + or.name.Variant + versonOrWorkspace + "/" + objType + "/" + or.name.ObjectPath + "/" + or.Name())
 }

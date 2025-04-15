@@ -40,9 +40,9 @@ func getObject(r *http.Request) (*httpx.Response, error) {
 	}
 
 	if objectFqn != "" && objType == types.ObjectTypeCollection {
-		kind = types.CollectionKind
+		kind = types.CollectionSchemaKind
 	} else if objectFqn != "" && objType == types.ObjectTypeParameter {
-		kind = types.ParameterKind
+		kind = types.ParameterSchemaKind
 	} else if objectFqn != "" && objType == types.ObjectTypeValue {
 		kind = types.ValueKind
 	} else if workspaceName != "" {

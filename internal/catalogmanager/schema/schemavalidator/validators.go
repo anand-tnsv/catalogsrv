@@ -12,8 +12,8 @@ var validKinds = []string{
 	types.CatalogKind,
 	types.VariantKind,
 	types.WorkspaceKind,
-	types.ParameterKind,
-	types.CollectionKind,
+	types.ParameterSchemaKind,
+	types.CollectionSchemaKind,
 	types.ValueKind,
 }
 
