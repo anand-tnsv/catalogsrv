@@ -2,9 +2,11 @@ package schemavalidator
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
@@ -111,6 +113,18 @@ func resourcePathValidator(fl validator.FieldLevel) bool {
 	return true
 }
 
+func catalogVersionValidator(fl validator.FieldLevel) bool {
+	version := fl.Field().String()
+	// version should either be an integer or a uuid
+	if _, err := strconv.Atoi(version); err == nil {
+		return true
+	}
+	if _, err := uuid.Parse(version); err == nil {
+		return true
+	}
+	return false
+}
+
 func requireVersionV1(fl validator.FieldLevel) bool {
 	version := fl.Field().String()
 	return version == types.VersionV1
@@ -127,6 +141,7 @@ func init() {
 	V().RegisterValidation("nameFormatValidator", nameFormatValidator)
 	V().RegisterValidation("noSpaces", noSpacesValidator)
 	V().RegisterValidation("resourcePathValidator", resourcePathValidator)
+	V().RegisterValidation("catalogVersionValidator", catalogVersionValidator)
 	V().RegisterValidation("notNull", notNull)
 	V().RegisterValidation("requireVersionV1", requireVersionV1)
 }

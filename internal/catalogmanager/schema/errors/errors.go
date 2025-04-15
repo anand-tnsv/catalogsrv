@@ -78,6 +78,14 @@ func ErrInvalidObjectPath(attr string, value ...any) ValidationError {
 	}
 }
 
+func ErrInvalidCatalogVersion(attr string, value ...any) ValidationError {
+	return ValidationError{
+		Field:  attr,
+		Value:  value,
+		ErrStr: "invalid catalog version",
+	}
+}
+
 func ErrInvalidVersion(attr string, value ...any) ValidationError {
 	return ValidationError{
 		Field:  attr,

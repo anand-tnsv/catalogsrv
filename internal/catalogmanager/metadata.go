@@ -7,6 +7,7 @@ import (
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/config"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
@@ -69,6 +70,11 @@ func canonicalizeMetadata(rsrcJson []byte, metadata *schemamanager.SchemaMetadat
 
 	if m.Variant.IsNil() {
 		m.Variant = types.NullableString{Value: types.DefaultVariant, Valid: true} // set default variant if nil
+	}
+
+	// if hierarchical schemas are not enabled, set path to /
+	if !config.HierarchicalSchemas {
+		m.Path = "/"
 	}
 
 	// marshal updated metadata back to json

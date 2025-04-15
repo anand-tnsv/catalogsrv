@@ -129,18 +129,6 @@ func (pm *V1ParameterSchemaManager) ValidateDependencies(ctx context.Context, lo
 					ves = append(ves, schemaerr.ErrInvalidValue(attrib+"::default", err.Error()))
 				}
 			}
-			if !param.Value.IsNil() {
-				if err := pm.ValidateValue(param.Value); err != nil {
-					ves = append(ves, schemaerr.ErrInvalidValue(attrib, err.Error()))
-				}
-			}
-			// get the value corresponding to the param if already set
-			v := cm.GetValue(ctx, param.Name)
-			if !v.Value.IsNil() {
-				if err := pm.ValidateValue(v.Value); err != nil {
-					ves = append(ves, schemaerr.ErrInvalidValue(attrib, err.Error()))
-				}
-			}
 		}
 	}
 	return

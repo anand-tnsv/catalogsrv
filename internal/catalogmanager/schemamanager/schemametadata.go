@@ -13,7 +13,7 @@ type SchemaMetadata struct {
 	Name        string               `json:"name" validate:"required,resourceNameValidator"`
 	Catalog     string               `json:"catalog" validate:"required,resourceNameValidator"`
 	Variant     types.NullableString `json:"variant,omitempty" validate:"resourceNameValidator"`
-	Path        string               `json:"path" validate:"required,resourcePathValidator"`
+	Path        string               `json:"path,omitempty" validate:"omitempty,resourcePathValidator"`
 	Description string               `json:"description"`
 }
 
@@ -42,6 +42,8 @@ func (rs *SchemaMetadata) Validate() schemaerr.ValidationErrors {
 			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
 		case "resourcePathValidator":
 			ves = append(ves, schemaerr.ErrInvalidObjectPath(jsonFieldName))
+		case "catalogVersionValidator":
+			ves = append(ves, schemaerr.ErrInvalidCatalogVersion(jsonFieldName))
 		default:
 			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}

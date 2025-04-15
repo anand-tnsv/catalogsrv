@@ -15,6 +15,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	v1Schema "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/schemaresource"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
@@ -63,6 +64,7 @@ func NewSchema(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMeta
 
 type storeOptions struct {
 	ErrorIfExists           bool
+	ErrorIfEqualToExisting  bool
 	WorkspaceID             uuid.UUID
 	Dir                     Directories
 	SetDefaultValues        bool
@@ -95,6 +97,12 @@ type ObjectStoreOption func(*storeOptions)
 func WithErrorIfExists() ObjectStoreOption {
 	return func(o *storeOptions) {
 		o.ErrorIfExists = true
+	}
+}
+
+func WithErrorIfEqualToExisting() ObjectStoreOption {
+	return func(o *storeOptions) {
+		o.ErrorIfEqualToExisting = true
 	}
 }
 
@@ -177,13 +185,7 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 			break
 		}
 		var err apperrors.Error
-		if existingObjHash, refs, existingParamPath, existingParamRef, err = validateParameterSchema(ctx, om, dir); err != nil {
-			if errors.Is(err, ErrAlreadyExists) {
-				if options.ErrorIfExists {
-					return ErrAlreadyExists
-				}
-				return nil
-			}
+		if existingObjHash, refs, existingParamPath, existingParamRef, err = validateParameterSchema(ctx, om, dir, options.ErrorIfExists); err != nil {
 			return err
 		}
 	case types.CatalogObjectTypeCollectionSchema:
@@ -191,13 +193,7 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 			break
 		}
 		var err apperrors.Error
-		if existingObjHash, refs, existingRefs, err = validateCollectionSchema(ctx, om, dir); err != nil {
-			if errors.Is(err, ErrAlreadyExists) {
-				if options.ErrorIfExists {
-					return ErrAlreadyExists
-				}
-				return nil
-			}
+		if existingObjHash, refs, existingRefs, err = validateCollectionSchema(ctx, om, dir, options.ErrorIfExists); err != nil {
 			return err
 		}
 	default:
@@ -215,8 +211,8 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 
 	hash = s.GetHash()
 	if hash == existingObjHash {
-		if options.ErrorIfExists {
-			return ErrAlreadyExists
+		if options.ErrorIfEqualToExisting {
+			return ErrEqualToExistingObject
 		}
 		return nil
 	}
@@ -358,7 +354,7 @@ func syncCollectionReferencesInParameters(ctx context.Context, paramDir uuid.UUI
 	}
 }
 
-func validateParameterSchema(ctx context.Context, om schemamanager.SchemaManager, dir Directories) (
+func validateParameterSchema(ctx context.Context, om schemamanager.SchemaManager, dir Directories, errorIfExists bool) (
 	existingObjHash string,
 	newRefs schemamanager.SchemaReferences,
 	existingPath string,
@@ -366,7 +362,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.SchemaManager
 	err apperrors.Error) {
 
 	m := om.Metadata()
-	pathWithName := m.Path + "/" + m.Name
+	pathWithName := path.Clean(m.Path + "/" + m.Name)
 
 	// get this objectRef from the directory
 	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName)
@@ -381,6 +377,10 @@ func validateParameterSchema(ctx context.Context, om schemamanager.SchemaManager
 	}
 
 	if r != nil {
+		if errorIfExists {
+			err = ErrAlreadyExists
+			return
+		}
 		if len(r.References) > 0 {
 			for _, ref := range r.References {
 				newRefs = append(newRefs, schemamanager.SchemaReference{
@@ -441,7 +441,7 @@ func isParentOrSame(p1, p2 string) bool {
 // validateCollectionSchema ensures that all the dataTypes referenced by parameters in the Spec are valid.
 // Similarly, it ensures that all the parameters referenced by the collection schema exist and also returns the
 // references to the parameter schemas.
-func validateCollectionSchema(ctx context.Context, om schemamanager.SchemaManager, dir Directories) (
+func validateCollectionSchema(ctx context.Context, om schemamanager.SchemaManager, dir Directories, errorIfExists bool) (
 	existingObjHash string,
 	newRefs schemamanager.SchemaReferences,
 	existingRefs schemamanager.SchemaReferences,
@@ -475,6 +475,10 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.SchemaManage
 		}
 	}
 	if r != nil {
+		if errorIfExists {
+			err = ErrAlreadyExists
+			return
+		}
 		if len(r.References) > 0 {
 			for _, ref := range r.References {
 				existingRefs = append(existingRefs, schemamanager.SchemaReference{
@@ -550,7 +554,10 @@ func deleteParameterSchema(ctx context.Context, pathWithName string, dir Directo
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete object with references")
 		if errors.Is(err, dberror.ErrNoAncestorReferencesFound) {
-			return ErrNoAncestorReferencesFound
+			if config.HierarchicalSchemas {
+				return ErrNoAncestorReferencesFound
+			}
+			return ErrUnableToDeleteParameterWithReferences
 		}
 	}
 
@@ -586,6 +593,10 @@ func LoadSchemaByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 	o := &storeOptions{}
 	for _, opt := range opts {
 		opt(o)
+	}
+
+	if !config.HierarchicalSchemas {
+		m.Path = "/"
 	}
 
 	var dir uuid.UUID
@@ -652,6 +663,10 @@ func LoadSchemaByHash(ctx context.Context, hash string, m *schemamanager.SchemaM
 			return nil, ErrObjectNotFound.Err(err)
 		}
 		return nil, ErrUnableToLoadObject.Err(err)
+	}
+
+	if !config.HierarchicalSchemas {
+		m.Path = "/"
 	}
 
 	s := &schemastore.SchemaStorageRepresentation{}

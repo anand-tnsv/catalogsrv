@@ -10,6 +10,7 @@ import (
 	_ "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/internal/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
@@ -20,7 +21,227 @@ import (
 )
 
 func TestSaveSchema(t *testing.T) {
+	emptyCollection1Yaml := `
+	version: v1
+	kind: CollectionSchema
+	metadata:
+		name: valid
+		catalog: example-catalog
+		description: An example collection
+	`
+	emptyCollection2Yaml := `
+	version: v1
+	kind: CollectionSchema
+	metadata:
+		name: path
+		catalog: example-catalog
+		description: An example collection
+	spec:
+		parameters:
+			maxRetries:
+				schema: integer-param-schema
+				default: 8
+			maxDelay:
+				dataType: Integer
+				default: 1000
+	`
+	validParamYaml := `
+				version: v1
+				kind: ParameterSchema
+				metadata:
+				  name: integer-param-schema
+				  catalog: example-catalog
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 10
+				  default: 5
+	`
+	validParamYamlModifiedValidation := `
+				version: v1
+				kind: ParameterSchema
+				metadata:
+				  name: integer-param-schema
+				  catalog: example-catalog
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 5
+				  default: 5
+	`
+	invalidDataTypeYamlCollection := `
+	version: v1
+	kind: CollectionSchema
+	metadata:
+		name: some-collection
+		catalog: example-catalog
+		description: An example collection
+	spec:
+		parameters:
+			maxRetries:
+				schema: integer-param-schema
+				default: 8
+			maxDelay:
+				dataType: InvalidInteger
+				default: 1000
+	`
 
+	// Run tests
+	// Initialize context with logger and database connection
+	ctx := newDb()
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
+
+	replaceTabsWithSpaces(&emptyCollection1Yaml)
+	replaceTabsWithSpaces(&emptyCollection2Yaml)
+	replaceTabsWithSpaces(&validParamYaml)
+	replaceTabsWithSpaces(&invalidDataTypeYamlCollection)
+	replaceTabsWithSpaces(&validParamYamlModifiedValidation)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant and project for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+
+	// create catalog example-catalog
+	cat := &models.Catalog{
+		Name:        "example-catalog",
+		Description: "An example catalog",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		ProjectID:   projectID,
+	}
+	err = db.DB(ctx).CreateCatalog(ctx, cat)
+	assert.NoError(t, err)
+
+	varId, err := db.DB(ctx).GetVariantIDFromName(ctx, cat.CatalogID, types.DefaultVariant)
+	assert.NoError(t, err)
+
+	// create a workspace
+	ws := &models.Workspace{
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		BaseVersion: 1,
+		VariantID:   varId,
+		CatalogID:   cat.CatalogID,
+	}
+	err = db.DB(ctx).CreateWorkspace(ctx, ws)
+	assert.NoError(t, err)
+
+	// create the empty collections
+	jsonData, err := yaml.YAMLToJSON([]byte(emptyCollection1Yaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	// create the same collection again
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// create the same collection again with error if equal
+	err = SaveSchema(ctx, collectionSchema, WithErrorIfEqualToExisting(), WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// create a collection with no existing parameter schemas
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// create the parameter schema
+	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml))
+	require.NoError(t, err)
+	parameterSchema, err := NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, parameterSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	// create the same schema again
+	err = SaveSchema(ctx, parameterSchema, WithErrorIfEqualToExisting(), WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+	err = SaveSchema(ctx, parameterSchema, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// create the collection with the parameter
+	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
+	require.NoError(t, err)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	// create the same collection again
+	err = SaveSchema(ctx, collectionSchema, WithErrorIfEqualToExisting(), WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// Load the collection schema
+	m := collectionSchema.Metadata()
+	lr, err := LoadSchemaByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.Equal(t, lr.Kind(), collectionSchema.Kind())
+	assert.Equal(t, collectionSchema.Version(), lr.Version())
+	assert.Equal(t, collectionSchema.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
+
+	// Load the parameter schema
+	m = parameterSchema.Metadata()
+	lr, err = LoadSchemaByPath(ctx, types.CatalogObjectTypeParameterSchema, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.Equal(t, lr.Kind(), parameterSchema.Kind())
+	assert.Equal(t, parameterSchema.Version(), lr.Version())
+	assert.Equal(t, parameterSchema.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
+
+	// create a collection with invalid data type
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidDataTypeYamlCollection))
+	require.NoError(t, err)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// modify the parameter schema
+	jsonData, err = yaml.YAMLToJSON([]byte(validParamYamlModifiedValidation))
+	require.NoError(t, err)
+	parameterSchema, err = NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, parameterSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// try to delete the parameter schema
+	dir, err := getDirectoriesForWorkspace(ctx, ws.WorkspaceID)
+	require.NoError(t, err)
+	err = deleteParameterSchema(ctx, "/integer-param-schema", dir)
+	require.ErrorIs(t, err, ErrUnableToDeleteParameterWithReferences)
+
+	// delete the collection
+	err = deleteCollectionSchema(ctx, "/path", dir)
+	require.NoError(t, err)
+	// delete the parameter schema
+	err = deleteParameterSchema(ctx, "/integer-param-schema", dir)
+	require.NoError(t, err)
+}
+func TestSaveHierarchicalSchema(t *testing.T) {
+	if !config.HierarchicalSchemas {
+		t.Skip("Hierarchical schemas are not enabled")
+	}
 	emptyCollection1Yaml := `
 	version: v1
 	kind: CollectionSchema
@@ -268,7 +489,7 @@ func TestSaveSchema(t *testing.T) {
 			err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 			if assert.NoError(t, err) {
 				// try to save again
-				err = SaveSchema(ctx, r, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
+				err = SaveSchema(ctx, r, WithErrorIfEqualToExisting(), WithWorkspaceID(ws.WorkspaceID))
 				if assert.Error(t, err) {
 					assert.ErrorIs(t, err, ErrAlreadyExists)
 				}
@@ -407,8 +628,10 @@ func TestSaveSchema(t *testing.T) {
 	}
 }
 
-func TestSaveValue(t *testing.T) {
-
+func TestSaveHierarchicalValue(t *testing.T) {
+	if !config.HierarchicalSchemas {
+		t.Skip("Hierarchical schemas are not enabled")
+	}
 	emptyCollection1Yaml := `
 	version: v1
 	kind: CollectionSchema
@@ -645,6 +868,9 @@ func TestSaveValue(t *testing.T) {
 }
 
 func TestReferences(t *testing.T) {
+	if !config.HierarchicalSchemas {
+		t.Skip("Hierarchical schemas are not enabled")
+	}
 	emptyCollection1Yaml := `
 	version: v1
 	kind: CollectionSchema

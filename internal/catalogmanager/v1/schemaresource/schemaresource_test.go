@@ -123,21 +123,6 @@ spec:
 				schemaerr.ErrMissingRequiredAttribute("metadata.catalog"),
 			},
 		},
-		{
-			name: "missing required metadata.path",
-			yamlInput: `
-version: v1
-kind: ParameterSchema
-metadata:
-  name: valid-name
-  catalog: valid-catalog
-spec:
-  description: example spec
-`,
-			expected: schemaerr.ValidationErrors{
-				schemaerr.ErrMissingRequiredAttribute("metadata.path"),
-			},
-		},
 	}
 
 	for _, tt := range tests {
