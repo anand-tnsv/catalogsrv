@@ -85,40 +85,35 @@ func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
 	return rr.Kind, nil
 }
 
+type ResourceManagerFactory func(context.Context, []byte, ResourceName) (schemamanager.ResourceManager, apperrors.Error)
+
+var resourceFactories = map[string]ResourceManagerFactory{
+	types.CatalogKind:          NewCatalogResource,
+	types.VariantKind:          NewVariantResource,
+	types.WorkspaceKind:        NewWorkspaceResource,
+	types.CollectionSchemaKind: NewSchemaResource,
+	types.ParameterSchemaKind:  NewSchemaResource,
+}
+
 func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	kind, err := RequestType(rsrcJson)
 	if err != nil {
 		return nil, err
 	}
-	switch kind {
-	case types.CatalogKind:
-		return NewCatalogResource(ctx, rsrcJson, name)
-	case types.VariantKind:
-		return NewVariantResource(ctx, rsrcJson, name)
-	case types.WorkspaceKind:
-		return NewWorkspaceResource(ctx, rsrcJson, name)
-	case types.CollectionSchemaKind:
+	if kind == types.CollectionSchemaKind {
 		name.ObjectType = types.CatalogObjectTypeCollectionSchema
-		return NewSchemaResource(ctx, rsrcJson, name)
-	case types.ParameterSchemaKind:
+	} else if kind == types.ParameterSchemaKind {
 		name.ObjectType = types.CatalogObjectTypeParameterSchema
-		return NewSchemaResource(ctx, rsrcJson, name)
+	}
+	if factory, ok := resourceFactories[kind]; ok {
+		return factory(ctx, rsrcJson, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }
 
 func ResourceManagerFromName(ctx context.Context, kind string, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	switch kind {
-	case types.CatalogKind:
-		return NewCatalogResource(ctx, nil, name)
-	case types.VariantKind:
-		return NewVariantResource(ctx, nil, name)
-	case types.WorkspaceKind:
-		return NewWorkspaceResource(ctx, nil, name)
-	case types.CollectionSchemaKind:
-		return NewSchemaResource(ctx, nil, name)
-	case types.ParameterSchemaKind:
-		return NewSchemaResource(ctx, nil, name)
+	if factory, ok := resourceFactories[kind]; ok {
+		return factory(ctx, nil, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }
