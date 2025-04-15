@@ -600,6 +600,18 @@ func TestSaveValue(t *testing.T) {
 	err = SaveValue(ctx, jsonData, nil, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 
+	// get the value
+	dir, err := getDirectoriesForWorkspace(ctx, ws.WorkspaceID)
+	require.NoError(t, err)
+
+	_, err = GetValue(ctx, &ValueMetadata{
+		Catalog:    collectionSchema.Catalog(),
+		Variant:    collectionSchema.Metadata().Variant,
+		Collection: collectionSchema.FullyQualifiedName(),
+	},
+		dir)
+	require.NoError(t, err)
+
 	// load collection by path
 	m := collectionSchema.Metadata()
 	lr, err := LoadObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))

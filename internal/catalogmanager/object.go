@@ -500,10 +500,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 	return
 }
 
-func deleteCollectionSchema(ctx context.Context, om schemamanager.ObjectManager, dir Directories) apperrors.Error {
-	m := om.Metadata()
-	pathWithName := m.Path + "/" + m.Name
-
+func deleteCollectionSchema(ctx context.Context, pathWithName string, dir Directories) apperrors.Error {
 	d := models.DirectoryIDs{
 		{
 			ID:   dir.CollectionsDir,
@@ -534,6 +531,37 @@ func deleteCollectionSchema(ctx context.Context, om schemamanager.ObjectManager,
 		}
 	}
 
+	return nil
+}
+
+func deleteParameterSchema(ctx context.Context, pathWithName string, dir Directories) apperrors.Error {
+	d := models.DirectoryIDs{
+		{
+			ID:   dir.ParametersDir,
+			Type: types.CatalogObjectTypeParameterSchema,
+		},
+		{
+			ID:   dir.CollectionsDir,
+			Type: types.CatalogObjectTypeCollectionSchema,
+		},
+	}
+
+	objHash, err := db.DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, d, pathWithName, models.ReplaceReferencesWithAncestor(true))
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete object with references")
+		if errors.Is(err, dberror.ErrNoAncestorReferencesFound) {
+			return ErrNoAncestorReferencesFound
+		}
+	}
+
+	// delete the object from the database
+	if err := db.DB(ctx).DeleteCatalogObject(ctx, objHash); err != nil {
+		if !errors.Is(err, dberror.ErrNotFound) {
+			// we don't return an error since the object reference has already been removed and
+			// we cannot roll this back.
+			log.Ctx(ctx).Error().Err(err).Str("hash", objHash).Msg("failed to delete objects from database")
+		}
+	}
 	return nil
 }
 
@@ -602,12 +630,15 @@ func LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 	return resource.LoadV1ObjectManager(ctx, s, m)
 }
 
-func DeleteObject(ctx context.Context, om schemamanager.ObjectManager) apperrors.Error {
-	if om == nil {
-		return validationerrors.ErrEmptySchema
+func DeleteObject(ctx context.Context, t types.CatalogObjectType, pathWithName string, dir Directories) apperrors.Error {
+	switch t {
+	case types.CatalogObjectTypeCollectionSchema:
+		return deleteCollectionSchema(ctx, pathWithName, dir)
+	case types.CatalogObjectTypeParameterSchema:
+		return deleteParameterSchema(ctx, pathWithName, dir)
+	default:
+		return ErrInvalidSchema
 	}
-	//m := om.Metadata()
-	return nil
 }
 
 func LoadObjectByHash(ctx context.Context, hash string, m *schemamanager.ObjectMetadata) (schemamanager.ObjectManager, apperrors.Error) {
@@ -887,6 +918,20 @@ func (or *objectResource) Update(ctx context.Context, rsrcJson []byte) apperrors
 }
 
 func (or *objectResource) Delete(ctx context.Context) apperrors.Error {
+	if or.workspaceID == uuid.Nil {
+		return ErrInvalidWorkspace
+	}
+	dir, err := getDirectoriesForWorkspace(ctx, or.workspaceID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("workspace_id", or.workspaceID.String()).Msg("failed to get directories for workspace")
+		return ErrInvalidWorkspace
+	}
+	pathWithName := path.Clean(or.name.ObjectPath + "/" + or.name.ObjectName)
+	err = DeleteObject(ctx, or.name.ObjectType, pathWithName, dir)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete object")
+		return ErrUnableToDeleteObject
+	}
 	return nil
 }
 

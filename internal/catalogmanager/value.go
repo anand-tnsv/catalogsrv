@@ -67,6 +67,47 @@ func (vs *valueSchema) Validate() schemaerr.ValidationErrors {
 	return ves
 }
 
+func GetValue(ctx context.Context, m *ValueMetadata, dir Directories) (*valueSchema, apperrors.Error) {
+	// load the object manager
+	om, err := LoadObjectByPath(ctx,
+		types.CatalogObjectTypeCollectionSchema,
+		&schemamanager.ObjectMetadata{
+			Catalog: m.Catalog,
+			Variant: m.Variant,
+			Path:    path.Dir(m.Collection),
+			Name:    path.Base(m.Collection),
+		},
+		WithDirectories(dir))
+
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load object manager")
+		if errors.Is(err, ErrObjectNotFound) {
+			return nil, ErrInvalidCollection.Msg("invalid collection " + m.Collection)
+		}
+		return nil, ErrCatalogError.Err(err)
+	}
+
+	// get the values
+	valuesParam := om.CollectionManager().GetValues(ctx)
+	values := make(valueSpec)
+	for param, value := range valuesParam {
+		values[param] = value.Value
+	}
+
+	vs := &valueSchema{
+		Version: om.Version(),
+		Kind:    om.Kind(),
+		Metadata: ValueMetadata{
+			Catalog:    om.Metadata().Catalog,
+			Variant:    om.Metadata().Variant,
+			Collection: om.FullyQualifiedName(),
+		},
+		Spec: values,
+	}
+
+	return vs, nil
+}
+
 func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...ObjectStoreOption) apperrors.Error {
 	if len(valueJson) == 0 {
 		return validationerrors.ErrEmptySchema
