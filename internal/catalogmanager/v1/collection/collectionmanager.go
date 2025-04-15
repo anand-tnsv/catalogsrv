@@ -116,7 +116,3 @@ func (cm *V1CollectionManager) SetValue(ctx context.Context, param string, value
 func (cm *V1CollectionManager) SetDefaultValues(ctx context.Context) {
 	cm.collectionSchema.SetDefaultValues(ctx)
 }
-
-func (cm *V1CollectionManager) ReValidateValues(ctx context.Context) {
-	cm.collectionSchema.ReValidateValues(ctx)
-}
