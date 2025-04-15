@@ -504,36 +504,34 @@ func deleteCollectionSchema(ctx context.Context, om schemamanager.ObjectManager,
 	m := om.Metadata()
 	pathWithName := m.Path + "/" + m.Name
 
-	// get this objectRef from the directory
-	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			log.Ctx(ctx).Debug().Str("path", pathWithName).Msg("object not found")
-		} else {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to get object by path")
-			return ErrCatalogError
-		}
+	d := models.DirectoryIDs{
+		{
+			ID:   dir.CollectionsDir,
+			Type: types.CatalogObjectTypeCollectionSchema,
+		},
+		{
+			ID:   dir.ParametersDir,
+			Type: types.CatalogObjectTypeParameterSchema,
+		},
 	}
 
-	existingRefs := make(schemamanager.ObjectReferences, 0)
-	existingObjHash := ""
+	// delete the collection in the directory, and all objects in all subpaths and remove all references
+	var objs []string
+	var err apperrors.Error
+	if objs, err = db.DB(ctx).DeleteTree(ctx, d, pathWithName); err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete tree")
+		return ErrUnableToDeleteObject.Msg("unable to delete collection")
+	}
 
-	if r != nil {
-		if len(r.References) > 0 {
-			for _, ref := range r.References {
-				existingRefs = append(existingRefs, schemamanager.ObjectReference{
-					Name: ref.Name,
-				})
+	// delete the objects from the database
+	for _, obj := range objs {
+		if err := db.DB(ctx).DeleteCatalogObject(ctx, obj); err != nil {
+			if !errors.Is(err, dberror.ErrNotFound) {
+				// we don't return an error since the object reference has already been removed and
+				// we cannot roll this back.
+				log.Ctx(ctx).Error().Err(err).Str("hash", obj).Msg("failed to delete objects from database")
 			}
 		}
-		existingObjHash = r.Hash
-	} else {
-		return ErrObjectNotFound
-	}
-
-	if err := db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to delete object from directory")
-		return ErrCatalogError
 	}
 
 	return nil

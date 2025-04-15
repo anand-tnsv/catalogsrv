@@ -95,3 +95,36 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 
 	return &obj, nil
 }
+
+func (h *hatchCatalogDb) DeleteCatalogObject(ctx context.Context, hash string) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	if hash == "" {
+		return dberror.ErrInvalidInput.Msg("hash cannot be empty")
+	}
+
+	// Query to delete catalog object based on composite key (hash, tenant_id)
+	query := `
+		DELETE FROM catalog_objects
+		WHERE hash = $1 AND tenant_id = $2
+	`
+	result, err := h.conn().ExecContext(ctx, query, hash, tenantID)
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	// Check if the row was deleted
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	// If no rows were affected, it means the object does not exist
+	if rowsAffected == 0 {
+		return dberror.ErrNotFound.Msg("catalog object not found")
+	}
+
+	return nil
+}

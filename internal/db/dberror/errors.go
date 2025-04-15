@@ -69,12 +69,13 @@ import (
 	}
 */
 var (
-	ErrDatabase        apperrors.Error = apperrors.New("db error")
-	ErrAlreadyExists   apperrors.Error = ErrDatabase.New("already exists")
-	ErrNotFound        apperrors.Error = ErrDatabase.New("not found")
-	ErrInvalidInput    apperrors.Error = ErrDatabase.New("invalid input")
-	ErrInvalidCatalog  apperrors.Error = ErrDatabase.New("invalid catalog")
-	ErrInvalidVariant  apperrors.Error = ErrDatabase.New("invalid variant")
-	ErrMissingTenantID apperrors.Error = ErrInvalidInput.New("missing tenant ID")
-	ErrMissingProjecID apperrors.Error = ErrInvalidInput.New("missing project ID")
+	ErrDatabase                  apperrors.Error = apperrors.New("db error")
+	ErrAlreadyExists             apperrors.Error = ErrDatabase.New("already exists")
+	ErrNotFound                  apperrors.Error = ErrDatabase.New("not found")
+	ErrInvalidInput              apperrors.Error = ErrDatabase.New("invalid input")
+	ErrInvalidCatalog            apperrors.Error = ErrDatabase.New("invalid catalog")
+	ErrInvalidVariant            apperrors.Error = ErrDatabase.New("invalid variant")
+	ErrMissingTenantID           apperrors.Error = ErrInvalidInput.New("missing tenant ID")
+	ErrMissingProjecID           apperrors.Error = ErrInvalidInput.New("missing project ID")
+	ErrNoAncestorReferencesFound apperrors.Error = ErrDatabase.New("no ancestor references found")
 )

@@ -268,14 +268,14 @@ func TestSchemaDirectory(t *testing.T) {
 	// add a new object
 	paths := []string{"/col/a/b", "/col/a/b/c", "/col/a/b/c/d/e/f", "/col/a/b/c/d", "/col/a/b/d/e", "/col/a/c", "/col/a/c/e/f"}
 	refsP := models.References{
-		{Name: "/par/a/b"}, {Name: "/par/a/b/c"}, {Name: "/par/a/b/c/d/e/f"}, {Name: "/par/a/b/c/d"}, {Name: "/par/a/b/d/e"}, {Name: "/par/a/c"}, {Name: "/par/a/c/e/f"},
+		{Name: "/par/a/b"}, {Name: "/par/a/b/c"}, {Name: "/par/a/b/c/d/c"}, {Name: "/par/a/b/c/d"}, {Name: "/par/a/b/d/e"}, {Name: "/par/a/c"}, {Name: "/par/a/c/e/f"},
 	}
 	for _, path := range paths {
 		err = DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, path, models.ObjectRef{Hash: "hash", References: refsP})
 		assert.NoError(t, err)
 	}
 
-	paths = []string{"/par/a/b", "/par/a/b/c", "/par/a/b/c/d/e/f", "/par/a/b/c/d", "/par/a/b/d/e", "/par/a/c", "/par/a/c/e/f"}
+	paths = []string{"/par/a/b", "/par/a/b/c", "/par/a/b/c/d/c", "/par/a/b/c/d", "/par/a/b/d/e", "/par/a/c", "/par/a/c/e/f"}
 	refsC := models.References{
 		{Name: "/col/a/b"}, {Name: "/col/a/b/c"}, {Name: "/col/a/b/c/d/e/f"}, {Name: "/col/a/b/c/d"}, {Name: "/col/a/b/d/e"}, {Name: "/col/a/c"}, {Name: "/col/a/c/e/f"},
 	}
@@ -283,6 +283,14 @@ func TestSchemaDirectory(t *testing.T) {
 		err = DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, path, models.ObjectRef{Hash: "hash", References: refsC})
 		assert.NoError(t, err)
 	}
+
+	// create a parameter with no references
+	err = DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/c/d/c/g", models.ObjectRef{Hash: "hash"})
+	require.NoError(t, err)
+	// get it
+	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/c/d/c/g")
+	require.NoError(t, err)
+	require.Equal(t, object.Hash, "hash")
 
 	// get an object
 	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b/c/d/e/f")
@@ -296,12 +304,71 @@ func TestSchemaDirectory(t *testing.T) {
 	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/c")
 	require.NoError(t, err)
 	require.Equal(t, object.Hash, "hash")
-	// delete the tree at /a/b
-	deletePath := "/col/a/b"
-	objs, err := DB(ctx).DeleteTree(ctx, models.DirectoryIDs{
+
+	// delete a parameter at /par/a/b/c/d/c/f
+	deletePath := "/par/a/b/c/d/c"
+	dirIds := models.DirectoryIDs{
 		{ID: cd, Type: types.CatalogObjectTypeCollectionSchema},
 		{ID: pd, Type: types.CatalogObjectTypeParameterSchema},
-	}, deletePath)
+	}
+	objHash, err := DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, dirIds, deletePath)
+	require.NoError(t, err)
+	require.Equal(t, "", objHash)
+	// get the object again
+	_, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, deletePath)
+	require.NoError(t, err)
+	// delete the parameter with no ref
+	objHash, err = DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, dirIds, "/par/a/b/c/d/c/g")
+	require.NoError(t, err)
+	require.Equal(t, "hash", objHash)
+	// get the object again
+	_, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/c/d/c/g")
+	require.Error(t, err, dberror.ErrNotFound)
+
+	//delete the param at deletePath with replaceReferences option
+	objHash, err = DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, dirIds, deletePath, models.ReplaceReferencesWithAncestor(true))
+	require.NoError(t, err)
+	require.Equal(t, "hash", objHash)
+	// get the object again
+	_, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, deletePath)
+	require.Error(t, err, dberror.ErrNotFound)
+	// get a collection and see if the ref is replaced
+	obj, err := DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b/c/d/e/f")
+	require.NoError(t, err)
+	require.Equal(t, obj.Hash, "hash")
+	newRefsP := models.References{}
+	for _, ref := range refsP {
+		if ref.Name != deletePath {
+			newRefsP = append(newRefsP, ref)
+		}
+	}
+	require.Equal(t, newRefsP, obj.References)
+
+	// delete a param with replaceReferences option for /par/a/c
+	deletePath = "/par/a/c"
+	_, err = DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, dirIds, deletePath, models.ReplaceReferencesWithAncestor(true))
+	require.ErrorIs(t, err, dberror.ErrNoAncestorReferencesFound)
+	objHash, err = DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, dirIds, deletePath, models.DeleteReferences(true))
+	require.NoError(t, err)
+	require.Equal(t, "hash", objHash)
+	// get a collection and see if the ref is replaced
+	obj, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b/c/d/e/f")
+	require.NoError(t, err)
+	require.Equal(t, obj.Hash, "hash")
+	newRefsP1 := models.References{}
+	for _, ref := range newRefsP {
+		if ref.Name != deletePath {
+			newRefsP1 = append(newRefsP1, ref)
+		}
+	}
+	newRefsP = newRefsP1
+	require.Equal(t, newRefsP, obj.References)
+	_, err = DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, dirIds, "/invalid/path")
+	require.ErrorIs(t, err, dberror.ErrNotFound)
+
+	// delete the tree at /a/b
+	deletePath = "/col/a/b"
+	objs, err := DB(ctx).DeleteTree(ctx, dirIds, deletePath)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(objs))
 	// get the object again
@@ -309,12 +376,12 @@ func TestSchemaDirectory(t *testing.T) {
 	require.Error(t, err, dberror.ErrNotFound)
 	_, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/b")
 	require.Error(t, err, dberror.ErrNotFound)
-	obj, err := DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/c")
+	obj, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, cd, "/col/a/c")
 	require.NoError(t, err)
 	require.Equal(t, obj.Hash, "hash")
-	require.Equal(t, refsP, obj.References)
+	require.Equal(t, newRefsP, obj.References)
 	// retrieve a parameter
-	obj, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/c/d/e/f")
+	obj, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/d/e")
 	require.NoError(t, err)
 	require.Equal(t, obj.Hash, "hash")
 	newRefsC := models.References{}

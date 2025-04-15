@@ -58,6 +58,7 @@ type DB_ interface {
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error
 	GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error)
+	DeleteCatalogObject(ctx context.Context, hash string) apperrors.Error
 
 	// Schema Directory
 	CreateSchemaDirectory(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory) apperrors.Error
@@ -74,6 +75,7 @@ type DB_ interface {
 	FindClosestObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, targetName, startPath string) (string, *models.ObjectRef, apperrors.Error)
 	PathExists(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error)
 	DeleteTree(ctx context.Context, directoryIds models.DirectoryIDs, path string) ([]string, apperrors.Error)
+	DeleteObjectWithReferences(ctx context.Context, t types.CatalogObjectType, dirIDs models.DirectoryIDs, delPath string, opts ...models.DirectoryObjectDeleteOptions) (string, apperrors.Error)
 
 	// Scope Management
 	AddScopes(ctx context.Context, scopes map[string]string)

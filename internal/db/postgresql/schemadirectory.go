@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"path"
 	"strings"
 
 	"github.com/golang/snappy"
@@ -627,6 +628,228 @@ func (h *hatchCatalogDb) DeleteTree(ctx context.Context, directoryIds models.Dir
 	return removedObjects, nil
 }
 
+type directoryObjDeleteOptions struct {
+	ignoreReferences              bool
+	replaceReferencesWithAncestor bool
+	deleteReferences              bool
+}
+
+func (o *directoryObjDeleteOptions) IgnoreReferences(b bool) {
+	o.ignoreReferences = b
+}
+
+func (o *directoryObjDeleteOptions) ReplaceReferencesWithAncestor(b bool) {
+	o.replaceReferencesWithAncestor = b
+}
+
+func (o *directoryObjDeleteOptions) DeleteReferences(b bool) {
+	o.deleteReferences = b
+}
+
+func (o *directoryObjDeleteOptions) ApplyOptions(opts ...models.DirectoryObjectDeleteOptions) {
+	for _, opt := range opts {
+		opt(o)
+	}
+}
+
+func (h *hatchCatalogDb) DeleteObjectWithReferences(ctx context.Context,
+	t types.CatalogObjectType,
+	dirIDs models.DirectoryIDs,
+	delPath string,
+	opts ...models.DirectoryObjectDeleteOptions) (objHash string, errRet apperrors.Error) {
+
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return "", dberror.ErrMissingTenantID
+	}
+
+	o := &directoryObjDeleteOptions{}
+	o.ApplyOptions(opts...)
+
+	var paramDirID, collectionDirID uuid.UUID
+	for _, dirId := range dirIDs {
+		if dirId.Type == types.CatalogObjectTypeCollectionSchema {
+			collectionDirID = dirId.ID
+		} else if dirId.Type == types.CatalogObjectTypeParameterSchema {
+			paramDirID = dirId.ID
+		}
+	}
+	if collectionDirID == uuid.Nil || paramDirID == uuid.Nil {
+		return "", dberror.ErrInvalidInput.Msg("invalid directory ids")
+	}
+
+	objName := path.Base(delPath)
+	objPath := path.Dir(delPath)
+	if objPath == "." {
+		objPath = "/"
+	}
+	if objName == "" {
+		return "", dberror.ErrInvalidInput.Msg("invalid path")
+	}
+
+	var (
+		deleteDirTableName string
+		deleteDirID        uuid.UUID
+		refDirTableName    string
+		refDirID           uuid.UUID
+		ancestorPath       string
+	)
+	if t == types.CatalogObjectTypeCollectionSchema {
+		deleteDirTableName = "collections_directory"
+		deleteDirID = collectionDirID
+		refDirTableName = "parameters_directory"
+		refDirID = paramDirID
+	} else if t == types.CatalogObjectTypeParameterSchema {
+		deleteDirTableName = "parameters_directory"
+		deleteDirID = paramDirID
+		refDirTableName = "collections_directory"
+		refDirID = collectionDirID
+	} else {
+		return "", dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+	})
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to start transaction")
+		return "", dberror.ErrDatabase.Err(err)
+	}
+	defer func() {
+		// recover from panic
+		if r := recover(); r != nil {
+			tx.Rollback()
+			log.Ctx(ctx).Error().Err(r.(error)).Msg("panic in DeleteObjectWithReferences")
+			// raise the panic back
+			panic(r)
+		} else {
+			if errRet != nil {
+				objHash = ""
+				tx.Rollback()
+			} else {
+				tx.Commit()
+			}
+		}
+
+	}()
+
+	writeDirectory := func(tableName string, dirID uuid.UUID, dir models.Directory) apperrors.Error {
+		b, err := models.DirectoryToJSON(dir)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to marshal directory")
+			return dberror.ErrDatabase.Err(err)
+		}
+		query := `UPDATE ` + tableName + ` SET directory = $1 WHERE directory_id = $2 AND tenant_id = $3;`
+		_, err = tx.ExecContext(ctx, query, b, dirID, tenantID)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to update directory")
+			return dberror.ErrDatabase.Err(err)
+		}
+		return nil
+	}
+
+	// Fetch the directory to delete from
+	query := `SELECT directory FROM ` + deleteDirTableName + ` WHERE directory_id = $1 AND tenant_id = $2 FOR UPDATE;`
+	var b []byte
+	err = tx.QueryRowContext(ctx, query, deleteDirID, tenantID).Scan(&b)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", dberror.ErrNotFound.Msg("directory not found")
+		}
+		log.Ctx(ctx).Error().Err(err).Msg("failed to get directory")
+		return "", dberror.ErrDatabase.Err(err)
+	}
+	deleteDir, err := models.JSONToDirectory(b)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal directory")
+		return "", dberror.ErrDatabase.Err(err)
+	}
+	// find the object and its references
+	var objRef models.ObjectRef
+	var ok bool
+	if objRef, ok = deleteDir[delPath]; !ok {
+		return "", dberror.ErrNotFound.Msg("object not found")
+	}
+
+	if len(objRef.References) == 0 || o.ignoreReferences {
+		// if there are no references to this object, just remove the object
+		delete(deleteDir, delPath)
+		return objRef.Hash, writeDirectory(deleteDirTableName, deleteDirID, deleteDir)
+	}
+
+	if o.replaceReferencesWithAncestor {
+		// get the ancestor
+		ancestorPathDir := ""
+		for p := range deleteDir {
+			if p == delPath {
+				continue
+			}
+			if strings.HasSuffix(p, objName) {
+				d := path.Dir(p)
+				if d == "." {
+					d = "/"
+				}
+				if strings.HasPrefix(objPath, d) && strings.HasPrefix(d, ancestorPathDir) {
+					ancestorPathDir = d
+				}
+			}
+		}
+		if len(ancestorPathDir) == 0 {
+			return "", dberror.ErrNoAncestorReferencesFound
+		}
+		ancestorPath = path.Clean(ancestorPathDir + "/" + objName)
+	}
+
+	if o.replaceReferencesWithAncestor || o.deleteReferences {
+		// get the references directory
+		query = `SELECT directory FROM ` + refDirTableName + ` WHERE directory_id = $1 AND tenant_id = $2 FOR UPDATE;`
+		b = nil
+		err = tx.QueryRowContext(ctx, query, refDirID, tenantID).Scan(&b)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return "", dberror.ErrNotFound.Msg("directory not found")
+			}
+			log.Ctx(ctx).Error().Err(err).Msg("failed to get directory")
+			return "", dberror.ErrDatabase.Err(err)
+		}
+		refDir, err := models.JSONToDirectory(b)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal directory")
+			return "", dberror.ErrDatabase.Err(err)
+		}
+		// remove the references to the object we need to delete
+		for _, r := range objRef.References {
+			if obj, ok := refDir[r.Name]; ok {
+				var newRefs models.References
+				for _, ref := range obj.References {
+					if ref.Name != delPath {
+						newRefs = append(newRefs, ref)
+					} else if o.replaceReferencesWithAncestor {
+						if !newRefs.Contains(ancestorPath) {
+							newRefs = append(newRefs, models.Reference{
+								Name: ancestorPath,
+							})
+						}
+					}
+				}
+				obj.References = newRefs
+				refDir[r.Name] = obj
+			}
+		}
+		if err := writeDirectory(refDirTableName, refDirID, refDir); err != nil {
+			return "", err
+		}
+		// delete the object
+		delete(deleteDir, delPath)
+		if err := writeDirectory(deleteDirTableName, deleteDirID, deleteDir); err != nil {
+			return "", err
+		}
+		return objRef.Hash, nil
+	}
+
+	return "", nil
+}
+
 // FindClosestObject searches for an object in a JSONB directory that is associated with the specified targetName
 // and located at the closest matching path to the provided startPath. It traverses outward from the startPath
 // to the nearest parent paths until it finds a match.
@@ -689,16 +912,16 @@ ORDER BY LENGTH(key) DESC;
 	var closestObject models.ObjectRef
 
 	for rows.Next() {
-		var path string
+		var delPath string
 		var objectData []byte
 
-		if err := rows.Scan(&path, &objectData); err != nil {
+		if err := rows.Scan(&delPath, &objectData); err != nil {
 			return "", nil, dberror.ErrDatabase.Err(err)
 		}
 
 		// Check if the path is equal to or a parent of startPath
-		if isParentPath(path, startPath, targetName) {
-			closestPath = path
+		if isParentPath(delPath, startPath, targetName) {
+			closestPath = delPath
 
 			if err := json.Unmarshal(objectData, &closestObject); err != nil {
 				return "", nil, dberror.ErrDatabase.Err(err)

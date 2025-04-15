@@ -55,6 +55,15 @@ type Reference struct {
 type References []Reference
 type Directory map[string]ObjectRef
 
+func (r References) Contains(name string) bool {
+	for _, ref := range r {
+		if ref.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func DirectoryToJSON(directory Directory) ([]byte, error) {
 	return json.Marshal(directory)
 }
@@ -63,6 +72,32 @@ func JSONToDirectory(data []byte) (Directory, error) {
 	var directory Directory
 	err := json.Unmarshal(data, &directory)
 	return directory, err
+}
+
+type DirectoryObjectDeleteOptionsSetter interface {
+	ReplaceReferencesWithAncestor(bool)
+	IgnoreReferences(bool)
+	DeleteReferences(bool)
+}
+
+type DirectoryObjectDeleteOptions func(DirectoryObjectDeleteOptionsSetter)
+
+func ReplaceReferencesWithAncestor(b bool) DirectoryObjectDeleteOptions {
+	return func(s DirectoryObjectDeleteOptionsSetter) {
+		s.ReplaceReferencesWithAncestor(b)
+	}
+}
+
+func IgnoreReferences(b bool) DirectoryObjectDeleteOptions {
+	return func(s DirectoryObjectDeleteOptionsSetter) {
+		s.IgnoreReferences(b)
+	}
+}
+
+func DeleteReferences(b bool) DirectoryObjectDeleteOptions {
+	return func(s DirectoryObjectDeleteOptionsSetter) {
+		s.DeleteReferences(b)
+	}
 }
 
 /*
