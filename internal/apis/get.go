@@ -36,6 +36,7 @@ func getObject(r *http.Request) (*httpx.Response, error) {
 		if objectPath == "." {
 			objectPath = "/"
 		}
+		objectPath = path.Clean("/" + objectPath) // this will always start with /
 	}
 
 	if objectFqn != "" && objType == types.ObjectTypeCollection {

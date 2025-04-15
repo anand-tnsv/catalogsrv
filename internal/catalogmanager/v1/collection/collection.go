@@ -192,6 +192,9 @@ func (cs *CollectionSchema) SetDefaultValues(ctx context.Context) {
 	}
 }
 
+func (cs *CollectionSchema) ReValidateValues(ctx context.Context) {
+}
+
 func (cs *CollectionSchema) ParameterNames() []string {
 	var names []string
 	for n := range cs.Spec.Parameters {

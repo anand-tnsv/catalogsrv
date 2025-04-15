@@ -392,6 +392,14 @@ func TestSchemaDirectory(t *testing.T) {
 	}
 	require.Equal(t, newRefsC, obj.References)
 
+	// let's update the hash of this parameter
+	err = DB(ctx).UpdateObjectHashForPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/d/e", "newhash")
+	require.NoError(t, err)
+	// get the object again
+	obj, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/par/a/b/d/e")
+	require.NoError(t, err)
+	require.Equal(t, obj.Hash, "newhash")
+
 	// delete tree with invalid root
 	_, err = DB(ctx).DeleteTree(ctx, models.DirectoryIDs{
 		{ID: cd, Type: types.CatalogObjectTypeCollectionSchema},

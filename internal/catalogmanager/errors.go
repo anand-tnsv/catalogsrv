@@ -12,7 +12,7 @@ var (
 	ErrObjectNotFound            apperrors.Error = ErrCatalogError.New("object not found").SetStatusCode(http.StatusNotFound)
 	ErrParentCollectionNotFound  apperrors.Error = ErrCatalogError.New("collection not found").SetStatusCode(http.StatusNotFound)
 	ErrUnableToLoadObject        apperrors.Error = ErrCatalogError.New("unable to load object").SetStatusCode(http.StatusInternalServerError)
-	ErrUnableToUpdateObject      apperrors.Error = ErrCatalogError.New("unable to update object").SetStatusCode(http.StatusInternalServerError)
+	ErrUnableToUpdateObject      apperrors.Error = ErrCatalogError.New("unable to update object").SetExpandError(true).SetStatusCode(http.StatusInternalServerError)
 	ErrUnableToDeleteObject      apperrors.Error = ErrCatalogError.New("unable to delete object").SetStatusCode(http.StatusInternalServerError)
 	ErrAlreadyExists             apperrors.Error = ErrCatalogError.New("object already exists").SetStatusCode(http.StatusConflict)
 	ErrInvalidSchema             apperrors.Error = ErrCatalogError.New("invalid schema").SetExpandError(true).SetStatusCode(http.StatusBadRequest)

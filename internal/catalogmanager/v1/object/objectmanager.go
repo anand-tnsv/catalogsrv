@@ -192,3 +192,14 @@ func (rm *V1ObjectManager) ToJson(ctx context.Context) ([]byte, apperrors.Error)
 	}
 	return j, nil
 }
+
+func (rm *V1ObjectManager) Compare(other schemamanager.ObjectManager, excludeMetadata bool) bool {
+	thisObj := rm.StorageRepresentation()
+	otherObj := other.StorageRepresentation()
+	// to exclude metadata, just exclude description. If there are other values in future, we need to do more here.
+	if excludeMetadata {
+		thisObj.Description = ""
+		otherObj.Description = ""
+	}
+	return thisObj.GetHash() == otherObj.GetHash()
+}

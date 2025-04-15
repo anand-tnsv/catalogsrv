@@ -503,6 +503,42 @@ func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.Catalog
 	return wasRemoved, nil
 }
 
+func (h *hatchCatalogDb) UpdateObjectHashForPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, hash string) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	tableName := getSchemaDirectoryTableName(t)
+	if tableName == "" {
+		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	query := `
+		UPDATE ` + tableName + `
+		SET directory = jsonb_set(
+			directory,
+			ARRAY[$1, 'hash'],
+			to_jsonb($2::TEXT)
+		)
+		WHERE directory_id = $3 AND tenant_id = $4;`
+
+	result, err := h.conn().ExecContext(ctx, query, path, hash, directoryID, tenantID)
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	if rowsAffected == 0 {
+		return dberror.ErrNotFound.Msg("object not found")
+	}
+
+	return nil
+}
+
 func (h *hatchCatalogDb) DeleteTree(ctx context.Context, directoryIds models.DirectoryIDs, path string) ([]string, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {

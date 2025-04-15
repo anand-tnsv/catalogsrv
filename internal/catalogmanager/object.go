@@ -461,7 +461,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 
 	m := om.Metadata()
 	parentPath := m.Path
-	pathWithName := parentPath + "/" + m.Name
+	pathWithName := path.Clean(parentPath + "/" + m.Name)
 
 	// get this objectRef from the directory
 	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, pathWithName)
@@ -720,7 +720,7 @@ func getClosestParentObjectFinder(ctx context.Context, m schemamanager.ObjectMet
 		return nil
 	}
 
-	startPath := strings.TrimRight(m.Path, "/") // remove trailing slash if exists
+	startPath := path.Clean(m.Path)
 
 	return func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error) {
 		path, obj, err := db.DB(ctx).FindClosestObject(ctx, t, dir.DirForType(t), targetName, startPath)
@@ -914,6 +914,36 @@ func (or *objectResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
 }
 
 func (or *objectResource) Update(ctx context.Context, rsrcJson []byte) apperrors.Error {
+	if or.workspaceID == uuid.Nil {
+		return ErrInvalidWorkspace
+	}
+	dir, err := getDirectoriesForWorkspace(ctx, or.workspaceID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("workspace_id", or.workspaceID.String()).Msg("failed to get directories for workspace")
+		return ErrInvalidWorkspace
+	}
+
+	m := &schemamanager.ObjectMetadata{
+		Catalog: or.name.Catalog,
+		Variant: types.NullableStringFrom(or.name.Variant),
+		Path:    or.name.ObjectPath,
+		Name:    or.name.ObjectName,
+	}
+
+	// get the new object
+	newObject, err := NewObject(ctx, rsrcJson, m)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to create new object")
+		return ErrUnableToUpdateObject.Err(err).Msg("failed to create new object")
+	}
+
+	// update the object
+	err = SaveObject(ctx, newObject, WithDirectories(dir))
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to save object")
+		return ErrUnableToUpdateObject.Err(err)
+	}
+
 	return nil
 }
 

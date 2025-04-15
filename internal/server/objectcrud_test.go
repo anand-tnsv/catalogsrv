@@ -763,6 +763,196 @@ func TestObjectCrud(t *testing.T) {
 		t.Logf("Response: %s", string(b))
 		t.FailNow()
 	}
+
+	// Update the object
+	reqYaml = `
+		version: v1
+		kind: Collection
+		metadata:
+			name: valid
+			catalog: valid-catalog
+			variant: valid-variant
+			path: /
+			description: This is a valid collection
+		spec: {}
+		`
+	replaceTabsWithSpaces(&reqYaml)
+	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
+	require.NoError(t, err)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	setRequestBodyAndHeader(t, httpReq, string(reqJson))
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Get the updated object
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// update just description
+	reqYaml = `
+		version: v1
+		kind: Collection
+		metadata:
+			name: valid
+			catalog: valid-catalog
+			variant: valid-variant
+			path: /
+			description: This is a new description
+		spec: {}
+		`
+	replaceTabsWithSpaces(&reqYaml)
+	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
+	require.NoError(t, err)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	setRequestBodyAndHeader(t, httpReq, string(reqJson))
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Get the updated object
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// update the collection with a dataType
+	reqYaml = `
+		version: v1
+		kind: Collection
+		metadata:
+			name: valid
+			catalog: valid-catalog
+			variant: valid-variant
+			path: /
+			description: This is a new description
+		spec:
+			parameters:
+				maxDelay:
+					schema: ""
+					dataType: Integer
+					default: 1000
+					annotations:
+		`
+	replaceTabsWithSpaces(&reqYaml)
+	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
+	require.NoError(t, err)
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	setRequestBodyAndHeader(t, httpReq, string(reqJson))
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Get the updated object
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	rspType = make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+	reqType = make(map[string]any)
+	err = json.Unmarshal(reqJson, &reqType)
+	assert.NoError(t, err)
+	assert.Equal(t, reqType, rspType)
+
+	// create a valid parameter
+	reqYaml = `
+				version: v1
+				kind: Parameter
+				metadata:
+				  name: integer-param-schema
+				  catalog: valid-catalog
+				  path: /
+				spec:
+				  dataType: Integer
+				  validation:
+				    minValue: 1
+				    maxValue: 10
+				  default: 5
+			`
+	replaceTabsWithSpaces(&reqYaml)
+	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
+	require.NoError(t, err)
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/create", nil)
+	setRequestBodyAndHeader(t, httpReq, string(reqJson))
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// check the location header in response
+	loc = response.Header().Get("Location")
+	assert.NotEmpty(t, loc)
+
+	// Get the parameter
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/parameter/integer-param-schema", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// update the collection with an the newly created parameter
+	reqYaml = `
+		version: v1
+		kind: Collection
+		metadata:
+			name: valid
+			catalog: valid-catalog
+			variant: valid-variant
+			path: /
+			description: This is a new description
+		spec:
+			parameters:
+				maxDelay:
+					schema: ""
+					dataType: Integer
+					default: 1000
+					annotations:
+				maxRetries:
+					schema: integer-param-schema
+					dataType: ""
+					default: 8
+					annotations:
+	`
+	replaceTabsWithSpaces(&reqYaml)
+	reqJson, err = yaml.YAMLToJSON([]byte(reqYaml))
+	require.NoError(t, err)
+
+	httpReq, _ = http.NewRequest("PUT", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	setRequestBodyAndHeader(t, httpReq, string(reqJson))
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Get the updated object
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/workspaces/"+id+"/collection/valid", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	rspType = make(map[string]any)
+	err = json.Unmarshal(response.Body.Bytes(), &rspType)
+	assert.NoError(t, err)
+	reqType = make(map[string]any)
+	err = json.Unmarshal(reqJson, &reqType)
+	assert.NoError(t, err)
+	assert.Equal(t, reqType, rspType)
+
 }
 
 func replaceTabsWithSpaces(s *string) {
