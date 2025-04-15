@@ -26,6 +26,7 @@ import (
 
 type VersionHeader struct {
 	Version string `json:"version"`
+	Kind    string `json:"kind"`
 }
 
 func NewSchema(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMetadata) (schemamanager.SchemaManager, apperrors.Error) {
@@ -49,7 +50,7 @@ func NewSchema(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMeta
 	}
 
 	// get the metadata, replace fields in json from provided metadata. Set defaults.
-	rsrcJson, m, err = canonicalizeMetadata(rsrcJson, m)
+	rsrcJson, m, err = canonicalizeMetadata(rsrcJson, version.Kind, m)
 	if err != nil {
 		return nil, validationerrors.ErrSchemaSerialization
 	}
@@ -75,10 +76,11 @@ type storeOptions struct {
 type Directories struct {
 	ParametersDir  uuid.UUID
 	CollectionsDir uuid.UUID
+	ValuesDir      uuid.UUID
 }
 
 func (d Directories) IsNil() bool {
-	return d.ParametersDir == uuid.Nil && d.CollectionsDir == uuid.Nil
+	return d.ParametersDir == uuid.Nil && d.CollectionsDir == uuid.Nil && d.ValuesDir == uuid.Nil
 }
 
 func (d Directories) DirForType(t types.CatalogObjectType) uuid.UUID {
@@ -87,6 +89,8 @@ func (d Directories) DirForType(t types.CatalogObjectType) uuid.UUID {
 		return d.ParametersDir
 	case types.CatalogObjectTypeCollectionSchema:
 		return d.CollectionsDir
+	case types.CatalogObjectTypeCatalogCollectionValue:
+		return d.ValuesDir
 	default:
 		return uuid.Nil
 	}
@@ -823,6 +827,10 @@ func getDirectoriesForWorkspace(ctx context.Context, workspaceId uuid.UUID) (Dir
 
 	if dir.CollectionsDir = wm.CollectionsDir(); dir.CollectionsDir == uuid.Nil {
 		return dir, ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
+	}
+
+	if dir.ValuesDir = wm.ValuesDir(); dir.ValuesDir == uuid.Nil {
+		return dir, ErrInvalidWorkspace.Msg("workspace does not have a values directory")
 	}
 
 	return dir, nil

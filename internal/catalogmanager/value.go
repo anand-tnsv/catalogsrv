@@ -88,7 +88,7 @@ func GetValue(ctx context.Context, m *ValueMetadata, dir Directories) (*valueSch
 	}
 
 	// get the values
-	valuesParam := om.CollectionSchemaManager().GetValues(ctx)
+	valuesParam := om.CollectionSchemaManager().GetDefaultValues()
 	values := make(valueSpec)
 	for param, value := range valuesParam {
 		values[param] = value.Value

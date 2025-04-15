@@ -34,7 +34,7 @@ func getMetadata(ctx context.Context, rsrcJson []byte) (*schemamanager.SchemaMet
 	return &rs.Metadata, nil
 }
 
-func canonicalizeMetadata(rsrcJson []byte, metadata *schemamanager.SchemaMetadata) ([]byte, *schemamanager.SchemaMetadata, apperrors.Error) {
+func canonicalizeMetadata(rsrcJson []byte, kind string, metadata *schemamanager.SchemaMetadata) ([]byte, *schemamanager.SchemaMetadata, apperrors.Error) {
 	if len(rsrcJson) == 0 {
 		return nil, nil, validationerrors.ErrEmptySchema
 	}
@@ -43,9 +43,16 @@ func canonicalizeMetadata(rsrcJson []byte, metadata *schemamanager.SchemaMetadat
 	if err := json.Unmarshal(rsrcJson, &fullMap); err != nil {
 		return nil, nil, validationerrors.ErrSchemaValidation.Msg("failed to unmarshal resource schema")
 	}
+	var (
+		rawMetadata json.RawMessage
+		ok          bool
+	)
+	if rawMetadata, ok = fullMap["metadata"]; !ok {
+		return nil, nil, validationerrors.ErrSchemaValidation.Msg("missing metadata in resource schema")
+	}
 	// get metadata in resource json
 	var m schemamanager.SchemaMetadata
-	err := json.Unmarshal(fullMap["metadata"], &m)
+	err := json.Unmarshal(rawMetadata, &m)
 	if err != nil {
 		return nil, nil, validationerrors.ErrSchemaValidation.Msg("failed to unmarshal metadata")
 	}
@@ -73,8 +80,10 @@ func canonicalizeMetadata(rsrcJson []byte, metadata *schemamanager.SchemaMetadat
 	}
 
 	// if hierarchical schemas are not enabled, set path to /
-	if !config.HierarchicalSchemas {
-		m.Path = "/"
+	if kind == types.CollectionSchemaKind || kind == types.ParameterSchemaKind {
+		if !config.HierarchicalSchemas {
+			m.Path = "/"
+		}
 	}
 
 	// marshal updated metadata back to json

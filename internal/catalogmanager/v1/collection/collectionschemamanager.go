@@ -101,7 +101,7 @@ func (cm *V1CollectionSchemaManager) GetValue(ctx context.Context, param string)
 	return cm.collectionSchema.GetValue(ctx, param)
 }
 
-func (cm *V1CollectionSchemaManager) GetValues(ctx context.Context) map[string]schemamanager.ParamValue {
+func (cm *V1CollectionSchemaManager) GetDefaultValues() map[string]schemamanager.ParamValue {
 	return cm.collectionSchema.Values
 }
 

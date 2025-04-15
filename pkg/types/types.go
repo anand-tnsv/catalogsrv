@@ -23,6 +23,7 @@ const (
 	WorkspaceKind        = "Workspace"
 	ParameterSchemaKind  = "ParameterSchema"
 	CollectionSchemaKind = "CollectionSchema"
+	CollectionKind       = "Collection"
 	ValueKind            = "Value"
 )
 

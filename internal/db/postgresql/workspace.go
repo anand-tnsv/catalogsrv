@@ -109,18 +109,36 @@ func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.
 	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCollectionSchema, &cd, tx); err != nil {
 		return err
 	}
+	vd := models.SchemaDirectory{
+		WorkspaceID: workspace.WorkspaceID,
+		VariantID:   workspace.VariantID,
+		CatalogID:   workspace.CatalogID,
+		TenantID:    workspace.TenantID,
+		Directory:   []byte("{}"), // Initialize with empty JSON
+	}
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCatalogCollectionValue, &vd, tx); err != nil {
+		return err
+	}
 
 	// update the parameter and collections directories in version
 	workspace.ParametersDir = pd.DirectoryID
 	workspace.CollectionsDir = cd.DirectoryID
+	workspace.ValuesDir = vd.DirectoryID
 
 	// update the worskpace with the directories
 	updateQuery := `
 		UPDATE workspaces
-		SET parameters_directory = $1, collections_directory = $2
-		WHERE workspace_id = $3 AND tenant_id = $4;
+		SET parameters_directory = $1, collections_directory = $2, values_directory = $3
+		WHERE workspace_id = $4 AND tenant_id = $5;
 	`
-	_, errDb = tx.ExecContext(ctx, updateQuery, workspace.ParametersDir, workspace.CollectionsDir, workspace.WorkspaceID, workspace.TenantID)
+	_, errDb = tx.ExecContext(ctx, updateQuery,
+		workspace.ParametersDir,
+		workspace.CollectionsDir,
+		workspace.ValuesDir,
+		workspace.WorkspaceID,
+		workspace.TenantID,
+	)
+
 	if errDb != nil {
 		tx.Rollback()
 		log.Ctx(ctx).Error().Err(errDb).Msg("failed to update workspace with directories")
@@ -176,7 +194,7 @@ func (h *hatchCatalogDb) GetWorkspace(ctx context.Context, workspaceID uuid.UUID
 	}
 
 	query := `
-		SELECT workspace_id, label, description, info, base_version, parameters_directory, collections_directory, variant_id, catalog_id, tenant_id, created_at, updated_at
+		SELECT workspace_id, label, description, info, base_version, parameters_directory, collections_directory, values_directory, variant_id, catalog_id, tenant_id, created_at, updated_at
 		FROM workspaces
 		WHERE workspace_id = $1 AND tenant_id = $2;
 	`
@@ -186,7 +204,7 @@ func (h *hatchCatalogDb) GetWorkspace(ctx context.Context, workspaceID uuid.UUID
 	var label sql.NullString
 	err := row.Scan(
 		&workspace.WorkspaceID, &label, &workspace.Description, &workspace.Info,
-		&workspace.BaseVersion, &workspace.ParametersDir, &workspace.CollectionsDir, &workspace.VariantID, &workspace.CatalogID, &workspace.TenantID,
+		&workspace.BaseVersion, &workspace.ParametersDir, &workspace.CollectionsDir, &workspace.ValuesDir, &workspace.VariantID, &workspace.CatalogID, &workspace.TenantID,
 		&workspace.CreatedAt, &workspace.UpdatedAt,
 	)
 	if err != nil {
@@ -222,7 +240,7 @@ func (h *hatchCatalogDb) GetWorkspaceByLabel(ctx context.Context, catalogID uuid
 	}
 
 	query := `
-		SELECT workspace_id, label, description, info, base_version, parameters_directory, collections_directory, variant_id, catalog_id, tenant_id, created_at, updated_at
+		SELECT workspace_id, label, description, info, base_version, parameters_directory, collections_directory, values_directory, variant_id, catalog_id, tenant_id, created_at, updated_at
 		FROM workspaces
 		WHERE label = $1 AND catalog_id = $2 AND variant_id = $3 AND tenant_id = $4;
 	`
@@ -231,7 +249,7 @@ func (h *hatchCatalogDb) GetWorkspaceByLabel(ctx context.Context, catalogID uuid
 	workspace := &models.Workspace{}
 	err := row.Scan(
 		&workspace.WorkspaceID, &workspace.Label, &workspace.Description, &workspace.Info,
-		&workspace.BaseVersion, &workspace.ParametersDir, &workspace.CollectionsDir,
+		&workspace.BaseVersion, &workspace.ParametersDir, &workspace.CollectionsDir, &workspace.ValuesDir,
 		&workspace.VariantID, &workspace.CatalogID, &workspace.TenantID,
 		&workspace.CreatedAt, &workspace.UpdatedAt,
 	)
@@ -258,8 +276,8 @@ func (h *hatchCatalogDb) UpdateWorkspace(ctx context.Context, workspace *models.
 
 	query := `
 		UPDATE workspaces
-		SET label = $1, description = $2, info = $3, base_version = $4, parameters_directory = $5, collections_directory = $6
-		WHERE workspace_id = $7 AND tenant_id = $8;
+		SET label = $1, description = $2, info = $3, base_version = $4, parameters_directory = $5, collections_directory = $6, values_directory = $7
+		WHERE workspace_id = $8 AND tenant_id = $9;
 	`
 
 	result, err := h.conn().ExecContext(ctx, query,
@@ -269,6 +287,7 @@ func (h *hatchCatalogDb) UpdateWorkspace(ctx context.Context, workspace *models.
 		workspace.BaseVersion,
 		workspace.ParametersDir,
 		workspace.CollectionsDir,
+		workspace.ValuesDir,
 		workspace.WorkspaceID,
 		tenantID,
 	)

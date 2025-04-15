@@ -1,7 +1,11 @@
 package schemamanager
 
+import "github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
+
 type CollectionManager interface {
-	GetSchema() []byte
-	GetMetadata() SchemaMetadata
-	GetCollectionSchemaManager() CollectionSchemaManager
+	Schema() string
+	Metadata() SchemaMetadata
+	CollectionSchemaManager() CollectionSchemaManager
+	CollectionSchema() []byte
+	StorageRepresentation() *schemastore.SchemaStorageRepresentation
 }

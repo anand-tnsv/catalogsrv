@@ -3,6 +3,8 @@ package schemastore
 import (
 	"encoding/json"
 
+	"github.com/mugiliam/common/apperrors"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
@@ -15,8 +17,12 @@ type SchemaStorageRepresentation struct {
 }
 
 // Serialize converts the SchemaStorageRepresentation to a JSON byte array
-func (s *SchemaStorageRepresentation) Serialize() ([]byte, error) {
-	return json.Marshal(s)
+func (s *SchemaStorageRepresentation) Serialize() ([]byte, apperrors.Error) {
+	j, err := json.Marshal(s)
+	if err != nil {
+		return nil, validationerrors.ErrSchemaSerialization
+	}
+	return j, nil
 }
 
 // GetHash returns the SHA-512 hash of the normalized SchemaStorageRepresentation
@@ -26,8 +32,8 @@ func (s *SchemaStorageRepresentation) GetHash() string {
 		return ""
 	}
 	// Normalize the JSON, so 2 equivalent representations yield the same hash
-	nsz, err := NormalizeJSON(sz)
-	if err != nil {
+	nsz, e := NormalizeJSON(sz)
+	if e != nil {
 		return ""
 	}
 	hash := HexEncodedSHA512(nsz)

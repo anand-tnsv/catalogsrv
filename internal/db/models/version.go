@@ -46,6 +46,7 @@ type Version struct {
 	Info           pgtype.JSONB   `db:"info"` // JSONB
 	ParametersDir  uuid.UUID      `db:"parameters_directory"`
 	CollectionsDir uuid.UUID      `db:"collections_directory"`
+	ValuesDir      uuid.UUID      `db:"values_directory"`
 	VariantID      uuid.UUID      `db:"variant_id"`
 	CatalogID      uuid.UUID      `db:"catalog_id"`
 	TenantID       types.TenantId `db:"tenant_id"`

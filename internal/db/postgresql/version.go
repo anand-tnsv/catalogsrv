@@ -89,7 +89,7 @@ func (h *hatchCatalogDb) createVersionWithTransaction(ctx context.Context, versi
 	}
 	version.VersionNum = versionNum
 
-	// Create the parameters and collections directories
+	// Create the parameters, collections, and values directories
 	pd := models.SchemaDirectory{
 		VersionNum: version.VersionNum,
 		VariantID:  version.VariantID,
@@ -110,16 +110,27 @@ func (h *hatchCatalogDb) createVersionWithTransaction(ctx context.Context, versi
 	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCollectionSchema, &cd, tx); err != nil {
 		return err
 	}
+	vd := models.SchemaDirectory{
+		VersionNum: version.VersionNum,
+		VariantID:  version.VariantID,
+		CatalogID:  version.CatalogID,
+		TenantID:   version.TenantID,
+		Directory:  []byte("{}"), // Initialize with empty JSON
+	}
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCollectionSchema, &vd, tx); err != nil {
+		return err
+	}
 
-	// update the parameter and collections directories in version
+	// update the parameter, collections, and values directories in version
 	version.ParametersDir = pd.DirectoryID
 	version.CollectionsDir = cd.DirectoryID
+	version.ValuesDir = vd.DirectoryID
 
 	query = `
-		UPDATE versions SET parameters_directory = $1, collections_directory = $2
-		WHERE version_num = $3 AND variant_id = $4 AND catalog_id = $5 AND tenant_id = $6;
+		UPDATE versions SET parameters_directory = $1, collections_directory = $2, values_directory = $3
+		WHERE version_num = $4 AND variant_id = $5 AND catalog_id = $6 AND tenant_id = $7;
 	`
-	_, err = tx.ExecContext(ctx, query, version.ParametersDir, version.CollectionsDir, version.VersionNum, version.VariantID, version.CatalogID, version.TenantID)
+	_, err = tx.ExecContext(ctx, query, version.ParametersDir, version.CollectionsDir, version.ValuesDir, version.VersionNum, version.VariantID, version.CatalogID, version.TenantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to update version with directories")
 		return dberror.ErrDatabase.Err(err)

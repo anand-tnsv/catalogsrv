@@ -181,6 +181,10 @@ func (wm *workspaceManager) CollectionsDir() uuid.UUID {
 	return wm.w.CollectionsDir
 }
 
+func (wm *workspaceManager) ValuesDir() uuid.UUID {
+	return wm.w.ValuesDir
+}
+
 func LoadWorkspaceManagerByID(ctx context.Context, workspaceID uuid.UUID) (schemamanager.WorkspaceManager, apperrors.Error) {
 	if workspaceID == uuid.Nil {
 		return nil, ErrInvalidWorkspace

@@ -16,6 +16,7 @@ type WorkspaceManager interface {
 	BaseVersion() int
 	ParametersDir() uuid.UUID
 	CollectionsDir() uuid.UUID
+	ValuesDir() uuid.UUID
 	Save(context.Context) apperrors.Error
 	ToJson(context.Context) ([]byte, apperrors.Error)
 }
