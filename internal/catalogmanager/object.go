@@ -205,7 +205,7 @@ func SaveObject(ctx context.Context, om schemamanager.ObjectManager, opts ...Obj
 	}
 
 	if om.Type() == types.CatalogObjectTypeCollectionSchema {
-		om.CollectionManager().SetDefaultValues(ctx)
+		om.CollectionSchemaManager().SetDefaultValues(ctx)
 	}
 
 	s := om.StorageRepresentation()
@@ -418,7 +418,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.ObjectManager
 	// if there are reference to this object - either new or updated - we need to validate them
 	if len(newRefs) > 0 {
 		loaders := getObjectLoaders(ctx, om.Metadata(), WithDirectories(dir))
-		if pm := om.ParameterManager(); pm != nil {
+		if pm := om.ParameterSchemaManager(); pm != nil {
 			if err = pm.ValidateDependencies(ctx, loaders, newRefs); err != nil {
 				return
 			}
@@ -452,7 +452,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.ObjectManage
 		return
 	}
 
-	cm := om.CollectionManager()
+	cm := om.CollectionSchemaManager()
 	if cm == nil {
 		log.Ctx(ctx).Error().Msg("collection manager is nil")
 		err = ErrCatalogError

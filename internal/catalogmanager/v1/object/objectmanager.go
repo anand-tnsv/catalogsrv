@@ -17,9 +17,9 @@ import (
 )
 
 type V1ObjectManager struct {
-	resourceSchema    *ObjectSchema
-	parameterManager  *parameter.V1ParameterManager
-	collectionManager *collection.V1CollectionManager
+	resourceSchema          *ObjectSchema
+	parameterSchemaManager  *parameter.V1ParameterSchemaManager
+	collectionSchemaManager *collection.V1CollectionSchemaManager
 }
 
 var _ schemamanager.ObjectManager = &V1ObjectManager{} // Ensure V1ObjectManager implements schemamanager.ObjectManager
@@ -87,11 +87,11 @@ func buildObjectManager(ctx context.Context, rs *ObjectSchema, rsrcJson []byte, 
 	var err apperrors.Error
 	switch rs.Kind {
 	case "ParameterSchema":
-		if rm.parameterManager, err = parameter.NewV1ParameterManager(ctx, rs.Version, rsrcJson, options...); err != nil {
+		if rm.parameterSchemaManager, err = parameter.NewV1ParameterSchemaManager(ctx, rs.Version, rsrcJson, options...); err != nil {
 			return nil, err
 		}
 	case "CollectionSchema":
-		if rm.collectionManager, err = collection.NewV1CollectionManager(ctx, rs.Version, rsrcJson, options...); err != nil {
+		if rm.collectionSchemaManager, err = collection.NewV1CollectionSchemaManager(ctx, rs.Version, rsrcJson, options...); err != nil {
 			return nil, err
 		}
 	default:
@@ -160,24 +160,24 @@ func (rm *V1ObjectManager) SetDescription(description string) {
 	rm.resourceSchema.Metadata.Description = description
 }
 
-func (rm *V1ObjectManager) ParameterManager() schemamanager.ParameterManager {
-	return rm.parameterManager
+func (rm *V1ObjectManager) ParameterSchemaManager() schemamanager.ParameterSchemaManager {
+	return rm.parameterSchemaManager
 }
 
-func (rm *V1ObjectManager) CollectionManager() schemamanager.CollectionManager {
-	return rm.collectionManager
+func (rm *V1ObjectManager) CollectionSchemaManager() schemamanager.CollectionSchemaManager {
+	return rm.collectionSchemaManager
 }
 
 func (rm *V1ObjectManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	var s *schemastore.SchemaStorageRepresentation = nil
 	switch rm.Kind() {
 	case "ParameterSchema":
-		if rm.parameterManager != nil {
-			s = rm.parameterManager.StorageRepresentation()
+		if rm.parameterSchemaManager != nil {
+			s = rm.parameterSchemaManager.StorageRepresentation()
 		}
 	case "CollectionSchema":
-		if rm.collectionManager != nil {
-			s = rm.collectionManager.StorageRepresentation()
+		if rm.collectionSchemaManager != nil {
+			s = rm.collectionSchemaManager.StorageRepresentation()
 		}
 	}
 	s.Description = rm.resourceSchema.Metadata.Description

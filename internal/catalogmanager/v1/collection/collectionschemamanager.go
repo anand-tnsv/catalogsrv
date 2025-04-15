@@ -11,12 +11,12 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-type V1CollectionManager struct {
+type V1CollectionSchemaManager struct {
 	version          string
 	collectionSchema CollectionSchema
 }
 
-func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte, options ...schemamanager.Options) (*V1CollectionManager, apperrors.Error) {
+func NewV1CollectionSchemaManager(ctx context.Context, version string, rsrcJson []byte, options ...schemamanager.Options) (*V1CollectionSchemaManager, apperrors.Error) {
 	o := schemamanager.OptionsConfig{}
 	for _, option := range options {
 		option(&o)
@@ -57,13 +57,13 @@ func NewV1CollectionManager(ctx context.Context, version string, rsrcJson []byte
 		}
 	}
 
-	return &V1CollectionManager{
+	return &V1CollectionSchemaManager{
 		version:          version,
 		collectionSchema: *cs,
 	}, nil
 }
 
-func (cm *V1CollectionManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
+func (cm *V1CollectionSchemaManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	s := schemastore.SchemaStorageRepresentation{
 		Version: cm.version,
 		Type:    types.CatalogObjectTypeCollectionSchema,
@@ -73,15 +73,15 @@ func (cm *V1CollectionManager) StorageRepresentation() *schemastore.SchemaStorag
 	return &s
 }
 
-func (cm *V1CollectionManager) ParameterNames() []string {
+func (cm *V1CollectionSchemaManager) ParameterNames() []string {
 	return cm.collectionSchema.ParameterNames()
 }
 
-func (cm *V1CollectionManager) ParametersWithSchema(schemaName string) []schemamanager.ParameterSpec {
+func (cm *V1CollectionSchemaManager) ParametersWithSchema(schemaName string) []schemamanager.ParameterSpec {
 	return cm.collectionSchema.ParametersWithSchema(schemaName)
 }
 
-func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, existingRefs schemamanager.ObjectReferences) (schemamanager.ObjectReferences, apperrors.Error) {
+func (cm *V1CollectionSchemaManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, existingRefs schemamanager.ObjectReferences) (schemamanager.ObjectReferences, apperrors.Error) {
 	refs, ves := cm.collectionSchema.ValidateDependencies(ctx, loaders, existingRefs)
 	if ves != nil {
 		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
@@ -89,7 +89,7 @@ func (cm *V1CollectionManager) ValidateDependencies(ctx context.Context, loaders
 	return refs, nil
 }
 
-func (cm *V1CollectionManager) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) apperrors.Error {
+func (cm *V1CollectionSchemaManager) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) apperrors.Error {
 	ves := cm.collectionSchema.ValidateValue(ctx, loaders, param, value)
 	if ves != nil {
 		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
@@ -97,15 +97,15 @@ func (cm *V1CollectionManager) ValidateValue(ctx context.Context, loaders schema
 	return nil
 }
 
-func (cm *V1CollectionManager) GetValue(ctx context.Context, param string) schemamanager.ParamValue {
+func (cm *V1CollectionSchemaManager) GetValue(ctx context.Context, param string) schemamanager.ParamValue {
 	return cm.collectionSchema.GetValue(ctx, param)
 }
 
-func (cm *V1CollectionManager) GetValues(ctx context.Context) map[string]schemamanager.ParamValue {
+func (cm *V1CollectionSchemaManager) GetValues(ctx context.Context) map[string]schemamanager.ParamValue {
 	return cm.collectionSchema.Values
 }
 
-func (cm *V1CollectionManager) SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error {
+func (cm *V1CollectionSchemaManager) SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error {
 	err := cm.collectionSchema.SetValue(ctx, param, value)
 	if err != nil {
 		return validationerrors.ErrSchemaValidation.Msg(err.Error())
@@ -113,6 +113,6 @@ func (cm *V1CollectionManager) SetValue(ctx context.Context, param string, value
 	return nil
 }
 
-func (cm *V1CollectionManager) SetDefaultValues(ctx context.Context) {
+func (cm *V1CollectionSchemaManager) SetDefaultValues(ctx context.Context) {
 	cm.collectionSchema.SetDefaultValues(ctx)
 }

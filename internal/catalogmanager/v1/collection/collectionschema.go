@@ -253,7 +253,7 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 				return dataType, ref, ves
 			}
-			pm := om.ParameterManager()
+			pm := om.ParameterSchemaManager()
 			if pm == nil {
 				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 				return dataType, ref, ves

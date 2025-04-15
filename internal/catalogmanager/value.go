@@ -34,6 +34,25 @@ type ValueMetadata struct {
 	Collection string               `json:"collection" validate:"required,resourcePathValidator"`
 }
 
+type collectionSchema struct {
+	Version  string             `json:"version" validate:"required"`
+	Kind     string             `json:"kind" validate:"required,kindValidator"`
+	Metadata CollectionMetadata `json:"metadata" validate:"required"`
+	Spec     collectionSpec     `json:"spec" validate:"required"`
+}
+
+type CollectionMetadata struct {
+	Name        string               `json:"name" validate:"required,nameFormatValidator"`
+	Catalog     string               `json:"catalog" validate:"required,resourceNameValidator"`
+	Variant     types.NullableString `json:"variant" validate:"required,resourceNameValidator"`
+	Path        string               `json:"path" validate:"required,resourcePathValidator"`
+	Description string               `json:"description"`
+}
+
+type collectionSpec struct {
+	Schema string `json:"schema" validate:"required, nameFormatValidator"`
+}
+
 type valueSpec map[string]types.NullableAny
 
 func (vs *valueSchema) Validate() schemaerr.ValidationErrors {
@@ -48,6 +67,37 @@ func (vs *valueSchema) Validate() schemaerr.ValidationErrors {
 	}
 
 	value := reflect.ValueOf(vs).Elem()
+	typeOfCS := value.Type()
+
+	for _, e := range ve {
+		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
+		switch e.Tag() {
+		case "required":
+			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
+		case "nameFormatValidator":
+			val, _ := e.Value().(string)
+			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
+		case "resourcePathValidator":
+			ves = append(ves, schemaerr.ErrInvalidObjectPath(jsonFieldName))
+		default:
+			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
+		}
+	}
+	return ves
+}
+
+func (cs *collectionSchema) Validate() schemaerr.ValidationErrors {
+	var ves schemaerr.ValidationErrors
+	err := schemavalidator.V().Struct(cs)
+	if err == nil {
+		return nil
+	}
+	ve, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return append(ves, schemaerr.ErrInvalidSchema)
+	}
+
+	value := reflect.ValueOf(cs).Elem()
 	typeOfCS := value.Type()
 
 	for _, e := range ve {
@@ -88,7 +138,7 @@ func GetValue(ctx context.Context, m *ValueMetadata, dir Directories) (*valueSch
 	}
 
 	// get the values
-	valuesParam := om.CollectionManager().GetValues(ctx)
+	valuesParam := om.CollectionSchemaManager().GetValues(ctx)
 	values := make(valueSpec)
 	for param, value := range valuesParam {
 		values[param] = value.Value
@@ -178,7 +228,7 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 	loaders.ParameterRef = getParameterRefForName(refs)
 
 	// validate the value against the collection
-	c := om.CollectionManager()
+	c := om.CollectionSchemaManager()
 	if c == nil {
 		return validationerrors.ErrSchemaValidation.Msg("failed to load collection manager")
 	}

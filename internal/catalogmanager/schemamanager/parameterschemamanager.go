@@ -20,7 +20,7 @@ type ParamValue struct {
 
 type ParamValues map[string]ParamValue
 
-type ParameterManager interface {
+type ParameterSchemaManager interface {
 	DataType() ParamDataType
 	Default() any
 	ValidateValue(types.NullableAny) apperrors.Error

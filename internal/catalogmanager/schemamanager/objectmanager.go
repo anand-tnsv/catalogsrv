@@ -12,8 +12,8 @@ type ObjectManager interface {
 	Version() string
 	Kind() string
 	Type() types.CatalogObjectType
-	ParameterManager() ParameterManager
-	CollectionManager() CollectionManager
+	ParameterSchemaManager() ParameterSchemaManager
+	CollectionSchemaManager() CollectionSchemaManager
 	StorageRepresentation() *schemastore.SchemaStorageRepresentation
 	Metadata() ObjectMetadata
 	Name() string

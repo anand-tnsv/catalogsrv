@@ -14,7 +14,7 @@ type ParameterSpec struct {
 	Value   types.NullableAny
 }
 
-type CollectionManager interface {
+type CollectionSchemaManager interface {
 	ParameterNames() []string
 	ParametersWithSchema(schemaName string) []ParameterSpec
 	ValidateDependencies(context.Context, ObjectLoaders, ObjectReferences) (ObjectReferences, apperrors.Error)

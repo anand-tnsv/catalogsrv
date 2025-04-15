@@ -14,15 +14,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type V1ParameterManager struct {
+type V1ParameterSchemaManager struct {
 	version         string
 	parameterSchema ParameterSchema
 	parameter       schemamanager.Parameter
 }
 
-var _ schemamanager.ParameterManager = &V1ParameterManager{} // Ensure V1ParameterManager implements schemamanager.ParameterManager
+var _ schemamanager.ParameterSchemaManager = &V1ParameterSchemaManager{} // Ensure V1ParameterSchemaManager implements schemamanager.ParameterSchemaManager
 
-func NewV1ParameterManager(ctx context.Context, version string, rsrcJson []byte, options ...schemamanager.Options) (*V1ParameterManager, apperrors.Error) {
+func NewV1ParameterSchemaManager(ctx context.Context, version string, rsrcJson []byte, options ...schemamanager.Options) (*V1ParameterSchemaManager, apperrors.Error) {
 	o := schemamanager.OptionsConfig{}
 	for _, option := range options {
 		option(&o)
@@ -66,29 +66,29 @@ func NewV1ParameterManager(ctx context.Context, version string, rsrcJson []byte,
 		}
 	}
 
-	return &V1ParameterManager{
+	return &V1ParameterSchemaManager{
 		version:         version,
 		parameterSchema: *ps,
 		parameter:       parameter,
 	}, nil
 }
 
-func (pm *V1ParameterManager) DataType() schemamanager.ParamDataType {
+func (pm *V1ParameterSchemaManager) DataType() schemamanager.ParamDataType {
 	return schemamanager.ParamDataType{
 		Type:    pm.parameterSchema.Spec.DataType,
 		Version: pm.version,
 	}
 }
 
-func (pm *V1ParameterManager) Default() interface{} {
+func (pm *V1ParameterSchemaManager) Default() interface{} {
 	return pm.parameter.DefaultValue()
 }
 
-func (pm *V1ParameterManager) ValidateValue(value types.NullableAny) apperrors.Error {
+func (pm *V1ParameterSchemaManager) ValidateValue(value types.NullableAny) apperrors.Error {
 	return pm.parameter.ValidateValue(value)
 }
 
-func (pm *V1ParameterManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
+func (pm *V1ParameterSchemaManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	s := schemastore.SchemaStorageRepresentation{
 		Version: pm.version,
 		Type:    types.CatalogObjectTypeParameterSchema,
@@ -97,7 +97,7 @@ func (pm *V1ParameterManager) StorageRepresentation() *schemastore.SchemaStorage
 	return &s
 }
 
-func (pm *V1ParameterManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, collectionRefs schemamanager.ObjectReferences) (err apperrors.Error) {
+func (pm *V1ParameterSchemaManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, collectionRefs schemamanager.ObjectReferences) (err apperrors.Error) {
 	var ves schemaerr.ValidationErrors
 	defer func() {
 		if ves != nil {
@@ -116,7 +116,7 @@ func (pm *V1ParameterManager) ValidateDependencies(ctx context.Context, loaders 
 			log.Ctx(ctx).Error().Str("collectionschema", collectionRef.Name).Msg("failed to load collection")
 			continue
 		}
-		cm := om.CollectionManager()
+		cm := om.CollectionSchemaManager()
 		if cm == nil {
 			log.Ctx(ctx).Error().Str("collectionschema", collectionRef.Name).Msg("failed to load collection manager")
 			continue
