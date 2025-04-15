@@ -6,25 +6,25 @@ import (
 )
 
 // We'll keep this a struct, so this is extensible in the future
-type ObjectReference struct {
+type SchemaReference struct {
 	Name string `json:"name"`
 }
 
-func (pr ObjectReference) String() string {
+func (pr SchemaReference) String() string {
 	return pr.Name
 }
 
-func (pr ObjectReference) ObjectName() string {
+func (pr SchemaReference) SchemaName() string {
 	return path.Base(pr.Name)
 }
 
-func (pr ObjectReference) Path() string {
+func (pr SchemaReference) Path() string {
 	return path.Dir(pr.Name)
 }
 
-type ObjectReferences []ObjectReference
+type SchemaReferences []SchemaReference
 
-func (prs ObjectReferences) Serialize() ([]byte, error) {
+func (prs SchemaReferences) Serialize() ([]byte, error) {
 	s, err := json.Marshal(prs)
 	if err != nil {
 		return nil, err
@@ -32,8 +32,8 @@ func (prs ObjectReferences) Serialize() ([]byte, error) {
 	return s, nil
 }
 
-func DeserializeObjectReferences(b []byte) (ObjectReferences, error) {
-	prs := ObjectReferences{}
+func DeserializeSchemaReferences(b []byte) (SchemaReferences, error) {
+	prs := SchemaReferences{}
 	err := json.Unmarshal(b, &prs)
 	return prs, err
 }

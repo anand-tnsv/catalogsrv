@@ -99,10 +99,10 @@ func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name Resou
 		return NewWorkspaceResource(ctx, rsrcJson, name)
 	case types.CollectionSchemaKind:
 		name.ObjectType = types.CatalogObjectTypeCollectionSchema
-		return NewObjectResource(ctx, rsrcJson, name)
+		return NewSchemaResource(ctx, rsrcJson, name)
 	case types.ParameterSchemaKind:
 		name.ObjectType = types.CatalogObjectTypeParameterSchema
-		return NewObjectResource(ctx, rsrcJson, name)
+		return NewSchemaResource(ctx, rsrcJson, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }
@@ -116,9 +116,9 @@ func ResourceManagerFromName(ctx context.Context, kind string, name ResourceName
 	case types.WorkspaceKind:
 		return NewWorkspaceResource(ctx, nil, name)
 	case types.CollectionSchemaKind:
-		return NewObjectResource(ctx, nil, name)
+		return NewSchemaResource(ctx, nil, name)
 	case types.ParameterSchemaKind:
-		return NewObjectResource(ctx, nil, name)
+		return NewSchemaResource(ctx, nil, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }

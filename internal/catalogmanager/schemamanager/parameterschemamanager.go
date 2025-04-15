@@ -24,6 +24,6 @@ type ParameterSchemaManager interface {
 	DataType() ParamDataType
 	Default() any
 	ValidateValue(types.NullableAny) apperrors.Error
-	ValidateDependencies(ctx context.Context, loaders ObjectLoaders, collectionRefs ObjectReferences) apperrors.Error
+	ValidateDependencies(ctx context.Context, loaders SchemaLoaders, collectionRefs SchemaReferences) apperrors.Error
 	StorageRepresentation() *schemastore.SchemaStorageRepresentation
 }

@@ -209,7 +209,7 @@ spec:
 			ctx = common.SetProjectIdInContext(ctx, projectID)
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
-				_, err := NewObject(ctx, jsonData, nil)
+				_, err := NewSchema(ctx, jsonData, nil)
 				errStr := ""
 				if err != nil {
 					errStr = err.Error()
@@ -375,7 +375,7 @@ spec:
 			ctx = common.SetProjectIdInContext(ctx, projectID)
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlData))
 			if assert.NoError(t, err) {
-				_, err := NewObject(ctx, jsonData, nil)
+				_, err := NewSchema(ctx, jsonData, nil)
 				errStr := ""
 				if err != nil {
 					errStr = err.Error()

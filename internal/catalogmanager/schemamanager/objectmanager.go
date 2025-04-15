@@ -8,14 +8,14 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-type ObjectManager interface {
+type SchemaManager interface {
 	Version() string
 	Kind() string
 	Type() types.CatalogObjectType
 	ParameterSchemaManager() ParameterSchemaManager
 	CollectionSchemaManager() CollectionSchemaManager
 	StorageRepresentation() *schemastore.SchemaStorageRepresentation
-	Metadata() ObjectMetadata
+	Metadata() SchemaMetadata
 	Name() string
 	Path() string
 	FullyQualifiedName() string
@@ -26,19 +26,19 @@ type ObjectManager interface {
 	SetCatalog(catalog string)
 	SetDescription(description string)
 	ToJson(ctx context.Context) ([]byte, apperrors.Error)
-	Compare(other ObjectManager, excludeMetadata bool) bool
+	Compare(other SchemaManager, excludeMetadata bool) bool
 }
 
-type ClosestParentObjectFinder func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error)
+type ClosestParentSchemaFinder func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error)
 type ParameterReferenceForName func(name string) string
-type ObjectLoaderByPath func(ctx context.Context, t types.CatalogObjectType, m *ObjectMetadata) (ObjectManager, apperrors.Error)
-type ObjectLoaderByHash func(ctx context.Context, t types.CatalogObjectType, hash string, m *ObjectMetadata) (ObjectManager, apperrors.Error)
-type SelfMetadata func() ObjectMetadata
+type SchemaLoaderByPath func(ctx context.Context, t types.CatalogObjectType, m *SchemaMetadata) (SchemaManager, apperrors.Error)
+type SchemaLoaderByHash func(ctx context.Context, t types.CatalogObjectType, hash string, m *SchemaMetadata) (SchemaManager, apperrors.Error)
+type SelfMetadata func() SchemaMetadata
 
-type ObjectLoaders struct {
-	ByPath        ObjectLoaderByPath
-	ByHash        ObjectLoaderByHash
-	ClosestParent ClosestParentObjectFinder
+type SchemaLoaders struct {
+	ByPath        SchemaLoaderByPath
+	ByHash        SchemaLoaderByHash
+	ClosestParent ClosestParentSchemaFinder
 	ParameterRef  ParameterReferenceForName
 	SelfMetadata  SelfMetadata
 }

@@ -97,7 +97,7 @@ func (pm *V1ParameterSchemaManager) StorageRepresentation() *schemastore.SchemaS
 	return &s
 }
 
-func (pm *V1ParameterSchemaManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, collectionRefs schemamanager.ObjectReferences) (err apperrors.Error) {
+func (pm *V1ParameterSchemaManager) ValidateDependencies(ctx context.Context, loaders schemamanager.SchemaLoaders, collectionRefs schemamanager.SchemaReferences) (err apperrors.Error) {
 	var ves schemaerr.ValidationErrors
 	defer func() {
 		if ves != nil {
@@ -110,7 +110,7 @@ func (pm *V1ParameterSchemaManager) ValidateDependencies(ctx context.Context, lo
 	for _, collectionRef := range collectionRefs {
 		m := loaders.SelfMetadata()
 		m.Path = collectionRef.Path()
-		m.Name = collectionRef.ObjectName()
+		m.Name = collectionRef.SchemaName()
 		om, err := loaders.ByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m)
 		if err != nil {
 			log.Ctx(ctx).Error().Str("collectionschema", collectionRef.Name).Msg("failed to load collection")

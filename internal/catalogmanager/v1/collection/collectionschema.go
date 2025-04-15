@@ -32,7 +32,6 @@ type Parameter struct {
 	DataType    string            `json:"dataType" validate:"required_without=Schema,excluded_unless=Schema '',omitempty,nameFormatValidator"`
 	Default     types.NullableAny `json:"default"`
 	Annotations Annotations       `json:"annotations" validate:"omitempty,dive,keys,noSpaces,endkeys,noSpaces"`
-	// Value       types.NullableAny `json:"value"`
 }
 
 type Annotations map[string]string
@@ -81,11 +80,11 @@ func (cs *CollectionSchema) Validate() schemaerr.ValidationErrors {
 	return ves
 }
 
-func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, existingRefs schemamanager.ObjectReferences) (schemamanager.ObjectReferences, schemaerr.ValidationErrors) {
+func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders schemamanager.SchemaLoaders, existingRefs schemamanager.SchemaReferences) (schemamanager.SchemaReferences, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
-	var refs schemamanager.ObjectReferences
+	var refs schemamanager.SchemaReferences
 	var dataType schemamanager.ParamDataType
-	refMap := make(map[string]schemamanager.ObjectReference)
+	refMap := make(map[string]schemamanager.SchemaReference)
 	if loaders.ClosestParent == nil || loaders.ByHash == nil || loaders.ByPath == nil {
 		return nil, append(ves, schemaerr.ErrMissingObjectLoaders(""))
 	}
@@ -98,12 +97,12 @@ func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders sc
 		if p.Schema != "" {
 			var schemaPath string
 			for _, ref := range existingRefs {
-				if ref.ObjectName() == p.Schema {
+				if ref.SchemaName() == p.Schema {
 					schemaPath = ref.Name
 					break
 				}
 			}
-			var ref schemamanager.ObjectReference
+			var ref schemamanager.SchemaReference
 			var ve schemaerr.ValidationErrors
 			dataType, ref, ve = validateParameterSchemaDependency(ctx, loaders, n, schemaPath, &p)
 			if ve != nil {
@@ -130,7 +129,7 @@ func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders sc
 	return refs, ves
 }
 
-func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) schemaerr.ValidationErrors {
+func (cs *CollectionSchema) ValidateValue(ctx context.Context, loaders schemamanager.SchemaLoaders, param string, value types.NullableAny) schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 	if value.IsNil() {
 		return ves
@@ -219,9 +218,9 @@ func (cs *CollectionSchema) ParametersWithSchema(schemaName string) []schemamana
 	return params
 }
 
-func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.ObjectLoaders, name string, schemaPath string, p *Parameter) (schemamanager.ParamDataType, schemamanager.ObjectReference, schemaerr.ValidationErrors) {
+func validateParameterSchemaDependency(ctx context.Context, loaders schemamanager.SchemaLoaders, name string, schemaPath string, p *Parameter) (schemamanager.ParamDataType, schemamanager.SchemaReference, schemaerr.ValidationErrors) {
 	var ves schemaerr.ValidationErrors
-	var ref schemamanager.ObjectReference
+	var ref schemamanager.SchemaReference
 	var hash string
 	var err apperrors.Error
 	var dataType schemamanager.ParamDataType
@@ -234,11 +233,11 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 	if err != nil || (schemaPath == "" && hash == "") {
 		ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
 	} else {
-		ref = schemamanager.ObjectReference{
+		ref = schemamanager.SchemaReference{
 			Name: schemaPath,
 		}
 		if !p.Default.IsNil() {
-			var om schemamanager.ObjectManager
+			var om schemamanager.SchemaManager
 			var err apperrors.Error
 			// construct the object metadata for what we want to load from the self metadata
 			m := loaders.SelfMetadata()

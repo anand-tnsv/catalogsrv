@@ -15,14 +15,14 @@ import (
 var _ = canonicalizeMetadata
 var _ = getMetadata
 
-func getMetadata(ctx context.Context, rsrcJson []byte) (*schemamanager.ObjectMetadata, apperrors.Error) {
+func getMetadata(ctx context.Context, rsrcJson []byte) (*schemamanager.SchemaMetadata, apperrors.Error) {
 	if len(rsrcJson) == 0 {
 		return nil, validationerrors.ErrEmptySchema
 	}
 
 	var rs struct {
 		VersionHeader
-		Metadata schemamanager.ObjectMetadata `json:"metadata"`
+		Metadata schemamanager.SchemaMetadata `json:"metadata"`
 	}
 	err := json.Unmarshal(rsrcJson, &rs)
 	if err != nil {
@@ -33,7 +33,7 @@ func getMetadata(ctx context.Context, rsrcJson []byte) (*schemamanager.ObjectMet
 	return &rs.Metadata, nil
 }
 
-func canonicalizeMetadata(rsrcJson []byte, metadata *schemamanager.ObjectMetadata) ([]byte, *schemamanager.ObjectMetadata, apperrors.Error) {
+func canonicalizeMetadata(rsrcJson []byte, metadata *schemamanager.SchemaMetadata) ([]byte, *schemamanager.SchemaMetadata, apperrors.Error) {
 	if len(rsrcJson) == 0 {
 		return nil, nil, validationerrors.ErrEmptySchema
 	}
@@ -43,7 +43,7 @@ func canonicalizeMetadata(rsrcJson []byte, metadata *schemamanager.ObjectMetadat
 		return nil, nil, validationerrors.ErrSchemaValidation.Msg("failed to unmarshal resource schema")
 	}
 	// get metadata in resource json
-	var m schemamanager.ObjectMetadata
+	var m schemamanager.SchemaMetadata
 	err := json.Unmarshal(fullMap["metadata"], &m)
 	if err != nil {
 		return nil, nil, validationerrors.ErrSchemaValidation.Msg("failed to unmarshal metadata")

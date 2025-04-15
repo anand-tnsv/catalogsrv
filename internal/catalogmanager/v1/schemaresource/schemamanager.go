@@ -1,4 +1,4 @@
-package resource
+package schemaresource
 
 import (
 	"context"
@@ -16,21 +16,21 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-type V1ObjectManager struct {
-	resourceSchema          *ObjectSchema
+type V1SchemaManager struct {
+	resourceSchema          *SchemaResource
 	parameterSchemaManager  *parameter.V1ParameterSchemaManager
 	collectionSchemaManager *collection.V1CollectionSchemaManager
 }
 
-var _ schemamanager.ObjectManager = &V1ObjectManager{} // Ensure V1ObjectManager implements schemamanager.ObjectManager
+var _ schemamanager.SchemaManager = &V1SchemaManager{} // Ensure V1SchemaManager implements schemamanager.SchemaManager
 
-func NewV1ObjectManager(ctx context.Context, rsrcJson []byte, options ...schemamanager.Options) (*V1ObjectManager, apperrors.Error) {
+func NewV1SchemaManager(ctx context.Context, rsrcJson []byte, options ...schemamanager.Options) (*V1SchemaManager, apperrors.Error) {
 	o := schemamanager.OptionsConfig{}
 	for _, option := range options {
 		option(&o)
 	}
 
-	rs, err := ReadObjectSchema(string(rsrcJson))
+	rs, err := ReadSchemaResource(string(rsrcJson))
 	if err != nil {
 		return nil, err
 	}
@@ -44,11 +44,11 @@ func NewV1ObjectManager(ctx context.Context, rsrcJson []byte, options ...schemam
 			return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 		}
 	}
-	return buildObjectManager(ctx, rs, rsrcJson, options...)
+	return buildSchemaManager(ctx, rs, rsrcJson, options...)
 }
 
-func LoadV1ObjectManager(ctx context.Context, s *schemastore.SchemaStorageRepresentation, m *schemamanager.ObjectMetadata) (*V1ObjectManager, apperrors.Error) {
-	rs := &ObjectSchema{}
+func LoadV1SchemaManager(ctx context.Context, s *schemastore.SchemaStorageRepresentation, m *schemamanager.SchemaMetadata) (*V1SchemaManager, apperrors.Error) {
+	rs := &SchemaResource{}
 	rs.Version = s.Version
 	switch s.Type {
 	case types.CatalogObjectTypeParameterSchema:
@@ -69,17 +69,17 @@ func LoadV1ObjectManager(ctx context.Context, s *schemastore.SchemaStorageRepres
 	}
 
 	rs.Metadata.Description = s.Description
-	return buildObjectManager(ctx, rs, nil, opts...)
+	return buildSchemaManager(ctx, rs, nil, opts...)
 }
 
-func buildObjectManager(ctx context.Context, rs *ObjectSchema, rsrcJson []byte, options ...schemamanager.Options) (*V1ObjectManager, apperrors.Error) {
+func buildSchemaManager(ctx context.Context, rs *SchemaResource, rsrcJson []byte, options ...schemamanager.Options) (*V1SchemaManager, apperrors.Error) {
 	if rs == nil {
 		return nil, validationerrors.ErrEmptySchema
 	}
 	if rsrcJson == nil {
 		rsrcJson, _ = json.Marshal(rs)
 	}
-	rm := &V1ObjectManager{
+	rm := &V1SchemaManager{
 		resourceSchema: rs,
 	}
 
@@ -102,15 +102,15 @@ func buildObjectManager(ctx context.Context, rs *ObjectSchema, rsrcJson []byte, 
 
 }
 
-func (rm *V1ObjectManager) Version() string {
+func (rm *V1SchemaManager) Version() string {
 	return rm.resourceSchema.Version
 }
 
-func (rm *V1ObjectManager) Kind() string {
+func (rm *V1SchemaManager) Kind() string {
 	return rm.resourceSchema.Kind
 }
 
-func (rm *V1ObjectManager) Type() types.CatalogObjectType {
+func (rm *V1SchemaManager) Type() types.CatalogObjectType {
 	switch rm.Kind() {
 	case "ParameterSchema":
 		return types.CatalogObjectTypeParameterSchema
@@ -120,55 +120,55 @@ func (rm *V1ObjectManager) Type() types.CatalogObjectType {
 		return types.CatalogObjectTypeInvalid
 	}
 }
-func (rm *V1ObjectManager) Metadata() schemamanager.ObjectMetadata {
+func (rm *V1SchemaManager) Metadata() schemamanager.SchemaMetadata {
 	return rm.resourceSchema.Metadata
 }
 
-func (rm *V1ObjectManager) Name() string {
+func (rm *V1SchemaManager) Name() string {
 	return rm.resourceSchema.Metadata.Name
 }
 
-func (rm *V1ObjectManager) Path() string {
+func (rm *V1SchemaManager) Path() string {
 	return rm.resourceSchema.Metadata.Path
 }
 
-func (rm *V1ObjectManager) FullyQualifiedName() string {
+func (rm *V1SchemaManager) FullyQualifiedName() string {
 	return rm.resourceSchema.Metadata.Path + "/" + rm.resourceSchema.Metadata.Name
 }
 
-func (rm *V1ObjectManager) Catalog() string {
+func (rm *V1SchemaManager) Catalog() string {
 	return rm.resourceSchema.Metadata.Catalog
 }
 
-func (rm *V1ObjectManager) Description() string {
+func (rm *V1SchemaManager) Description() string {
 	return rm.resourceSchema.Metadata.Description
 }
 
-func (rm *V1ObjectManager) SetName(name string) {
+func (rm *V1SchemaManager) SetName(name string) {
 	rm.resourceSchema.Metadata.Name = name
 }
 
-func (rm *V1ObjectManager) SetPath(path string) {
+func (rm *V1SchemaManager) SetPath(path string) {
 	rm.resourceSchema.Metadata.Path = path
 }
 
-func (rm *V1ObjectManager) SetCatalog(catalog string) {
+func (rm *V1SchemaManager) SetCatalog(catalog string) {
 	rm.resourceSchema.Metadata.Catalog = catalog
 }
 
-func (rm *V1ObjectManager) SetDescription(description string) {
+func (rm *V1SchemaManager) SetDescription(description string) {
 	rm.resourceSchema.Metadata.Description = description
 }
 
-func (rm *V1ObjectManager) ParameterSchemaManager() schemamanager.ParameterSchemaManager {
+func (rm *V1SchemaManager) ParameterSchemaManager() schemamanager.ParameterSchemaManager {
 	return rm.parameterSchemaManager
 }
 
-func (rm *V1ObjectManager) CollectionSchemaManager() schemamanager.CollectionSchemaManager {
+func (rm *V1SchemaManager) CollectionSchemaManager() schemamanager.CollectionSchemaManager {
 	return rm.collectionSchemaManager
 }
 
-func (rm *V1ObjectManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
+func (rm *V1SchemaManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {
 	var s *schemastore.SchemaStorageRepresentation = nil
 	switch rm.Kind() {
 	case "ParameterSchema":
@@ -184,7 +184,7 @@ func (rm *V1ObjectManager) StorageRepresentation() *schemastore.SchemaStorageRep
 	return s
 }
 
-func (rm *V1ObjectManager) ToJson(ctx context.Context) ([]byte, apperrors.Error) {
+func (rm *V1SchemaManager) ToJson(ctx context.Context) ([]byte, apperrors.Error) {
 	j, err := json.Marshal(rm.resourceSchema)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to marshal object schema")
@@ -193,7 +193,7 @@ func (rm *V1ObjectManager) ToJson(ctx context.Context) ([]byte, apperrors.Error)
 	return j, nil
 }
 
-func (rm *V1ObjectManager) Compare(other schemamanager.ObjectManager, excludeMetadata bool) bool {
+func (rm *V1SchemaManager) Compare(other schemamanager.SchemaManager, excludeMetadata bool) bool {
 	thisObj := rm.StorageRepresentation()
 	otherObj := other.StorageRepresentation()
 	// to exclude metadata, just exclude description. If there are other values in future, we need to do more here.

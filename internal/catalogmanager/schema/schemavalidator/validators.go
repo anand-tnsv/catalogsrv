@@ -116,7 +116,7 @@ func requireVersionV1(fl validator.FieldLevel) bool {
 	return version == types.VersionV1
 }
 
-func ValidateObjectName(name string) bool {
+func ValidateSchemaName(name string) bool {
 	re := regexp.MustCompile(resourceNameRegex)
 	return re.MatchString(name)
 }

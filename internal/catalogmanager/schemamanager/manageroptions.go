@@ -6,7 +6,7 @@ type OptionsConfig struct {
 	Validate             bool
 	ValidateDependencies bool
 	SetDefaultValues     bool
-	ObjectLoaders        ObjectLoaders
+	SchemaLoaders        SchemaLoaders
 	ParamValues          json.RawMessage
 }
 
@@ -32,9 +32,9 @@ func WithValidateDependencies(validate ...bool) Options {
 	}
 }
 
-func WithObjectLoaders(loaders ObjectLoaders) Options {
+func WithSchemaLoaders(loaders SchemaLoaders) Options {
 	return func(cfg *OptionsConfig) {
-		cfg.ObjectLoaders = loaders
+		cfg.SchemaLoaders = loaders
 	}
 }
 

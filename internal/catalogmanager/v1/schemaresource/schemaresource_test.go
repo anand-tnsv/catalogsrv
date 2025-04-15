@@ -1,4 +1,4 @@
-package resource
+package schemaresource
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func TestObjectSchema_Validate(t *testing.T) {
+func TestSchemaResource_Validate(t *testing.T) {
 	tests := []struct {
 		name      string
 		yamlInput string
@@ -143,14 +143,14 @@ spec:
 	for _, tt := range tests {
 		tt := tt // capture range variable
 		t.Run(tt.name, func(t *testing.T) {
-			// Convert YAML input to JSON for unmarshaling into ObjectSchema struct
-			var input ObjectSchema
+			// Convert YAML input to JSON for unmarshaling into SchemaResource struct
+			var input SchemaResource
 			jsonData, err := yaml.YAMLToJSON([]byte(tt.yamlInput))
 			if err != nil {
 				t.Fatalf("failed to convert YAML to JSON: %v", err)
 			}
 
-			// Unmarshal JSON into the ObjectSchema struct
+			// Unmarshal JSON into the SchemaResource struct
 			err = json.Unmarshal(jsonData, &input)
 			if err != nil {
 				t.Fatalf("failed to unmarshal JSON input: %v", err)
@@ -253,7 +253,7 @@ func TestValidateJsonSchema(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := schemavalidator.ValidateJsonSchema(ObjectSchemaJsonSchema, tt.input)
+			actual := schemavalidator.ValidateJsonSchema(SchemaResourceJsonSchema, tt.input)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

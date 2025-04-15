@@ -62,14 +62,14 @@ func NewWorkspaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 	}
 
 	if catalog != "" {
-		if !schemavalidator.ValidateObjectName(catalog) {
+		if !schemavalidator.ValidateSchemaName(catalog) {
 			return nil, ErrInvalidCatalog
 		}
 		ws.Metadata.Catalog = catalog
 	}
 
 	if variant != "" {
-		if !schemavalidator.ValidateObjectName(variant) {
+		if !schemavalidator.ValidateSchemaName(variant) {
 			return nil, validationerrors.ErrInvalidNameFormat
 		}
 		ws.Metadata.Variant = variant
@@ -445,7 +445,7 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 func NewWorkspaceResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	catalogID, variantID := uuid.Nil, uuid.Nil
 	if len(rsrcJson) == 0 || (len(name.Catalog) > 0 && len(name.Variant) > 0) {
-		if len(name.Catalog) > 0 && schemavalidator.ValidateObjectName(name.Catalog) {
+		if len(name.Catalog) > 0 && schemavalidator.ValidateSchemaName(name.Catalog) {
 			var err apperrors.Error
 			catalogID, err = db.DB(ctx).GetCatalogIDByName(ctx, name.Catalog)
 			if err != nil {
@@ -458,7 +458,7 @@ func NewWorkspaceResource(ctx context.Context, rsrcJson []byte, name ResourceNam
 		} else {
 			return nil, ErrInvalidCatalog.Msg("invalid catalog name")
 		}
-		if len(name.Variant) > 0 && schemavalidator.ValidateObjectName(name.Variant) {
+		if len(name.Variant) > 0 && schemavalidator.ValidateSchemaName(name.Variant) {
 			var err apperrors.Error
 			variantID, err = db.DB(ctx).GetVariantIDFromName(ctx, catalogID, name.Variant)
 			if err != nil {

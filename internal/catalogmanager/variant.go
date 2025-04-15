@@ -102,14 +102,14 @@ func NewVariantManager(ctx context.Context, rsrcJson []byte, name string, catalo
 
 	// replace name and catalog if not empty
 	if name != "" {
-		if !schemavalidator.ValidateObjectName(name) {
+		if !schemavalidator.ValidateSchemaName(name) {
 			return nil, validationerrors.ErrInvalidNameFormat
 		}
 		vs.Metadata.Name = name
 	}
 
 	if catalog != "" {
-		if !schemavalidator.ValidateObjectName(catalog) {
+		if !schemavalidator.ValidateSchemaName(catalog) {
 			return nil, ErrInvalidCatalog
 		}
 		vs.Metadata.Catalog = catalog
@@ -328,7 +328,7 @@ func (vr *variantResource) Update(ctx context.Context, rsrcJson []byte) apperror
 func NewVariantResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	cid := uuid.Nil
 	if len(rsrcJson) == 0 || len(name.Catalog) > 0 {
-		if len(name.Catalog) > 0 && schemavalidator.ValidateObjectName(name.Catalog) {
+		if len(name.Catalog) > 0 && schemavalidator.ValidateSchemaName(name.Catalog) {
 			var err apperrors.Error
 			cid, err = db.DB(ctx).GetCatalogIDByName(ctx, name.Catalog)
 			if err != nil {

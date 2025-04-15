@@ -17,8 +17,8 @@ type ParameterSpec struct {
 type CollectionSchemaManager interface {
 	ParameterNames() []string
 	ParametersWithSchema(schemaName string) []ParameterSpec
-	ValidateDependencies(context.Context, ObjectLoaders, ObjectReferences) (ObjectReferences, apperrors.Error)
-	ValidateValue(ctx context.Context, loaders ObjectLoaders, param string, value types.NullableAny) apperrors.Error
+	ValidateDependencies(context.Context, SchemaLoaders, SchemaReferences) (SchemaReferences, apperrors.Error)
+	ValidateValue(ctx context.Context, loaders SchemaLoaders, param string, value types.NullableAny) apperrors.Error
 	SetValue(ctx context.Context, param string, value types.NullableAny) apperrors.Error
 	GetValue(ctx context.Context, param string) ParamValue
 	GetValues(ctx context.Context) map[string]ParamValue

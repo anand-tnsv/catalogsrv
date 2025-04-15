@@ -9,7 +9,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-type ObjectMetadata struct {
+type SchemaMetadata struct {
 	Name        string               `json:"name" validate:"required,resourceNameValidator"`
 	Catalog     string               `json:"catalog" validate:"required,resourceNameValidator"`
 	Variant     types.NullableString `json:"variant,omitempty" validate:"resourceNameValidator"`
@@ -17,7 +17,7 @@ type ObjectMetadata struct {
 	Description string               `json:"description"`
 }
 
-func (rs *ObjectMetadata) Validate() schemaerr.ValidationErrors {
+func (rs *SchemaMetadata) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
 	err := schemavalidator.V().Struct(rs)
 	if err == nil {

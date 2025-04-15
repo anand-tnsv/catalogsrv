@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func TestSaveObject(t *testing.T) {
+func TestSaveSchema(t *testing.T) {
 
 	emptyCollection1Yaml := `
 	version: v1
@@ -225,67 +225,67 @@ func TestSaveObject(t *testing.T) {
 	// create the empty collections
 	jsonData, err := yaml.YAMLToJSON([]byte(emptyCollection1Yaml))
 	require.NoError(t, err)
-	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	collectionSchema, err := NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection3Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection4Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection5Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection6Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 
 	// Create the parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml))
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		if assert.NoError(t, err) {
-			err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+			err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 			if assert.NoError(t, err) {
 				// try to save again
-				err = SaveObject(ctx, r, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
+				err = SaveSchema(ctx, r, WithErrorIfExists(), WithWorkspaceID(ws.WorkspaceID))
 				if assert.Error(t, err) {
 					assert.ErrorIs(t, err, ErrAlreadyExists)
 				}
 				// create another object with same spec but at different path. Should not create a duplicate hash
-				rNew, err := NewObject(ctx, jsonData, &schemamanager.ObjectMetadata{
+				rNew, err := NewSchema(ctx, jsonData, &schemamanager.SchemaMetadata{
 					Name: "example-new",
 					Path: "/another/path",
 				})
 				if assert.NoError(t, err) {
-					err = SaveObject(ctx, rNew, WithWorkspaceID(ws.WorkspaceID))
+					err = SaveSchema(ctx, rNew, WithWorkspaceID(ws.WorkspaceID))
 					if assert.NoError(t, err) {
 						assert.Equal(t, r.StorageRepresentation().GetHash(), rNew.StorageRepresentation().GetHash())
 					}
 				}
 				// load the resource from the database
 				m := r.Metadata()
-				lr, err := LoadObjectByHash(ctx, r.StorageRepresentation().GetHash(), &m)
+				lr, err := LoadSchemaByHash(ctx, r.StorageRepresentation().GetHash(), &m)
 				if assert.NoError(t, err) { // Check if no error occurred
 					assert.NotNil(t, lr)                                                                       // Check if the loaded resource is not nil
 					assert.Equal(t, r.Kind(), lr.Kind())                                                       // Check if the kind matches
@@ -299,7 +299,7 @@ func TestSaveObject(t *testing.T) {
 				} else if r.Kind() == "ParameterSchema" {
 					tp = types.CatalogObjectTypeParameterSchema
 				}
-				lr, err = LoadObjectByPath(ctx, tp, &m, WithWorkspaceID(ws.WorkspaceID))
+				lr, err = LoadSchemaByPath(ctx, tp, &m, WithWorkspaceID(ws.WorkspaceID))
 				if assert.NoError(t, err) {
 					assert.NotNil(t, lr)
 					assert.Equal(t, r.Kind(), lr.Kind())
@@ -318,13 +318,13 @@ func TestSaveObject(t *testing.T) {
 	// create the collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		if assert.NoError(t, err) {
 			// load the collection schema
 			m := collectionSchema.Metadata()
-			lr, err := LoadObjectByHash(ctx, collectionSchema.StorageRepresentation().GetHash(), &m)
+			lr, err := LoadSchemaByHash(ctx, collectionSchema.StorageRepresentation().GetHash(), &m)
 			if assert.NoError(t, err) {
 				assert.NotNil(t, lr)
 				assert.Equal(t, collectionSchema.Kind(), lr.Kind())
@@ -332,7 +332,7 @@ func TestSaveObject(t *testing.T) {
 				assert.Equal(t, collectionSchema.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
 			}
 			// load by path
-			lr, err = LoadObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
+			lr, err = LoadSchemaByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
 			if assert.NoError(t, err) {
 				assert.NotNil(t, lr)
 				assert.Equal(t, collectionSchema.Kind(), lr.Kind())
@@ -343,7 +343,7 @@ func TestSaveObject(t *testing.T) {
 	}
 	// change the base path of the collection schema
 	collectionSchema.SetPath("/another/collection/path")
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	if assert.Error(t, err) {
 		t.Logf("Error: %v", err)
 	}
@@ -354,9 +354,9 @@ func TestSaveObject(t *testing.T) {
 	collection["spec"].(map[string]any)["parameters"].(map[string]any)["maxRetries"].(map[string]any)["default"] = "five"
 	jsonData, err = json.Marshal(collection)
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		if assert.Error(t, err) {
 			t.Logf("Error: %v", err)
 		}
@@ -365,9 +365,9 @@ func TestSaveObject(t *testing.T) {
 	// create a collection with a non-existent parameter schema
 	jsonData, err = yaml.YAMLToJSON([]byte(nonExistentParamYaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		if assert.Error(t, err) {
 			t.Logf("Error: %v", err)
 		}
@@ -376,9 +376,9 @@ func TestSaveObject(t *testing.T) {
 	// create a collection with a non-existent data type
 	jsonData, err = yaml.YAMLToJSON([]byte(nonExistentDataTypeYaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		if assert.Error(t, err) {
 			t.Logf("Error: %v", err)
 		}
@@ -387,9 +387,9 @@ func TestSaveObject(t *testing.T) {
 	// create a parameter with an invalid path
 	jsonData, err = yaml.YAMLToJSON([]byte(invalidParameterPath))
 	require.NoError(t, err)
-	parameterSchema, err := NewObject(ctx, jsonData, nil)
+	parameterSchema, err := NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, parameterSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, parameterSchema, WithWorkspaceID(ws.WorkspaceID))
 		if assert.Error(t, err) {
 			t.Logf("Error: %v", err)
 		}
@@ -398,9 +398,9 @@ func TestSaveObject(t *testing.T) {
 	// create a collection with an invalid path
 	jsonData, err = yaml.YAMLToJSON([]byte(invalidCollectionPath))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		if assert.Error(t, err) {
 			t.Logf("Error: %v", err)
 		}
@@ -559,23 +559,23 @@ func TestSaveValue(t *testing.T) {
 	// create the empty collections
 	jsonData, err := yaml.YAMLToJSON([]byte(emptyCollection1Yaml))
 	require.NoError(t, err)
-	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	collectionSchema, err := NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 
 	// Create the parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml))
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		require.NoError(t, err)
-		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 	}
 	// Create the collection
@@ -587,9 +587,9 @@ func TestSaveValue(t *testing.T) {
 	// create the collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 	}
 	collectionHash := collectionSchema.StorageRepresentation().GetHash()
@@ -614,7 +614,7 @@ func TestSaveValue(t *testing.T) {
 
 	// load collection by path
 	m := collectionSchema.Metadata()
-	lr, err := LoadObjectByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
+	lr, err := LoadSchemaByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	require.NotNil(t, lr)
 	assert.NotEqual(t, collectionHash, lr.StorageRepresentation().GetHash())
@@ -878,31 +878,31 @@ func TestReferences(t *testing.T) {
 	// create the empty collections
 	jsonData, err := yaml.YAMLToJSON([]byte(emptyCollection1Yaml))
 	require.NoError(t, err)
-	collectionSchema, err := NewObject(ctx, jsonData, nil)
+	collectionSchema, err := NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection2Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	jsonData, err = yaml.YAMLToJSON([]byte(emptyCollection3Yaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)
-	err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 
 	// Create the parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml))
 	var paramFqn string
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		require.NoError(t, err)
 		paramFqn = r.FullyQualifiedName()
-		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 	}
 	// Create the collection
@@ -914,114 +914,114 @@ func TestReferences(t *testing.T) {
 	// create the collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		// get all references
-		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}})
 	}
 
 	// Create the parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(validParamYaml2))
 	var paramFqn2 string
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		require.NoError(t, err)
 		paramFqn2 = r.FullyQualifiedName()
-		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 	}
 	// update the collection schema to include another parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml2))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		// get all references
-		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
 		assert.Len(t, refs, 2)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn2}, {Name: paramFqn}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn2}, {Name: paramFqn}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}})
 	}
 	// update the collection back
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYaml))
 	require.NoError(t, err)
-	collectionSchema, err = NewObject(ctx, jsonData, nil)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		// get all references
-		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
 		assert.Len(t, refs, 1)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
 		require.NoError(t, err)
 		assert.Len(t, refs, 0)
 	}
 	// update the parameter
 	jsonData, err = yaml.YAMLToJSON([]byte(updatedParamYaml))
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		require.NoError(t, err)
 		paramFqn = r.FullyQualifiedName()
-		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		// get all references
-		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn}})
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn}})
 	}
 	// create a collection schema at new path
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionYamlAtNewPath))
 	require.NoError(t, err)
-	collectionSchema2, err := NewObject(ctx, jsonData, nil)
+	collectionSchema2, err := NewSchema(ctx, jsonData, nil)
 	if assert.NoError(t, err) {
-		err = SaveObject(ctx, collectionSchema2, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, collectionSchema2, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		// get all references
-		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema2.FullyQualifiedName())
+		refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema2.FullyQualifiedName())
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn2}, {Name: paramFqn}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn2}, {Name: paramFqn}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}, {Name: collectionSchema2.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}, {Name: collectionSchema2.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema2.FullyQualifiedName()}})
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema2.FullyQualifiedName()}})
 	}
 
 	// update the parameter at a new path with lower max value
 	jsonData, err = yaml.YAMLToJSON([]byte(updatedParamAtNewPathYaml))
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		require.NoError(t, err)
-		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.Error(t, err)
 		t.Logf("Error: %v", err)
 	}
@@ -1030,57 +1030,57 @@ func TestReferences(t *testing.T) {
 	jsonData, err = yaml.YAMLToJSON([]byte(updatedParamAtNewPathYaml2))
 	var paramFqn3 string
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		require.NoError(t, err)
 		paramFqn3 = r.FullyQualifiedName()
-		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		// get all references
-		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn3)
+		refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn3)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema2.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema2.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema2.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema2.FullyQualifiedName())
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema2.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema2.FullyQualifiedName())
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn}, {Name: paramFqn2}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn}, {Name: paramFqn2}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn3}})
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn3}})
 	}
 
 	// update the parameter at the grandparent path
 	jsonData, err = yaml.YAMLToJSON([]byte(updatedParamYamlAtGrandparent))
 	var paramFqn4 string
 	if assert.NoError(t, err) {
-		r, err := NewObject(ctx, jsonData, nil)
+		r, err := NewSchema(ctx, jsonData, nil)
 		require.NoError(t, err)
-		err = SaveObject(ctx, r, WithWorkspaceID(ws.WorkspaceID))
+		err = SaveSchema(ctx, r, WithWorkspaceID(ws.WorkspaceID))
 		require.NoError(t, err)
 		paramFqn4 = r.FullyQualifiedName()
 		// get all references
-		refs, err := getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn4)
+		refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn4)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn3)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn3)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema2.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema2.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, paramFqn2)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: collectionSchema2.FullyQualifiedName()}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema2.FullyQualifiedName())
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: collectionSchema2.FullyQualifiedName()}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema2.FullyQualifiedName())
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn}, {Name: paramFqn2}})
-		refs, err = getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn}, {Name: paramFqn2}})
+		refs, err = getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, collectionSchema.FullyQualifiedName())
 		require.NoError(t, err)
-		assert.ElementsMatch(t, refs, []schemamanager.ObjectReference{{Name: paramFqn3}})
+		assert.ElementsMatch(t, refs, []schemamanager.SchemaReference{{Name: paramFqn3}})
 	}
 
 }

@@ -119,9 +119,9 @@ func (cs *collectionSchema) Validate() schemaerr.ValidationErrors {
 
 func GetValue(ctx context.Context, m *ValueMetadata, dir Directories) (*valueSchema, apperrors.Error) {
 	// load the object manager
-	om, err := LoadObjectByPath(ctx,
+	om, err := LoadSchemaByPath(ctx,
 		types.CatalogObjectTypeCollectionSchema,
-		&schemamanager.ObjectMetadata{
+		&schemamanager.SchemaMetadata{
 			Catalog: m.Catalog,
 			Variant: m.Variant,
 			Path:    path.Dir(m.Collection),
@@ -197,9 +197,9 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 	}
 
 	// load the object manager
-	om, err := LoadObjectByPath(ctx,
+	om, err := LoadSchemaByPath(ctx,
 		types.CatalogObjectTypeCollectionSchema,
-		&schemamanager.ObjectMetadata{
+		&schemamanager.SchemaMetadata{
 			Catalog: v.Metadata.Catalog,
 			Variant: v.Metadata.Variant,
 			Path:    path.Dir(v.Metadata.Collection),
@@ -217,14 +217,14 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 	oldHash := om.StorageRepresentation().GetHash()
 
 	// get object References
-	refs, err := getObjectReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, v.Metadata.Collection)
+	refs, err := getSchemaReferences(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, v.Metadata.Collection)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to get object references")
-		refs = schemamanager.ObjectReferences{}
+		refs = schemamanager.SchemaReferences{}
 	}
 
 	// get the loaders
-	loaders := getObjectLoaders(ctx, om.Metadata(), WithDirectories(dir))
+	loaders := getSchemaLoaders(ctx, om.Metadata(), WithDirectories(dir))
 	loaders.ParameterRef = getParameterRefForName(refs)
 
 	// validate the value against the collection

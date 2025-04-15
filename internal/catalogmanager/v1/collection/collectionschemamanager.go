@@ -40,7 +40,7 @@ func NewV1CollectionSchemaManager(ctx context.Context, version string, rsrcJson 
 	}
 
 	if o.ValidateDependencies {
-		_, ves := cs.ValidateDependencies(ctx, o.ObjectLoaders, schemamanager.ObjectReferences{})
+		_, ves := cs.ValidateDependencies(ctx, o.SchemaLoaders, schemamanager.SchemaReferences{})
 		if ves != nil {
 			return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 		}
@@ -81,7 +81,7 @@ func (cm *V1CollectionSchemaManager) ParametersWithSchema(schemaName string) []s
 	return cm.collectionSchema.ParametersWithSchema(schemaName)
 }
 
-func (cm *V1CollectionSchemaManager) ValidateDependencies(ctx context.Context, loaders schemamanager.ObjectLoaders, existingRefs schemamanager.ObjectReferences) (schemamanager.ObjectReferences, apperrors.Error) {
+func (cm *V1CollectionSchemaManager) ValidateDependencies(ctx context.Context, loaders schemamanager.SchemaLoaders, existingRefs schemamanager.SchemaReferences) (schemamanager.SchemaReferences, apperrors.Error) {
 	refs, ves := cm.collectionSchema.ValidateDependencies(ctx, loaders, existingRefs)
 	if ves != nil {
 		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
@@ -89,7 +89,7 @@ func (cm *V1CollectionSchemaManager) ValidateDependencies(ctx context.Context, l
 	return refs, nil
 }
 
-func (cm *V1CollectionSchemaManager) ValidateValue(ctx context.Context, loaders schemamanager.ObjectLoaders, param string, value types.NullableAny) apperrors.Error {
+func (cm *V1CollectionSchemaManager) ValidateValue(ctx context.Context, loaders schemamanager.SchemaLoaders, param string, value types.NullableAny) apperrors.Error {
 	ves := cm.collectionSchema.ValidateValue(ctx, loaders, param, value)
 	if ves != nil {
 		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
