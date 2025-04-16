@@ -157,7 +157,7 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 		t                  types.CatalogObjectType = om.Type() // object type
 		dir                Directories                         // directories for this object type
 		hash               string                              // hash of the object's storage representation
-		path               string                  = m.Path    // path to the object in the directory
+		rsrcPath           string                  = m.Path    // path to the object in the directory
 		pathWithName       string                  = ""        // fully qualified resource path with name
 		refs, existingRefs schemamanager.SchemaReferences
 		existingParamPath  string
@@ -166,8 +166,8 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
-	path = strings.TrimRight(path, "/")
-	pathWithName = path + "/" + m.Name
+	rsrcPath = strings.TrimRight(rsrcPath, "/")
+	pathWithName = path.Clean(rsrcPath + "/" + m.Name)
 
 	// get the directory
 	if !options.Dir.IsNil() {

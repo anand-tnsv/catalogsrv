@@ -7,6 +7,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/rs/zerolog/log"
@@ -31,8 +32,14 @@ func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.Ca
 	}
 
 	// snappy compress the data
-	dataZ := snappy.Encode(nil, obj.Data)
-	log.Ctx(ctx).Debug().Msgf("raw: %d, compressed: %d", len(obj.Data), len(dataZ))
+	var dataZ []byte
+	if config.CompressCatalogObjects {
+		dataZ = snappy.Encode(nil, obj.Data)
+		log.Ctx(ctx).Debug().Msgf("raw: %d, compressed: %d", len(obj.Data), len(dataZ))
+	} else {
+		dataZ = obj.Data // No compression
+		log.Ctx(ctx).Debug().Msg("compression is disabled, using raw data")
+	}
 
 	// Insert the catalog object into the database
 	query := `
@@ -88,9 +95,12 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 	}
 
 	// Uncompress the data
-	obj.Data, err = snappy.Decode(nil, obj.Data)
-	if err != nil {
-		return nil, dberror.ErrDatabase.Err(err)
+	if config.CompressCatalogObjects {
+		obj.Data, err = snappy.Decode(nil, obj.Data)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to uncompress catalog object data")
+			return nil, dberror.ErrDatabase.Err(err)
+		}
 	}
 
 	return &obj, nil

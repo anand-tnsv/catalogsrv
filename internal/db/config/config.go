@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/mugiliam/hatchcatalogsrv/internal/config"
+)
 
 type dbconncfg struct {
 	host     string
@@ -28,3 +32,5 @@ func HatchCatalogDsn() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		hatchCatalogDbConn.host, hatchCatalogDbConn.port, hatchCatalogDbConn.user, hatchCatalogDbConn.password, hatchCatalogDbConn.dbname, hatchCatalogDbConn.sslmode)
 }
+
+const CompressCatalogObjects = config.CompressCatalogObjects

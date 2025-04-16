@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
@@ -264,10 +265,13 @@ func (h *hatchCatalogDb) LoadObjectByPath(ctx context.Context, t types.CatalogOb
 		TenantID: tenantID,
 	}
 
+	catalogObj.Data = data
 	// Decompress the data
-	catalogObj.Data, err = snappy.Decode(nil, data)
-	if err != nil {
-		return nil, dberror.ErrDatabase.Err(err)
+	if config.CompressCatalogObjects {
+		catalogObj.Data, err = snappy.Decode(nil, data)
+		if err != nil {
+			return nil, dberror.ErrDatabase.Err(err)
+		}
 	}
 
 	return catalogObj, nil

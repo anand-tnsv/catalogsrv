@@ -27,7 +27,7 @@ spec:
   parameters:
     maxRetries:
       schema: IntegerParamSchema
-      default: 5
+      default: 'hello'
   collections:
     databaseConfig:
       schema: DatabaseConfigCollection
@@ -46,7 +46,7 @@ spec:
   parameters:
     maxRetries:
       dataType: Integer
-      default: 5
+      default: 10
   collections:
     databaseConfig:
       schema: DatabaseConfigCollection

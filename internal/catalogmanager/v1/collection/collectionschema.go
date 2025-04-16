@@ -236,35 +236,34 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 		ref = schemamanager.SchemaReference{
 			Name: schemaPath,
 		}
+
+		var om schemamanager.SchemaManager
+		var err apperrors.Error
+		// construct the object metadata for what we want to load from the self metadata
+		m := loaders.SelfMetadata()
+		m.Name = path.Base(schemaPath)
+		m.Path = path.Dir(schemaPath)
+		if len(hash) > 0 {
+			om, err = loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, &m)
+		} else {
+			om, err = loaders.ByPath(ctx, types.CatalogObjectTypeParameterSchema, &m)
+		}
+		if err != nil && om == nil {
+			ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
+			return dataType, ref, ves
+		}
+		pm := om.ParameterSchemaManager()
+		if pm == nil {
+			ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
+			return dataType, ref, ves
+		}
+		dataType = pm.DataType()
 		if !p.Default.IsNil() {
-			var om schemamanager.SchemaManager
-			var err apperrors.Error
-			// construct the object metadata for what we want to load from the self metadata
-			m := loaders.SelfMetadata()
-			m.Name = path.Base(schemaPath)
-			m.Path = path.Dir(schemaPath)
-			if len(hash) > 0 {
-				om, err = loaders.ByHash(ctx, types.CatalogObjectTypeParameterSchema, hash, &m)
-			} else {
-				om, err = loaders.ByPath(ctx, types.CatalogObjectTypeParameterSchema, &m)
-			}
-			if err != nil && om == nil {
-				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-				return dataType, ref, ves
-			}
-			pm := om.ParameterSchemaManager()
-			if pm == nil {
-				ves = append(ves, schemaerr.ErrParameterSchemaDoesNotExist(p.Schema))
-				return dataType, ref, ves
-			}
 			if err := pm.ValidateValue(p.Default); err != nil {
 				ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
-				return dataType, ref, ves
 			}
-			dataType = pm.DataType()
 		}
 	}
-
 	return dataType, ref, ves
 }
 

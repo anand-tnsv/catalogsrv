@@ -87,6 +87,38 @@ func TestSaveSchema(t *testing.T) {
 				dataType: InvalidInteger
 				default: 1000
 	`
+	invalidDefaultYamlCollection := `
+	version: v1
+	kind: CollectionSchema
+	metadata:
+		name: some-collection
+		catalog: example-catalog
+		description: An example collection
+	spec:
+		parameters:
+			maxRetries:
+				schema: integer-param-schema
+				default: 'hello'
+			maxDelay:
+				dataType: Integer
+				default: 1000
+	`
+	invalidDefaultDataTypeYamlCollection := `
+	version: v1
+	kind: CollectionSchema
+	metadata:
+		name: some-collection
+		catalog: example-catalog
+		description: An example collection
+	spec:
+		parameters:
+			maxRetries:
+				schema: integer-param-schema
+				default: 5
+			maxDelay:
+				dataType: Integer
+				default: 'hello'
+	`
 
 	// Run tests
 	// Initialize context with logger and database connection
@@ -100,6 +132,8 @@ func TestSaveSchema(t *testing.T) {
 	replaceTabsWithSpaces(&validParamYaml)
 	replaceTabsWithSpaces(&invalidDataTypeYamlCollection)
 	replaceTabsWithSpaces(&validParamYamlModifiedValidation)
+	replaceTabsWithSpaces(&invalidDefaultYamlCollection)
+	replaceTabsWithSpaces(&invalidDefaultDataTypeYamlCollection)
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -211,6 +245,22 @@ func TestSaveSchema(t *testing.T) {
 
 	// create a collection with invalid data type
 	jsonData, err = yaml.YAMLToJSON([]byte(invalidDataTypeYamlCollection))
+	require.NoError(t, err)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// create a collection with invalid default value
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidDefaultYamlCollection))
+	require.NoError(t, err)
+	collectionSchema, err = NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// create a collection with invalid default value data type
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidDefaultDataTypeYamlCollection))
 	require.NoError(t, err)
 	collectionSchema, err = NewSchema(ctx, jsonData, nil)
 	require.NoError(t, err)

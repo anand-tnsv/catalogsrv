@@ -39,11 +39,12 @@ func TestCollection(t *testing.T) {
 			parameters:
 				maxRetries:
 					schema: integer-param-schema
-					default: 8
+					default: 5
 				maxDelay:
 					dataType: Integer
 					default: 1000
 	`
+
 	anotherCollectionYaml := `
 		version: v1
 		kind: CollectionSchema
@@ -82,6 +83,75 @@ func TestCollection(t *testing.T) {
 		spec:
 			schema: example-collection-schema
 	`
+	validCollectionValueWithValueYaml := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			schema: example-collection-schema
+			values:
+				maxRetries: 5
+				maxDelay: 1000
+	`
+	validCollectionValueWithInvalidValueYaml := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			schema: example-collection-schema
+			values:
+				maxRetries: 'hello'
+				maxDelay: 1000
+	`
+	validCollectionValueWithInvalidValueYaml2 := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			schema: example-collection-schema
+			values:
+				maxRetries: 3
+				maxDelay: 'hello'
+	`
+	validCollectionValueWithPartialValueYaml := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			schema: example-collection-schema
+			values:
+				maxRetries: 3
+	`
+	validCollectionValueWithPartialValueYaml2 := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			schema: example-collection-schema
+			values:
+				maxDelay: 500
+	`
+
 	invalidCollectionValueYaml2 := `
 		version: v1
 		kind: Collection
@@ -114,9 +184,14 @@ func TestCollection(t *testing.T) {
 	replaceTabsWithSpaces(&collectionYaml)
 	replaceTabsWithSpaces(&invalidCollectionvalueYaml)
 	replaceTabsWithSpaces(&validCollectionValueYaml)
+	replaceTabsWithSpaces(&validCollectionValueWithValueYaml)
 	replaceTabsWithSpaces(&invalidCollectionValueYaml2)
 	replaceTabsWithSpaces(&collectionWithChangedSchemaYaml)
 	replaceTabsWithSpaces(&anotherCollectionYaml)
+	replaceTabsWithSpaces(&validCollectionValueWithPartialValueYaml)
+	replaceTabsWithSpaces(&validCollectionValueWithPartialValueYaml2)
+	replaceTabsWithSpaces(&validCollectionValueWithInvalidValueYaml)
+	replaceTabsWithSpaces(&validCollectionValueWithInvalidValueYaml2)
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -213,6 +288,45 @@ func TestCollection(t *testing.T) {
 	require.NoError(t, err)
 	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
+
+	// create the collection with valid values but without values
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithValueYaml))
+	require.NoError(t, err)
+	collection, err = NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	// create the collection with partial values
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithPartialValueYaml))
+	require.NoError(t, err)
+	collection, err = NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithPartialValueYaml2))
+	require.NoError(t, err)
+	collection, err = NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	// create the collection with partial values but invalid value
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithInvalidValueYaml))
+	require.NoError(t, err)
+	collection, err = NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// create the collection with partial values but invalid value 2
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithInvalidValueYaml2))
+	require.NoError(t, err)
+	collection, err = NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
 
 	// create the collection with changed schema
 	jsonData, err = yaml.YAMLToJSON([]byte(collectionWithChangedSchemaYaml))

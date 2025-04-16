@@ -39,7 +39,8 @@ type CollectionMetadata struct {
 }
 
 type collectionSpec struct {
-	Schema string `json:"schema" validate:"required,nameFormatValidator"`
+	Schema string                       `json:"schema" validate:"required,nameFormatValidator"`
+	Values map[string]types.NullableAny `json:"values"`
 }
 
 func (cs *collectionSchema) Validate() schemaerr.ValidationErrors {
@@ -152,6 +153,50 @@ func (cm *collectionManager) SetDefaultValues() apperrors.Error {
 	return nil
 }
 
+func (cm *collectionManager) SetValue(ctx context.Context, schemaLoaders schemamanager.SchemaLoaders, param string, value types.NullableAny) apperrors.Error {
+	if cm.csm == nil {
+		return ErrInvalidCollectionSchema
+	}
+	if err := cm.csm.ValidateValue(ctx, schemaLoaders, param, value); err != nil {
+		return err
+	}
+	// We need to copy the dataType and other annotations from the schema before we can copy over the value
+	if cm.schema.Values == nil {
+		cm.schema.Values = make(schemamanager.ParamValues)
+	}
+	v := cm.csm.GetValue(ctx, param)
+	v.Value = value
+	cm.schema.Values[param] = v
+	return nil
+}
+
+func (cm *collectionManager) ValidateValues(ctx context.Context, schemaLoaders schemamanager.SchemaLoaders) apperrors.Error {
+	if cm.csm == nil {
+		return ErrInvalidCollectionSchema
+	}
+
+	// There are few things to unwrap here:
+	// At this time, the schema has all the parameters set in its Values. And these values either have the default set or are nil. But
+	// the dataTypes and other annotations are always set.  So we need to copy all these over to the collection and substitute with new
+	// values if the collection had any new values defined. Or we will copy over the defaults. If no defaults are set, the param will be a NullableAny
+	// with dataType and other annotations set.
+	if cm.schema.Values == nil {
+		cm.schema.Values = make(schemamanager.ParamValues)
+	}
+	for _, param := range cm.csm.ParameterNames() {
+		if v, ok := cm.schema.Spec.Values[param]; ok {
+			// if the user set any value, we'll validate it and set it. If validation fails, we will return an error.
+			if err := cm.SetValue(ctx, schemaLoaders, param, v); err != nil {
+				return err
+			}
+		} else {
+			// the values in the schema are already either the default or nil. But the dataType and other annotations are set. So it is safe to just copy over.
+			cm.schema.Values[param] = cm.csm.GetValue(ctx, param)
+		}
+	}
+	return nil
+}
+
 func NewCollectionManager(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
 	if len(rsrcJson) == 0 {
 		return nil, validationerrors.ErrEmptySchema
@@ -240,15 +285,19 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 	if collectionSchemaExists(ctx, dir.CollectionsDir, schemaPath) != nil {
 		return ErrInvalidCollectionSchema
 	}
-	if cm.Values() == nil {
-		if err := LoadCollectionSchemaManager(ctx, cm, WithDirectories(dir)); err != nil {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
-			return err
-		}
-		if err := cm.SetDefaultValues(); err != nil {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to set default values")
-			return err
-		}
+
+	if err := LoadCollectionSchemaManager(ctx, cm, WithDirectories(dir)); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
+		return err
+	}
+
+	schemaLoaders := getSchemaLoaders(ctx, cm.Metadata(), WithDirectories(dir))
+	schemaLoaders.ParameterRef = func(name string) string {
+		return "/" + path.Base(name)
+	}
+	if err := cm.ValidateValues(ctx, schemaLoaders); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to set default values")
+		return err
 	}
 
 	s := cm.StorageRepresentation()
