@@ -220,5 +220,5 @@ func TestCollection(t *testing.T) {
 	collection, err = NewCollectionManager(ctx, jsonData, nil)
 	require.NoError(t, err)
 	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrSchemaOfCollectionNotMutable)
 }

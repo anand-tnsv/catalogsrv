@@ -116,25 +116,30 @@ func (cm *collectionManager) StorageRepresentation() *schemastore.SchemaStorageR
 	return &s
 }
 
-func (cm *collectionManager) LoadCollectionSchemaManager(ctx context.Context, opts ...ObjectStoreOption) apperrors.Error {
-	if cm.csm == nil {
-		// Load the collection schema manager
-		m := &schemamanager.SchemaMetadata{
-			Name:    cm.schema.Spec.Schema,
-			Catalog: cm.schema.Metadata.Catalog,
-			Variant: cm.schema.Metadata.Variant,
-		}
-		sm, err := LoadSchemaByPath(ctx,
-			types.CatalogObjectTypeCollectionSchema,
-			m,
-			opts...,
-		)
-		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
-			return err
-		}
-		cm.csm = sm.CollectionSchemaManager()
+func (cm *collectionManager) SetCollectionSchemaManager(csm schemamanager.CollectionSchemaManager) {
+	cm.csm = csm
+}
+
+func (cm *collectionManager) Values() schemamanager.ParamValues {
+	return cm.schema.Values
+}
+
+func LoadCollectionSchemaManager(ctx context.Context, cm schemamanager.CollectionManager, opts ...ObjectStoreOption) apperrors.Error {
+	m := &schemamanager.SchemaMetadata{
+		Name:    cm.Schema(),
+		Catalog: cm.Metadata().Catalog,
+		Variant: cm.Metadata().Variant,
 	}
+	sm, err := LoadSchemaByPath(ctx,
+		types.CatalogObjectTypeCollectionSchema,
+		m,
+		opts...,
+	)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
+		return err
+	}
+	cm.SetCollectionSchemaManager(sm.CollectionSchemaManager())
 	return nil
 }
 
@@ -219,13 +224,31 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		if options.ErrorIfExists {
 			return ErrAlreadyExists.Msg("collection already exists")
 		}
-		// the collection schema cannot be changed
-		if existingCollection.
+		m := cm.Metadata()
+		cmExisting, err := collectionManagerFromObject(ctx, existingCollection, &m)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load existing collection")
+			return err
+		}
+		// collection cannot be modified if schema is different
+		if cmExisting.Schema() != cm.Schema() {
+			return ErrSchemaOfCollectionNotMutable
+		}
 	}
 
 	schemaPath := "/" + path.Base(string(cm.Schema()))
 	if collectionSchemaExists(ctx, dir.CollectionsDir, schemaPath) != nil {
 		return ErrInvalidCollectionSchema
+	}
+	if cm.Values() == nil {
+		if err := LoadCollectionSchemaManager(ctx, cm, WithDirectories(dir)); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
+			return err
+		}
+		if err := cm.SetDefaultValues(); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to set default values")
+			return err
+		}
 	}
 
 	s := cm.StorageRepresentation()
@@ -271,4 +294,95 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 	}
 
 	return nil
+}
+
+func LoadCollectionByHash(ctx context.Context, hash string, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
+	if hash == "" {
+		return nil, validationerrors.ErrEmptySchema
+	}
+
+	obj, err := db.DB(ctx).GetCatalogObject(ctx, hash)
+	if err != nil {
+		if errors.Is(err, dberror.ErrNotFound) {
+			return nil, ErrObjectNotFound.Err(err)
+		}
+		return nil, ErrUnableToLoadObject.Err(err)
+	}
+
+	return collectionManagerFromObject(ctx, obj, m)
+}
+
+func LoadCollectionByPath(ctx context.Context, m *schemamanager.SchemaMetadata, opts ...ObjectStoreOption) (schemamanager.CollectionManager, apperrors.Error) {
+	if m == nil {
+		return nil, validationerrors.ErrEmptySchema
+	}
+
+	options := storeOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	rsrcPath := m.Path
+	pathWithName := path.Clean(rsrcPath + "/" + m.Name)
+	t := types.CatalogObjectTypeCatalogCollectionValue
+	var dir Directories
+
+	// get the directory
+	if !options.Dir.IsNil() {
+		dir = options.Dir
+	} else if options.WorkspaceID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForWorkspace(ctx, options.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, ErrInvalidVersionOrWorkspace
+	}
+
+	obj, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir.ValuesDir, pathWithName)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load object by path")
+		return nil, err
+	}
+
+	return collectionManagerFromObject(ctx, obj, m)
+}
+
+func collectionManagerFromObject(ctx context.Context, obj *models.CatalogObject, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
+	if obj == nil {
+		return nil, validationerrors.ErrEmptySchema
+	}
+
+	s := schemastore.SchemaStorageRepresentation{}
+	if err := json.Unmarshal(obj.Data, &s); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal collection schema")
+		return nil, validationerrors.ErrSchemaValidation
+	}
+	if s.Type != types.CatalogObjectTypeCatalogCollectionValue {
+		log.Ctx(ctx).Error().Msg("invalid collection schema type")
+		return nil, ErrUnableToLoadObject
+	}
+	if s.Type != types.CatalogObjectTypeCatalogCollectionValue {
+		log.Ctx(ctx).Error().Msg("invalid collection schema kind")
+		return nil, ErrUnableToLoadObject
+	}
+
+	cm := &collectionManager{}
+	if err := json.Unmarshal(s.Schema, &cm.schema.Spec); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal collection schema spec")
+		return nil, ErrUnableToLoadObject
+	}
+	if err := json.Unmarshal(s.Values, &cm.schema.Values); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal collection schema values")
+		return nil, ErrUnableToLoadObject
+	}
+	cm.schema.Kind = types.CollectionKind
+	cm.schema.Version = s.Version
+	cm.schema.Metadata.Name = m.Name
+	cm.schema.Metadata.Catalog = m.Catalog
+	cm.schema.Metadata.Variant = m.Variant
+	cm.schema.Metadata.Path = m.Path
+	cm.schema.Metadata.Description = s.Description
+
+	return cm, nil
 }
