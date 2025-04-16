@@ -84,14 +84,7 @@ func (ns *NullableAny) GetAs(v any) error {
 	return errors.New("value is not set")
 }
 
-var _ json.Marshaler = &NullableAny{}   // Ensure NullableString implements json.Marshaler
-var _ json.Unmarshaler = &NullableAny{} // Ensure NullableString implements json.Unmarshaler
-var _ Nullable = &NullableAny{}         // Ensure NullableString implements Nullable interface
-
-var _ json.Marshaler = NullableAny{}
-
 // implement json.Marshaler interface
-
 func (ns NullableAny) MarshalJSON() ([]byte, error) {
 	if ns.valid {
 		return ns.value, nil
@@ -100,15 +93,22 @@ func (ns NullableAny) MarshalJSON() ([]byte, error) {
 }
 
 func (ns *NullableAny) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 {
+	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
 		ns.value = nil
 		ns.valid = false
 		return nil
 	}
 	if !json.Valid(data) {
+		ns.value = nil
+		ns.valid = false
 		return errors.New("invalid JSON")
 	}
 	ns.value = data
 	ns.valid = true
 	return nil
 }
+
+var _ json.Marshaler = &NullableAny{}
+var _ json.Unmarshaler = &NullableAny{}
+var _ Nullable = &NullableAny{}
+var _ json.Marshaler = NullableAny{}

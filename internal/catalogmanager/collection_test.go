@@ -37,6 +37,8 @@ func TestCollection(t *testing.T) {
 			description: An example collection schema
 		spec:
 			parameters:
+				maxAttempts:
+					schema: integer-param-schema
 				maxRetries:
 					schema: integer-param-schema
 					default: 5
@@ -96,6 +98,20 @@ func TestCollection(t *testing.T) {
 			values:
 				maxRetries: 5
 				maxDelay: 1000
+	`
+	validCollectionWithChangedValueYaml := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			schema: example-collection-schema
+			values:
+				maxRetries: 3
+				maxAttempts: 10
 	`
 	validCollectionValueWithInvalidValueYaml := `
 		version: v1
@@ -192,6 +208,7 @@ func TestCollection(t *testing.T) {
 	replaceTabsWithSpaces(&validCollectionValueWithPartialValueYaml2)
 	replaceTabsWithSpaces(&validCollectionValueWithInvalidValueYaml)
 	replaceTabsWithSpaces(&validCollectionValueWithInvalidValueYaml2)
+	replaceTabsWithSpaces(&validCollectionWithChangedValueYaml)
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -280,6 +297,14 @@ func TestCollection(t *testing.T) {
 	require.ErrorIs(t, err, ErrEqualToExistingObject)
 	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID), WithErrorIfExists())
 	require.ErrorIs(t, err, ErrAlreadyExists)
+
+	// create the collection with changed values
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionWithChangedValueYaml))
+	require.NoError(t, err)
+	collection, err = NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
 
 	// create another collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(anotherCollectionYaml))

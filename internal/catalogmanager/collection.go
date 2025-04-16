@@ -170,7 +170,7 @@ func (cm *collectionManager) SetValue(ctx context.Context, schemaLoaders schemam
 	return nil
 }
 
-func (cm *collectionManager) ValidateValues(ctx context.Context, schemaLoaders schemamanager.SchemaLoaders) apperrors.Error {
+func (cm *collectionManager) ValidateValues(ctx context.Context, schemaLoaders schemamanager.SchemaLoaders, currValues schemamanager.ParamValues) apperrors.Error {
 	if cm.csm == nil {
 		return ErrInvalidCollectionSchema
 	}
@@ -187,6 +187,11 @@ func (cm *collectionManager) ValidateValues(ctx context.Context, schemaLoaders s
 		if v, ok := cm.schema.Spec.Values[param]; ok {
 			// if the user set any value, we'll validate it and set it. If validation fails, we will return an error.
 			if err := cm.SetValue(ctx, schemaLoaders, param, v); err != nil {
+				return err
+			}
+		} else if v, ok := currValues[param]; ok {
+			// we validate this again in case the parameter schemas have changed
+			if err := cm.SetValue(ctx, schemaLoaders, param, v.Value); err != nil {
 				return err
 			}
 		} else {
@@ -265,18 +270,19 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		}
 	}
 
+	var cmCurrent schemamanager.CollectionManager
 	if existingCollection != nil {
 		if options.ErrorIfExists {
 			return ErrAlreadyExists.Msg("collection already exists")
 		}
 		m := cm.Metadata()
-		cmExisting, err := collectionManagerFromObject(ctx, existingCollection, &m)
+		cmCurrent, err = collectionManagerFromObject(ctx, existingCollection, &m)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msg("failed to load existing collection")
 			return err
 		}
 		// collection cannot be modified if schema is different
-		if cmExisting.Schema() != cm.Schema() {
+		if cmCurrent.Schema() != cm.Schema() {
 			return ErrSchemaOfCollectionNotMutable
 		}
 	}
@@ -295,7 +301,13 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 	schemaLoaders.ParameterRef = func(name string) string {
 		return "/" + path.Base(name)
 	}
-	if err := cm.ValidateValues(ctx, schemaLoaders); err != nil {
+
+	var cmCurrentValues schemamanager.ParamValues = nil
+	if cmCurrent != nil {
+		cmCurrentValues = cmCurrent.Values()
+	}
+
+	if err := cm.ValidateValues(ctx, schemaLoaders, cmCurrentValues); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to set default values")
 		return err
 	}

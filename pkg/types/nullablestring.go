@@ -23,10 +23,6 @@ func (ns *NullableString) Set(value string) {
 	ns.Valid = true
 }
 
-var _ json.Marshaler = &NullableString{}   // Ensure NullableString implements json.Marshaler
-var _ json.Unmarshaler = &NullableString{} // Ensure NullableString implements json.Unmarshaler
-var _ Nullable = &NullableString{}         // Ensure NullableString implements Nullable interface
-
 // implement json.Marshaler interface
 func (ns NullableString) MarshalJSON() ([]byte, error) {
 	if ns.Valid {
@@ -36,7 +32,7 @@ func (ns NullableString) MarshalJSON() ([]byte, error) {
 }
 
 func (ns *NullableString) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 {
+	if len(data) == 0 || string(data) == "null" {
 		ns.Value = ""
 		ns.Valid = false
 		return nil
@@ -48,3 +44,7 @@ func (ns *NullableString) UnmarshalJSON(data []byte) error {
 func NullableStringFrom(s string) NullableString {
 	return NullableString{Value: s, Valid: true}
 }
+
+var _ json.Marshaler = &NullableString{}   // Ensure NullableString implements json.Marshaler
+var _ json.Unmarshaler = &NullableString{} // Ensure NullableString implements json.Unmarshaler
+var _ Nullable = &NullableString{}         // Ensure NullableString implements Nullable interface
