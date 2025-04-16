@@ -8,22 +8,27 @@ import (
 
 // NormalizeJSON sorts the keys of the JSON and returns the canonical representation
 func NormalizeJSON(data []byte) ([]byte, error) {
-	var jsonObj interface{}
+	return Transform(data)
+	/*
+		var jsonObj interface{}
 
-	// Unmarshal the JSON data into a generic map
-	err := json.Unmarshal(data, &jsonObj)
-	if err != nil {
-		return nil, err
-	}
+		// Unmarshal the JSON data into a generic map
+		err := json.Unmarshal(data, &jsonObj)
+		if err != nil {
+			return nil, err
+		}
 
-	// Marshal back the object into sorted JSON
-	normalizedJSON, err := marshalSorted(jsonObj)
-	if err != nil {
-		return nil, err
-	}
+		// Marshal back the object into sorted JSON
+		normalizedJSON, err := marshalSorted(jsonObj)
+		if err != nil {
+			return nil, err
+		}
 
-	return normalizedJSON, nil
+		return normalizedJSON, nil
+	*/
 }
+
+var _ = marshalSorted // This is to ensure that the function is included in the package for testing purposes
 
 // marshalSorted recursively sorts keys and marshals JSON in a deterministic way
 func marshalSorted(obj interface{}) ([]byte, error) {

@@ -27,6 +27,7 @@ Godeps/
 *.log
 *.log.*
 *.tmp
+.DS_Store
 
 # Output binaries
 /bin/

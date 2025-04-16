@@ -2,6 +2,7 @@ package schemastore
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -322,7 +323,10 @@ func TestNormalizeJson(t *testing.T) {
 }	
 	`
 	var baseHash, equivalentHash string
+	start := time.Now()
 	normalizedJson, err := NormalizeJSON([]byte(baseJson))
+	duration := time.Since(start)
+	t.Logf("NormalizeJSON took %s", duration)
 	if assert.NoError(t, err) {
 		baseHash = HexEncodedSHA512(normalizedJson)
 	}
