@@ -298,6 +298,25 @@ func TestCollection(t *testing.T) {
 	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID), WithErrorIfExists())
 	require.ErrorIs(t, err, ErrAlreadyExists)
 
+	// check the collection
+	m := collection.Metadata()
+	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.NotNil(t, collection)
+	assert.Equal(t, "my-collection", collection.Metadata().Name)
+	assert.Equal(t, "example-collection-schema", collection.Schema())
+	assert.Equal(t, "An example collection", collection.Metadata().Description)
+	assert.Equal(t, "/some/random/path", collection.Metadata().Path)
+	values := collection.Values()
+	assert.NotNil(t, values)
+	assert.Equal(t, 3, len(values)) // maxRetries and maxDelay should be set
+	var val int
+	assert.NoError(t, values["maxRetries"].Value.GetAs(&val))
+	assert.Equal(t, 5, val) // default value from schema
+	assert.NoError(t, values["maxDelay"].Value.GetAs(&val))
+	assert.Equal(t, 1000, val)
+	assert.True(t, values["maxAttempts"].Value.IsNil())
+
 	// create the collection with changed values
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionWithChangedValueYaml))
 	require.NoError(t, err)
@@ -305,6 +324,24 @@ func TestCollection(t *testing.T) {
 	require.NoError(t, err)
 	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
+
+	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.NotNil(t, collection)
+	assert.Equal(t, "my-collection", collection.Metadata().Name)
+	assert.Equal(t, "example-collection-schema", collection.Schema())
+	assert.Equal(t, "An example collection", collection.Metadata().Description)
+	assert.Equal(t, "/some/random/path", collection.Metadata().Path)
+	values = collection.Values()
+	assert.NotNil(t, values)
+	assert.Equal(t, 3, len(values)) // maxRetries and maxDelay should be set
+	assert.NoError(t, values["maxRetries"].Value.GetAs(&val))
+	assert.Equal(t, 3, val) // default value from schema
+	assert.NoError(t, values["maxDelay"].Value.GetAs(&val))
+	assert.Equal(t, 1000, val) // default value from schema
+	assert.False(t, values["maxAttempts"].Value.IsNil())
+	assert.NoError(t, values["maxAttempts"].Value.GetAs(&val))
+	assert.Equal(t, 10, val) // changed value from the new collection
 
 	// create another collection schema
 	jsonData, err = yaml.YAMLToJSON([]byte(anotherCollectionYaml))
@@ -314,7 +351,7 @@ func TestCollection(t *testing.T) {
 	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 
-	// create the collection with valid values but without values
+	// create the collection with valid values
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithValueYaml))
 	require.NoError(t, err)
 	collection, err = NewCollectionManager(ctx, jsonData, nil)
@@ -329,6 +366,19 @@ func TestCollection(t *testing.T) {
 	require.NoError(t, err)
 	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
+	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.NotNil(t, collection)
+	values = collection.Values()
+	assert.NotNil(t, values)
+	assert.Equal(t, 3, len(values)) // maxRetries and maxDelay should be set
+	assert.NoError(t, values["maxRetries"].Value.GetAs(&val))
+	assert.Equal(t, 3, val) // default value from schema
+	assert.NoError(t, values["maxDelay"].Value.GetAs(&val))
+	assert.Equal(t, 1000, val) // default value from schema
+	assert.False(t, values["maxAttempts"].Value.IsNil())
+	assert.NoError(t, values["maxAttempts"].Value.GetAs(&val))
+	assert.Equal(t, 10, val) // changed value from the new collection
 
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithPartialValueYaml2))
 	require.NoError(t, err)
@@ -336,6 +386,19 @@ func TestCollection(t *testing.T) {
 	require.NoError(t, err)
 	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
+	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.NotNil(t, collection)
+	values = collection.Values()
+	assert.NotNil(t, values)
+	assert.Equal(t, 3, len(values)) // maxRetries and maxDelay should be set
+	assert.NoError(t, values["maxRetries"].Value.GetAs(&val))
+	assert.Equal(t, 3, val) // default value from schema
+	assert.NoError(t, values["maxDelay"].Value.GetAs(&val))
+	assert.Equal(t, 500, val) // default value from schema
+	assert.False(t, values["maxAttempts"].Value.IsNil())
+	assert.NoError(t, values["maxAttempts"].Value.GetAs(&val))
+	assert.Equal(t, 10, val) // changed value from the new collection
 
 	// create the collection with partial values but invalid value
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueWithInvalidValueYaml))

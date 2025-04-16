@@ -11,7 +11,7 @@ type NullableAny struct {
 	valid bool // Valid is true if Value is not nil
 }
 
-func (ns *NullableAny) IsNil() bool {
+func (ns NullableAny) IsNil() bool {
 	return !ns.valid
 }
 
@@ -58,7 +58,7 @@ func (ns *NullableAny) Set(value any) error {
 	return nil
 }
 
-func (ns *NullableAny) Get() any {
+func (ns NullableAny) Get() any {
 	if ns.valid {
 		var v any
 		err := json.Unmarshal(ns.value, &v)
@@ -70,14 +70,14 @@ func (ns *NullableAny) Get() any {
 	return nil
 }
 
-func (ns *NullableAny) IsEqualTo(value NullableAny) bool {
+func (ns NullableAny) IsEqualTo(value NullableAny) bool {
 	if ns.valid && value.valid {
 		return bytes.Equal(ns.value, value.value)
 	}
 	return ns.valid == value.valid
 }
 
-func (ns *NullableAny) GetAs(v any) error {
+func (ns NullableAny) GetAs(v any) error {
 	if ns.valid {
 		return json.Unmarshal(ns.value, v)
 	}
