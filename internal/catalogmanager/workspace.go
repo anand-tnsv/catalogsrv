@@ -96,10 +96,7 @@ func NewWorkspaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 	}
 
 	// handle the base version
-	// TODO: pick the latest version if empty
-	if ws.Metadata.BaseVersion == 0 {
-		ws.Metadata.BaseVersion = 1
-	}
+	ws.Metadata.BaseVersion = 1
 
 	w := models.Workspace{
 		Description: ws.Metadata.Description,

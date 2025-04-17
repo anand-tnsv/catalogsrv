@@ -184,7 +184,7 @@ func SaveValue(ctx context.Context, valueJson []byte, m *ValueMetadata, opts ...
 	}
 	for param, value := range v.Spec {
 		v := c.GetValue(ctx, param)
-		if v.Value.IsEqualTo(value) {
+		if v.Value.Equals(value) {
 			continue
 		}
 		if err := c.ValidateValue(ctx, loaders, param, value); err != nil {

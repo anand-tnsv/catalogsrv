@@ -59,7 +59,7 @@ func getObject(r *http.Request) (*httpx.Response, error) {
 	} else if objType == types.ObjectTypeParameter {
 		catObjType = types.CatalogObjectTypeParameterSchema
 	} else if objType == types.ObjectTypeValue {
-		catObjType = types.CatalogObjectTypeCatalogCollectionValue
+		catObjType = types.CatalogObjectTypeCatalogCollection
 	}
 
 	rm, err := catalogmanager.ResourceManagerFromName(ctx, kind, catalogmanager.ResourceName{

@@ -13,9 +13,17 @@ type ParamDataType struct {
 	Version string `json:"version"`
 }
 
+func (dt ParamDataType) Equals(other ParamDataType) bool {
+	return dt.Type == other.Type && dt.Version == other.Version
+}
+
 type ParamValue struct {
 	Value    types.NullableAny `json:"value"`
 	DataType ParamDataType     `json:"dataType"`
+}
+
+func (pv ParamValue) Equals(other ParamValue) bool {
+	return pv.Value.Equals(other.Value) && pv.DataType.Equals(other.DataType)
 }
 
 type ParamValues map[string]ParamValue

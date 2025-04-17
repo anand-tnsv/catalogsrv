@@ -1023,7 +1023,7 @@ func getSchemaDirectoryTableName(t types.CatalogObjectType) string {
 		return "collections_directory"
 	case types.CatalogObjectTypeParameterSchema:
 		return "parameters_directory"
-	case types.CatalogObjectTypeCatalogCollectionValue:
+	case types.CatalogObjectTypeCatalogCollection:
 		return "values_directory"
 	default:
 		return ""

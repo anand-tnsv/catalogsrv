@@ -8,6 +8,7 @@ type CatalogId uuid.UUID
 
 const DefaultVariant = "default"
 const InitialVersionLabel = "init"
+const DefaultNamespace = "default"
 
 func (u CatalogId) String() string {
 	return uuid.UUID(u).String()
@@ -51,11 +52,11 @@ const (
 type CatalogObjectType string
 
 const (
-	CatalogObjectTypeInvalid                CatalogObjectType = "invalid"
-	CatalogObjectTypeUnknown                CatalogObjectType = "unknown"
-	CatalogObjectTypeParameterSchema        CatalogObjectType = "parameter_schema"
-	CatalogObjectTypeCollectionSchema       CatalogObjectType = "collection_schema"
-	CatalogObjectTypeCatalogCollectionValue CatalogObjectType = "collection_value"
+	CatalogObjectTypeInvalid           CatalogObjectType = "invalid"
+	CatalogObjectTypeUnknown           CatalogObjectType = "unknown"
+	CatalogObjectTypeParameterSchema   CatalogObjectType = "parameter_schema"
+	CatalogObjectTypeCollectionSchema  CatalogObjectType = "collection_schema"
+	CatalogObjectTypeCatalogCollection CatalogObjectType = "collection"
 )
 
 type Nullable interface {

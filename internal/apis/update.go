@@ -60,7 +60,7 @@ func updateObject(r *http.Request) (*httpx.Response, error) {
 	} else if objType == types.ObjectTypeParameter {
 		catObjType = types.CatalogObjectTypeParameterSchema
 	} else if objType == types.ObjectTypeValue {
-		catObjType = types.CatalogObjectTypeCatalogCollectionValue
+		catObjType = types.CatalogObjectTypeCatalogCollection
 	}
 
 	if r.Body == nil {

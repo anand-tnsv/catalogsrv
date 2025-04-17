@@ -89,7 +89,7 @@ func (d Directories) DirForType(t types.CatalogObjectType) uuid.UUID {
 		return d.ParametersDir
 	case types.CatalogObjectTypeCollectionSchema:
 		return d.CollectionsDir
-	case types.CatalogObjectTypeCatalogCollectionValue:
+	case types.CatalogObjectTypeCatalogCollection:
 		return d.ValuesDir
 	default:
 		return uuid.Nil

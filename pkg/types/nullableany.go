@@ -70,7 +70,7 @@ func (ns NullableAny) Get() any {
 	return nil
 }
 
-func (ns NullableAny) IsEqualTo(value NullableAny) bool {
+func (ns NullableAny) Equals(value NullableAny) bool {
 	if ns.valid && value.valid {
 		return bytes.Equal(ns.value, value.value)
 	}
@@ -106,6 +106,23 @@ func (ns *NullableAny) UnmarshalJSON(data []byte) error {
 	ns.value = data
 	ns.valid = true
 	return nil
+}
+
+func NullableAnyFrom(value any) (NullableAny, error) {
+	var na NullableAny
+	err := na.Set(value)
+	if err != nil {
+		return NullableAny{}, err
+	}
+	return na, nil
+}
+
+func NilAny() NullableAny {
+	// Return a NullableAny that is nil
+	return NullableAny{
+		value: nil,
+		valid: false,
+	}
 }
 
 var _ json.Marshaler = &NullableAny{}

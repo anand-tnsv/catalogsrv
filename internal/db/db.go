@@ -54,6 +54,18 @@ type DB_ interface {
 	GetWorkspaceByLabel(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, label string) (*models.Workspace, apperrors.Error)
 	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) apperrors.Error
 	UpdateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
+	CreateWorkspaceCollection(ctx context.Context, wc *models.WorkspaceCollection) (err apperrors.Error)
+	GetWorkspaceCollection(ctx context.Context, path, namespace string, workspaceID, variantID, catalogID uuid.UUID) (*models.WorkspaceCollection, apperrors.Error)
+	UpdateWorkspaceCollection(ctx context.Context, wc *models.WorkspaceCollection) apperrors.Error
+	DeleteWorkspaceCollection(ctx context.Context, path, namespace string, workspaceID, variantID, catalogID uuid.UUID) apperrors.Error
+	ListWorkspaceCollectionsByNamespace(ctx context.Context, namespace string, workspaceID, variantID, catalogID uuid.UUID) ([]*models.WorkspaceCollection, apperrors.Error)
+
+	// Namespace
+	CreateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error
+	GetNamespace(ctx context.Context, name string, variantID, catalogID uuid.UUID) (*models.Namespace, apperrors.Error)
+	UpdateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error
+	DeleteNamespace(ctx context.Context, name string, variantID, catalogID uuid.UUID) apperrors.Error
+	ListNamespacesByVariant(ctx context.Context, catalogID, variantID uuid.UUID) ([]*models.Namespace, apperrors.Error)
 
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error

@@ -33,4 +33,5 @@ var (
 	ErrInvalidUUID                           apperrors.Error = ErrCatalogError.New("invalid uuid")
 	ErrNoAncestorReferencesFound             apperrors.Error = ErrUnableToDeleteObject.New("no ancestor references found").SetStatusCode(http.StatusConflict)
 	ErrUnableToDeleteParameterWithReferences apperrors.Error = ErrUnableToDeleteObject.New("parameter has existing references in collections").SetStatusCode(http.StatusConflict)
+	ErrInvalidParameter                      apperrors.Error = ErrCatalogError.New("invalid parameter").SetStatusCode(http.StatusBadRequest)
 )

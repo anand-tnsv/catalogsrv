@@ -109,6 +109,21 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 		return errDb
 	}
 
+	// Create a default namespace for the variant
+	namespace := models.Namespace{
+		Name:        types.DefaultNamespace,
+		VariantID:   variant.VariantID,
+		CatalogID:   variant.CatalogID,
+		TenantID:    tenantID,
+		Description: "Default namespace for the variant",
+		Info:        nil, // Default info as null
+	}
+	errDb = h.createNamespaceWithTransaction(ctx, &namespace, tx)
+	if errDb != nil {
+		log.Ctx(ctx).Error().Err(errDb).Str("variant_id", variant.VariantID.String()).Msg("failed to create default namespace for variant")
+		return errDb
+	}
+
 	return nil
 }
 

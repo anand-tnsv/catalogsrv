@@ -116,7 +116,7 @@ func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.
 		TenantID:    workspace.TenantID,
 		Directory:   []byte("{}"), // Initialize with empty JSON
 	}
-	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCatalogCollectionValue, &vd, tx); err != nil {
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCatalogCollection, &vd, tx); err != nil {
 		return err
 	}
 

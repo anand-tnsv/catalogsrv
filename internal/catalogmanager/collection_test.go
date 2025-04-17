@@ -423,4 +423,36 @@ func TestCollection(t *testing.T) {
 	require.NoError(t, err)
 	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
 	require.ErrorIs(t, err, ErrSchemaOfCollectionNotMutable)
+
+	// change single collection value
+	valAny, _ := types.NullableAnyFrom(7) // new value for maxRetries
+	err = UpdateCollectionValue(ctx, &m, "maxRetries", valAny, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.NotNil(t, collection)
+	values = collection.Values()
+	assert.NotNil(t, values)
+	assert.Equal(t, 3, len(values)) // maxRetries and maxDelay should be set
+	assert.NoError(t, values["maxRetries"].Value.GetAs(&val))
+	assert.Equal(t, 7, val) // updated value from the new collection
+	assert.NoError(t, values["maxDelay"].Value.GetAs(&val))
+	assert.Equal(t, 500, val)
+	assert.False(t, values["maxAttempts"].Value.IsNil())
+	assert.NoError(t, values["maxAttempts"].Value.GetAs(&val))
+	assert.Equal(t, 10, val) // unchanged value from the new collection
+
+	// Test invalid parameter name
+	err = UpdateCollectionValue(ctx, &m, "invalidParam", valAny, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// Test invalid value type
+	valAny, _ = types.NullableAnyFrom("not-an-integer") // invalid value for maxRetries
+	err = UpdateCollectionValue(ctx, &m, "maxRetries", valAny, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	// set the same value
+	valAny, _ = types.NullableAnyFrom(7) // same value for maxRetries
+	err = UpdateCollectionValue(ctx, &m, "maxRetries", valAny, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
 }
