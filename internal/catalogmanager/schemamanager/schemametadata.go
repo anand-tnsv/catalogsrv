@@ -1,6 +1,7 @@
 package schemamanager
 
 import (
+	"encoding/json"
 	"reflect"
 
 	"github.com/go-playground/validator/v10"
@@ -9,13 +10,18 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
+// Modifying this struct should also change the Json Marshaler
 type SchemaMetadata struct {
 	Name        string               `json:"name" validate:"required,resourceNameValidator"`
 	Catalog     string               `json:"catalog" validate:"required,resourceNameValidator"`
 	Variant     types.NullableString `json:"variant,omitempty" validate:"resourceNameValidator"`
+	Namespace   types.NullableString `json:"namespace,omitempty" validate:"omitempty,resourceNameValidator"`
 	Path        string               `json:"path,omitempty" validate:"omitempty,resourcePathValidator"`
 	Description string               `json:"description"`
 }
+
+var _ json.Marshaler = SchemaMetadata{}
+var _ json.Marshaler = &SchemaMetadata{}
 
 func (rs *SchemaMetadata) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
@@ -49,4 +55,24 @@ func (rs *SchemaMetadata) Validate() schemaerr.ValidationErrors {
 		}
 	}
 	return ves
+}
+
+func (s SchemaMetadata) MarshalJSON() ([]byte, error) {
+	m := make(map[string]interface{})
+
+	m["name"] = s.Name
+	m["catalog"] = s.Catalog
+	m["description"] = s.Description
+
+	if s.Variant.Valid {
+		m["variant"] = s.Variant.Value
+	}
+	if s.Namespace.Valid {
+		m["namespace"] = s.Namespace.Value
+	}
+	if s.Path != "" {
+		m["path"] = s.Path
+	}
+
+	return json.Marshal(m)
 }

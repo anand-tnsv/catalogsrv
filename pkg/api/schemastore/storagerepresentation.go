@@ -2,6 +2,7 @@ package schemastore
 
 import (
 	"encoding/json"
+	"reflect"
 
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
@@ -14,6 +15,7 @@ type SchemaStorageRepresentation struct {
 	Description string                  `json:"description"`
 	Schema      json.RawMessage         `json:"schema"`
 	Values      json.RawMessage         `json:"values"`
+	Entropy     []byte                  `json:"entropy,omitempty"`
 }
 
 // Serialize converts the SchemaStorageRepresentation to a JSON byte array
@@ -23,6 +25,14 @@ func (s *SchemaStorageRepresentation) Serialize() ([]byte, apperrors.Error) {
 		return nil, validationerrors.ErrSchemaSerialization
 	}
 	return j, nil
+}
+
+func (s *SchemaStorageRepresentation) SetEntropy(entropy []byte) {
+	if entropy == nil {
+		s.Entropy = nil
+		return
+	}
+	s.Entropy = entropy
 }
 
 // GetHash returns the SHA-512 hash of the normalized SchemaStorageRepresentation
@@ -43,4 +53,27 @@ func (s *SchemaStorageRepresentation) GetHash() string {
 // Size returns the approximate size of the SchemaStorageRepresentation in bytes
 func (s *SchemaStorageRepresentation) Size() int {
 	return len(s.Schema) + len(s.Version) + len(s.Type)
+}
+
+func (s *SchemaStorageRepresentation) DiffersInSpec(other *SchemaStorageRepresentation) bool {
+	if other == nil {
+		return true
+	}
+	// Compare the Schema field only for differences do a byte compare
+	res, err := jsonEqual(s.Schema, other.Schema)
+	return err != nil || !res
+}
+
+func jsonEqual(a, b json.RawMessage) (bool, error) {
+	var objA interface{}
+	var objB interface{}
+
+	if err := json.Unmarshal([]byte(a), &objA); err != nil {
+		return false, err
+	}
+	if err := json.Unmarshal([]byte(b), &objB); err != nil {
+		return false, err
+	}
+
+	return reflect.DeepEqual(objA, objB), nil
 }

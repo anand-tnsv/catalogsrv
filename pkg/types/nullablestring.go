@@ -45,6 +45,10 @@ func NullableStringFrom(s string) NullableString {
 	return NullableString{Value: s, Valid: true}
 }
 
+func NullString() NullableString {
+	return NullableString{Value: "", Valid: false}
+}
+
 var _ json.Marshaler = &NullableString{}   // Ensure NullableString implements json.Marshaler
 var _ json.Unmarshaler = &NullableString{} // Ensure NullableString implements json.Unmarshaler
 var _ Nullable = &NullableString{}         // Ensure NullableString implements Nullable interface

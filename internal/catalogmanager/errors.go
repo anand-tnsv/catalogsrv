@@ -25,6 +25,7 @@ var (
 	ErrInvalidObject                         apperrors.Error = ErrCatalogError.New("invalid object").SetStatusCode(http.StatusBadRequest)
 	ErrInvalidVersion                        apperrors.Error = ErrCatalogError.New("invalid version").SetStatusCode(http.StatusBadRequest)
 	ErrVariantNotFound                       apperrors.Error = ErrCatalogError.New("variant not found").SetStatusCode(http.StatusNotFound)
+	ErrNamespaceNotFound                     apperrors.Error = ErrCatalogError.New("namespace not found").SetStatusCode(http.StatusNotFound)
 	ErrWorkspaceNotFound                     apperrors.Error = ErrCatalogError.New("workspace not found").SetStatusCode(http.StatusNotFound)
 	ErrInvalidVersionOrWorkspace             apperrors.Error = ErrCatalogError.New("invalid version or workspace").SetStatusCode(http.StatusBadRequest)
 	ErrInvalidCollectionSchema               apperrors.Error = ErrCatalogError.New("invalid collection schema").SetStatusCode(http.StatusBadRequest)
@@ -34,4 +35,6 @@ var (
 	ErrNoAncestorReferencesFound             apperrors.Error = ErrUnableToDeleteObject.New("no ancestor references found").SetStatusCode(http.StatusConflict)
 	ErrUnableToDeleteParameterWithReferences apperrors.Error = ErrUnableToDeleteObject.New("parameter has existing references in collections").SetStatusCode(http.StatusConflict)
 	ErrInvalidParameter                      apperrors.Error = ErrCatalogError.New("invalid parameter").SetStatusCode(http.StatusBadRequest)
+	ErrUnableToSaveSchema                    apperrors.Error = ErrCatalogError.New("unable to save schema").SetStatusCode(http.StatusInternalServerError)
+	ErrSchemaConflict                        apperrors.Error = ErrCatalogError.New("schema conflicts with existing schema").SetStatusCode(http.StatusConflict) // when trying to save a schema that conflicts with an existing one
 )

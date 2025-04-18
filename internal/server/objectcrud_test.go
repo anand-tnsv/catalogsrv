@@ -18,7 +18,9 @@ import (
 func TestCatalogCreate(t *testing.T) {
 
 	ctx := newDb()
-	defer db.DB(ctx).Close(ctx)
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -30,7 +32,9 @@ func TestCatalogCreate(t *testing.T) {
 	// Create the tenant for testing
 	err := db.DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
-	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
 
 	// Create the project for testing
 	err = db.DB(ctx).CreateProject(ctx, projectID)
@@ -67,7 +71,9 @@ func TestCatalogCreate(t *testing.T) {
 
 func TestGetUpdateDeleteCatalog(t *testing.T) {
 	ctx := newDb()
-	defer db.DB(ctx).Close(ctx)
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -79,7 +85,9 @@ func TestGetUpdateDeleteCatalog(t *testing.T) {
 	// Create the tenant for testing
 	err := db.DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
-	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
 
 	// Create the project for testing
 	err = db.DB(ctx).CreateProject(ctx, projectID)
@@ -199,7 +207,9 @@ func TestGetUpdateDeleteCatalog(t *testing.T) {
 
 func TestVariantCrud(t *testing.T) {
 	ctx := newDb()
-	defer db.DB(ctx).Close(ctx)
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -211,7 +221,9 @@ func TestVariantCrud(t *testing.T) {
 	// Create the tenant for testing
 	err := db.DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
-	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
 
 	// Create the project for testing
 	err = db.DB(ctx).CreateProject(ctx, projectID)
@@ -350,7 +362,9 @@ func TestVariantCrud(t *testing.T) {
 
 func TestWorkspaceCrud(t *testing.T) {
 	ctx := newDb()
-	defer db.DB(ctx).Close(ctx)
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
 
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
@@ -362,7 +376,9 @@ func TestWorkspaceCrud(t *testing.T) {
 	// Create the tenant for testing
 	err := db.DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
-	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
 
 	// Create the project for testing
 	err = db.DB(ctx).CreateProject(ctx, projectID)
@@ -630,8 +646,9 @@ func TestWorkspaceCrud(t *testing.T) {
 
 func TestObjectCrud(t *testing.T) {
 	ctx := newDb()
-	defer db.DB(ctx).Close(ctx)
-
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("PABCDE")
 
@@ -642,7 +659,9 @@ func TestObjectCrud(t *testing.T) {
 	// Create the tenant for testing
 	err := db.DB(ctx).CreateTenant(ctx, tenantID)
 	assert.NoError(t, err)
-	defer db.DB(ctx).DeleteTenant(ctx, tenantID)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
 
 	// Create the project for testing
 	err = db.DB(ctx).CreateProject(ctx, projectID)

@@ -224,6 +224,7 @@ func (h *hatchCatalogDb) LoadObjectByPath(ctx context.Context, t types.CatalogOb
 		return nil, dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
 
+	log.Ctx(ctx).Debug().Str("path", path).Str("DirectoryID", directoryID.String()).Msg("Loading object by path")
 	query := `
 		WITH hash_cte AS (
 			SELECT (directory-> $1 ->> 'hash') AS hash

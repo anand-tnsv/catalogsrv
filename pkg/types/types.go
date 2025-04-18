@@ -34,6 +34,19 @@ const (
 	ObjectTypeValue      = "value"
 )
 
+func Kind(t CatalogObjectType) string {
+	switch t {
+	case CatalogObjectTypeParameterSchema:
+		return ParameterSchemaKind
+	case CatalogObjectTypeCollectionSchema:
+		return CollectionSchemaKind
+	case CatalogObjectTypeCatalogCollection:
+		return CollectionKind
+	default:
+		return ""
+	}
+}
+
 var validObjTypes = []string{ObjectTypeCollection, ObjectTypeParameter, ObjectTypeValue}
 
 func InValidObjectTypes(s string) bool {
@@ -58,6 +71,19 @@ const (
 	CatalogObjectTypeCollectionSchema  CatalogObjectType = "collection_schema"
 	CatalogObjectTypeCatalogCollection CatalogObjectType = "collection"
 )
+
+func CatalogObjectTypeFromKind(k string) CatalogObjectType {
+	switch k {
+	case ParameterSchemaKind:
+		return CatalogObjectTypeParameterSchema
+	case CollectionSchemaKind:
+		return CatalogObjectTypeCollectionSchema
+	case CollectionKind:
+		return CatalogObjectTypeCatalogCollection
+	default:
+		return CatalogObjectTypeInvalid
+	}
+}
 
 type Nullable interface {
 	IsNil() bool
