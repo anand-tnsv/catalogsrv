@@ -117,7 +117,7 @@ func (h *hatchCatalogDb) createVersionWithTransaction(ctx context.Context, versi
 		TenantID:   version.TenantID,
 		Directory:  []byte("{}"), // Initialize with empty JSON
 	}
-	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCollectionSchema, &vd, tx); err != nil {
+	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCatalogCollection, &vd, tx); err != nil {
 		return err
 	}
 
