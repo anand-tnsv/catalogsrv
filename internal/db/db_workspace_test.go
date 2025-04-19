@@ -66,13 +66,12 @@ func TestCreateWorkspace(t *testing.T) {
 	// Create a version 1 for the variant
 	version := models.Version{
 		VariantID: variant.VariantID,
-		CatalogID: catalog.CatalogID,
 		TenantID:  tenantID,
 		Info:      info,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully create a workspace
 	workspace := models.Workspace{
@@ -81,7 +80,6 @@ func TestCreateWorkspace(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
@@ -93,6 +91,12 @@ func TestCreateWorkspace(t *testing.T) {
 	assert.NotNil(t, retrievedWorkspace)
 	assert.Equal(t, "workspace1", retrievedWorkspace.Label)
 
+	// Get the catalog given a workpace
+	catalogForWorkspace, err := DB(ctx).GetCatalogForWorkspace(ctx, workspace.WorkspaceID)
+	assert.NoError(t, err)
+	assert.Equal(t, catalog.CatalogID, catalogForWorkspace.CatalogID)
+	assert.Equal(t, info, catalogForWorkspace.Info)
+
 	// Test case: Create a workspace with invalid label (should fail due to check constraint)
 	invalidLabelWorkspace := models.Workspace{
 		Label:       "invalid label with spaces",
@@ -100,24 +104,10 @@ func TestCreateWorkspace(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &invalidLabelWorkspace)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	// Test case: Create a workspace with invalid catalog ID (should fail)
-	invalidCatalogIDWorkspace := models.Workspace{
-		Label:       "workspace2",
-		Description: "This workspace should fail due to invalid catalog ID",
-		Info:        info,
-		BaseVersion: 1,
-		VariantID:   variant.VariantID,
-		CatalogID:   uuid.New(),
-	}
-	err = DB(ctx).CreateWorkspace(ctx, &invalidCatalogIDWorkspace)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidCatalog)
 
 	// Test case: Create a workspace with invalid variant ID (should fail)
 	invalidVariantIDWorkspace := models.Workspace{
@@ -126,7 +116,6 @@ func TestCreateWorkspace(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   uuid.New(),
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &invalidVariantIDWorkspace)
 	assert.Error(t, err)
@@ -139,7 +128,6 @@ func TestCreateWorkspace(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &duplicateWorkspace)
 	assert.Error(t, err)
@@ -202,13 +190,12 @@ func TestDeleteWorkspace(t *testing.T) {
 	// Create a version 1 for the variant
 	version := models.Version{
 		VariantID: variant.VariantID,
-		CatalogID: catalog.CatalogID,
 		TenantID:  tenantID,
 		Info:      info,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully create and then delete a workspace
 	workspace := models.Workspace{
@@ -217,7 +204,6 @@ func TestDeleteWorkspace(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
@@ -297,13 +283,12 @@ func TestGetWorkspace(t *testing.T) {
 	// Create a version 1 for the variant
 	version := models.Version{
 		VariantID: variant.VariantID,
-		CatalogID: catalog.CatalogID,
 		TenantID:  tenantID,
 		Info:      info,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully create and retrieve a workspace
 	workspace := models.Workspace{
@@ -312,7 +297,6 @@ func TestGetWorkspace(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
@@ -390,13 +374,12 @@ func TestUpdateWorkspaceLabel(t *testing.T) {
 	// Create a version 1 for the variant
 	version := models.Version{
 		VariantID: variant.VariantID,
-		CatalogID: catalog.CatalogID,
 		TenantID:  tenantID,
 		Info:      info,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully create and update the label of a workspace
 	workspace := models.Workspace{
@@ -405,7 +388,6 @@ func TestUpdateWorkspaceLabel(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
@@ -434,7 +416,6 @@ func TestUpdateWorkspaceLabel(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &duplicateWorkspace)
 	assert.NoError(t, err)
@@ -458,7 +439,7 @@ func TestUpdateWorkspaceLabel(t *testing.T) {
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
 
-func TestCreateWorkspaceCollection(t *testing.T) {
+func TestCreateCollection(t *testing.T) {
 	ctx := log.Logger.WithContext(context.Background())
 	ctx = newDb(ctx)
 	defer DB(ctx).Close(ctx)
@@ -500,13 +481,12 @@ func TestCreateWorkspaceCollection(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	assert.NoError(t, DB(ctx).CreateWorkspace(ctx, &workspace))
 	defer DB(ctx).DeleteWorkspace(ctx, workspace.WorkspaceID)
 
 	// Test case: Create workspace collection using default namespace
-	wc := models.WorkspaceCollection{
+	wc := models.Collection{
 		CollectionID:     uuid.New(),
 		Path:             "/config/db",
 		Hash:             "a3f1f81c9d26b37286f0828b8fecd851e35b0e7dfc51c58c9fd1a038d451de56",
@@ -514,22 +494,21 @@ func TestCreateWorkspaceCollection(t *testing.T) {
 		Namespace:        types.DefaultNamespace, // use default
 		CollectionSchema: "DbSchema",
 		Info:             info.Bytes,
-		WorkspaceID:      workspace.WorkspaceID,
+		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
-		CatalogID:        catalog.CatalogID,
 	}
-	err := DB(ctx).CreateWorkspaceCollection(ctx, &wc)
+	err := DB(ctx).CreateCollection(ctx, &wc)
 	assert.NoError(t, err)
 
 	// Test case: Duplicate collection (same path, namespace, etc.)
-	err = DB(ctx).CreateWorkspaceCollection(ctx, &wc)
+	err = DB(ctx).CreateCollection(ctx, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrAlreadyExists)
 
 	// Test case: Invalid path format
 	wc.Path = "invalid path"
 	wc.CollectionID = uuid.New()
-	err = DB(ctx).CreateWorkspaceCollection(ctx, &wc)
+	err = DB(ctx).CreateCollection(ctx, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
@@ -537,7 +516,7 @@ func TestCreateWorkspaceCollection(t *testing.T) {
 	wc.Path = "/config/valid"
 	wc.Namespace = "invalid namespace with spaces"
 	wc.CollectionID = uuid.New()
-	err = DB(ctx).CreateWorkspaceCollection(ctx, &wc)
+	err = DB(ctx).CreateCollection(ctx, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
@@ -545,26 +524,18 @@ func TestCreateWorkspaceCollection(t *testing.T) {
 	wc.Namespace = types.DefaultNamespace
 	wc.CollectionSchema = "invalid schema!"
 	wc.CollectionID = uuid.New()
-	err = DB(ctx).CreateWorkspaceCollection(ctx, &wc)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	// Test case: Referencing non-existent workspace
-	wc.CollectionSchema = "ValidSchema"
-	wc.WorkspaceID = uuid.New()
-	wc.CollectionID = uuid.New()
-	err = DB(ctx).CreateWorkspaceCollection(ctx, &wc)
+	err = DB(ctx).CreateCollection(ctx, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	// Test case: Missing tenant ID
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	err = DB(ctx).CreateWorkspaceCollection(ctxWithoutTenant, &wc)
+	err = DB(ctx).CreateCollection(ctxWithoutTenant, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrMissingTenantID)
 }
 
-func TestGetWorkspaceCollection(t *testing.T) {
+func TestGetCollection(t *testing.T) {
 	ctx := log.Logger.WithContext(context.Background())
 	ctx = newDb(ctx)
 	defer DB(ctx).Close(ctx)
@@ -597,12 +568,11 @@ func TestGetWorkspaceCollection(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	assert.NoError(t, DB(ctx).CreateWorkspace(ctx, &workspace))
 	defer DB(ctx).DeleteWorkspace(ctx, workspace.WorkspaceID)
 
-	wc := models.WorkspaceCollection{
+	wc := models.Collection{
 		CollectionID:     uuid.New(),
 		Path:             "/get/example",
 		Hash:             "abcd1234",
@@ -610,23 +580,22 @@ func TestGetWorkspaceCollection(t *testing.T) {
 		Namespace:        types.DefaultNamespace,
 		CollectionSchema: "BasicSchema",
 		Info:             info.Bytes,
-		WorkspaceID:      workspace.WorkspaceID,
+		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
-		CatalogID:        catalog.CatalogID,
 	}
-	assert.NoError(t, DB(ctx).CreateWorkspaceCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
 
 	// Valid get
-	result, err := DB(ctx).GetWorkspaceCollection(ctx, wc.Path, wc.Namespace, wc.WorkspaceID, wc.VariantID, wc.CatalogID)
+	result, err := DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
 	require.NoError(t, err)
 	assert.Equal(t, wc.Path, result.Path)
 
 	// Not found
-	_, err = DB(ctx).GetWorkspaceCollection(ctx, "/missing/path", wc.Namespace, wc.WorkspaceID, wc.VariantID, wc.CatalogID)
+	_, err = DB(ctx).GetCollection(ctx, "/missing/path", wc.Namespace, wc.RepoID, wc.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
-func TestUpdateWorkspaceCollection(t *testing.T) {
+func TestUpdateCollection(t *testing.T) {
 	ctx := log.Logger.WithContext(context.Background())
 	ctx = newDb(ctx)
 	defer DB(ctx).Close(ctx)
@@ -659,12 +628,11 @@ func TestUpdateWorkspaceCollection(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	assert.NoError(t, DB(ctx).CreateWorkspace(ctx, &workspace))
 	defer DB(ctx).DeleteWorkspace(ctx, workspace.WorkspaceID)
 
-	wc := models.WorkspaceCollection{
+	wc := models.Collection{
 		CollectionID:     uuid.New(),
 		Path:             "/update/example",
 		Hash:             schemastore.HexEncodedSHA512([]byte("original_hash")),
@@ -672,30 +640,29 @@ func TestUpdateWorkspaceCollection(t *testing.T) {
 		Namespace:        types.DefaultNamespace,
 		CollectionSchema: "UpdateSchema",
 		Info:             info.Bytes,
-		WorkspaceID:      workspace.WorkspaceID,
+		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
-		CatalogID:        catalog.CatalogID,
 	}
-	assert.NoError(t, DB(ctx).CreateWorkspaceCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
 
 	// Update
 	wc.Hash = schemastore.HexEncodedSHA512([]byte("updated_hash"))
 	wc.Description = "updated description"
-	assert.NoError(t, DB(ctx).UpdateWorkspaceCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).UpdateCollection(ctx, &wc))
 
 	// Verify
-	got, err := DB(ctx).GetWorkspaceCollection(ctx, wc.Path, wc.Namespace, wc.WorkspaceID, wc.VariantID, wc.CatalogID)
+	got, err := DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
 	assert.NoError(t, err)
 	assert.Equal(t, wc.Hash, got.Hash)
 	assert.Equal(t, "updated description", got.Description)
 
 	// Not found
 	wc.Path = "/not/found"
-	err = DB(ctx).UpdateWorkspaceCollection(ctx, &wc)
+	err = DB(ctx).UpdateCollection(ctx, &wc)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
-func TestDeleteWorkspaceCollection(t *testing.T) {
+func TestDeleteCollection(t *testing.T) {
 	ctx := log.Logger.WithContext(context.Background())
 	ctx = newDb(ctx)
 	defer DB(ctx).Close(ctx)
@@ -728,12 +695,11 @@ func TestDeleteWorkspaceCollection(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	assert.NoError(t, DB(ctx).CreateWorkspace(ctx, &workspace))
 	defer DB(ctx).DeleteWorkspace(ctx, workspace.WorkspaceID)
 
-	wc := models.WorkspaceCollection{
+	wc := models.Collection{
 		CollectionID:     uuid.New(),
 		Path:             "/delete/example",
 		Hash:             "xyz123",
@@ -741,26 +707,25 @@ func TestDeleteWorkspaceCollection(t *testing.T) {
 		Namespace:        types.DefaultNamespace,
 		CollectionSchema: "DeleteSchema",
 		Info:             info.Bytes,
-		WorkspaceID:      workspace.WorkspaceID,
+		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
-		CatalogID:        catalog.CatalogID,
 	}
-	assert.NoError(t, DB(ctx).CreateWorkspaceCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
 
 	// Delete
-	err := DB(ctx).DeleteWorkspaceCollection(ctx, wc.Path, wc.Namespace, wc.WorkspaceID, wc.VariantID, wc.CatalogID)
+	err := DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
 	assert.NoError(t, err)
 
 	// Confirm
-	_, err = DB(ctx).GetWorkspaceCollection(ctx, wc.Path, wc.Namespace, wc.WorkspaceID, wc.VariantID, wc.CatalogID)
+	_, err = DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Delete again
-	err = DB(ctx).DeleteWorkspaceCollection(ctx, wc.Path, wc.Namespace, wc.WorkspaceID, wc.VariantID, wc.CatalogID)
+	err = DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
-func TestListWorkspaceCollectionsByNamespace(t *testing.T) {
+func TestListCollectionsByNamespace(t *testing.T) {
 	ctx := log.Logger.WithContext(context.Background())
 	ctx = newDb(ctx)
 	defer DB(ctx).Close(ctx)
@@ -793,13 +758,12 @@ func TestListWorkspaceCollectionsByNamespace(t *testing.T) {
 		Info:        info,
 		BaseVersion: 1,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	assert.NoError(t, DB(ctx).CreateWorkspace(ctx, &workspace))
 	defer DB(ctx).DeleteWorkspace(ctx, workspace.WorkspaceID)
 
 	for _, path := range []string{"/x/a", "/x/b", "/x/c"} {
-		wc := models.WorkspaceCollection{
+		wc := models.Collection{
 			CollectionID:     uuid.New(),
 			Path:             path,
 			Hash:             "abc123",
@@ -807,14 +771,13 @@ func TestListWorkspaceCollectionsByNamespace(t *testing.T) {
 			Namespace:        types.DefaultNamespace,
 			CollectionSchema: "SchemaX",
 			Info:             info.Bytes,
-			WorkspaceID:      workspace.WorkspaceID,
+			RepoID:           workspace.WorkspaceID,
 			VariantID:        variant.VariantID,
-			CatalogID:        catalog.CatalogID,
 		}
-		assert.NoError(t, DB(ctx).CreateWorkspaceCollection(ctx, &wc))
+		assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
 	}
 
-	list, err := DB(ctx).ListWorkspaceCollectionsByNamespace(ctx, types.DefaultNamespace, workspace.WorkspaceID, variant.VariantID, catalog.CatalogID)
+	list, err := DB(ctx).ListCollectionsByNamespace(ctx, types.DefaultNamespace, workspace.WorkspaceID, variant.VariantID)
 	assert.NoError(t, err)
 	assert.Len(t, list, 3)
 }

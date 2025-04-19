@@ -39,33 +39,36 @@ type DB_ interface {
 
 	// Version
 	CreateVersion(ctx context.Context, version *models.Version) error
-	GetVersion(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID) (*models.Version, error)
-	GetVersionByLabel(ctx context.Context, label string, catalogID, variantID uuid.UUID) (*models.Version, error)
-	SetVersionLabel(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID, newLabel string) error
-	UpdateVersionDescription(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID, newDescription string) error
-	DeleteVersion(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID) error
-	CountVersionsInCatalogAndVariant(ctx context.Context, catalogID, variantID uuid.UUID) (int, error)
-	GetNamedVersions(ctx context.Context, catalogID, variantID uuid.UUID) ([]models.Version, error)
+	GetVersion(ctx context.Context, versionNum int, variantID uuid.UUID) (*models.Version, error)
+	GetVersionByLabel(ctx context.Context, label string, variantID uuid.UUID) (*models.Version, error)
+	SetVersionLabel(ctx context.Context, versionNum int, variantID uuid.UUID, newLabel string) error
+	UpdateVersionDescription(ctx context.Context, versionNum int, variantID uuid.UUID, newDescription string) error
+	DeleteVersion(ctx context.Context, versionNum int, variantID uuid.UUID) error
+	CountVersionsInVariant(ctx context.Context, variantID uuid.UUID) (int, error)
+	GetNamedVersions(ctx context.Context, variantID uuid.UUID) ([]models.Version, error)
 
 	// Workspace
 	CreateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
 	DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) apperrors.Error
 	GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*models.Workspace, apperrors.Error)
-	GetWorkspaceByLabel(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, label string) (*models.Workspace, apperrors.Error)
+	GetWorkspaceByLabel(ctx context.Context, variantID uuid.UUID, label string) (*models.Workspace, apperrors.Error)
 	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) apperrors.Error
 	UpdateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
-	CreateWorkspaceCollection(ctx context.Context, wc *models.WorkspaceCollection) (err apperrors.Error)
-	GetWorkspaceCollection(ctx context.Context, path, namespace string, workspaceID, variantID, catalogID uuid.UUID) (*models.WorkspaceCollection, apperrors.Error)
-	UpdateWorkspaceCollection(ctx context.Context, wc *models.WorkspaceCollection) apperrors.Error
-	DeleteWorkspaceCollection(ctx context.Context, path, namespace string, workspaceID, variantID, catalogID uuid.UUID) apperrors.Error
-	ListWorkspaceCollectionsByNamespace(ctx context.Context, namespace string, workspaceID, variantID, catalogID uuid.UUID) ([]*models.WorkspaceCollection, apperrors.Error)
+	GetCatalogForWorkspace(ctx context.Context, workspaceID uuid.UUID) (models.Catalog, apperrors.Error)
+
+	//Collections
+	CreateCollection(ctx context.Context, wc *models.Collection) (err apperrors.Error)
+	GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error)
+	UpdateCollection(ctx context.Context, wc *models.Collection) apperrors.Error
+	DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) apperrors.Error
+	ListCollectionsByNamespace(ctx context.Context, namespace string, repoID, variantID uuid.UUID) ([]*models.Collection, apperrors.Error)
 
 	// Namespace
 	CreateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error
-	GetNamespace(ctx context.Context, name string, variantID, catalogID uuid.UUID) (*models.Namespace, apperrors.Error)
+	GetNamespace(ctx context.Context, name string, variantID uuid.UUID) (*models.Namespace, apperrors.Error)
 	UpdateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error
-	DeleteNamespace(ctx context.Context, name string, variantID, catalogID uuid.UUID) apperrors.Error
-	ListNamespacesByVariant(ctx context.Context, catalogID, variantID uuid.UUID) ([]*models.Namespace, apperrors.Error)
+	DeleteNamespace(ctx context.Context, name string, variantID uuid.UUID) apperrors.Error
+	ListNamespacesByVariant(ctx context.Context, variantID uuid.UUID) ([]*models.Namespace, apperrors.Error)
 
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error

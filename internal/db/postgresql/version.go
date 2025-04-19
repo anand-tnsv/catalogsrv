@@ -14,19 +14,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// CreateVersion creates a new version in the database.
-// It automatically assigns a unique version number within the catalog and variant based on the sequence.
-// Returns an error if the label already exists for the given variant and catalog (when not empty),
-// the label format is invalid, the catalog or variant ID is invalid, or there is a database error.
 func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Version) (err error) {
-	// Retrieve tenantID from the context
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
 	}
 	version.TenantID = tenantID
 
-	// create a transaction
 	tx, err := h.conn().BeginTx(ctx, nil)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to begin transaction")
@@ -53,84 +47,63 @@ func (h *hatchCatalogDb) CreateVersion(ctx context.Context, version *models.Vers
 }
 
 func (h *hatchCatalogDb) createVersionWithTransaction(ctx context.Context, version *models.Version, tx *sql.Tx) apperrors.Error {
-
-	label := sql.NullString{String: version.Label, Valid: version.Label != ""} // Set label as sql.NullString
+	label := sql.NullString{String: version.Label, Valid: version.Label != ""}
 	query := `
-		INSERT INTO versions (label, description, info, variant_id, catalog_id, tenant_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO versions (label, description, info, variant_id, tenant_id)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING version_num;
 	`
 
-	// Execute the query and scan the returned version_num
-	row := tx.QueryRowContext(ctx, query, label, version.Description, version.Info, version.VariantID, version.CatalogID, version.TenantID)
+	row := tx.QueryRowContext(ctx, query, label, version.Description, version.Info, version.VariantID, version.TenantID)
 	var versionNum int
 	err := row.Scan(&versionNum)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Ctx(ctx).Info().Str("label", version.Label).Str("variant_id", version.VariantID.String()).Str("catalog_id", version.CatalogID.String()).Msg("version already exists")
+			log.Ctx(ctx).Info().Str("label", version.Label).Str("variant_id", version.VariantID.String()).Msg("version already exists")
 			return dberror.ErrAlreadyExists.Msg("version already exists")
 		}
 		if pgErr, ok := err.(*pgconn.PgError); ok {
-			if pgErr.Code == "23505" && pgErr.ConstraintName == "unique_label_variant_catalog_tenant" { // Unique constraint violation
-				log.Ctx(ctx).Error().Str("label", version.Label).Str("variant_id", version.VariantID.String()).Str("catalog_id", version.CatalogID.String()).Msg("label already exists for the given variant and catalog")
-				return dberror.ErrAlreadyExists.Msg("label already exists for the given variant and catalog")
+			if pgErr.Code == "23505" && pgErr.ConstraintName == "unique_label_variant_tenant" {
+				log.Ctx(ctx).Error().Str("label", version.Label).Str("variant_id", version.VariantID.String()).Msg("label already exists for the given variant")
+				return dberror.ErrAlreadyExists.Msg("label already exists for the given variant")
 			}
-			if pgErr.Code == "23514" && pgErr.ConstraintName == "versions_label_check" { // Check constraint violation code
+			if pgErr.Code == "23514" && pgErr.ConstraintName == "versions_label_check" {
 				log.Ctx(ctx).Error().Str("label", version.Label).Msg("invalid label format")
 				return dberror.ErrInvalidInput.Msg("invalid label format")
 			}
-			if pgErr.ConstraintName == "versions_variant_id_catalog_id_tenant_id_fkey" || pgErr.ConstraintName == "version_sequences_variant_id_catalog_id_tenant_id_fkey" { // Foreign key constraint violations
-				log.Ctx(ctx).Info().Str("variant_id", version.VariantID.String()).Str("catalog_id", version.CatalogID.String()).Msg("catalog or variant not found")
-				return dberror.ErrInvalidCatalog
+			if pgErr.ConstraintName == "versions_variant_id_tenant_id_fkey" || pgErr.ConstraintName == "version_sequences_variant_id_tenant_id_fkey" {
+				log.Ctx(ctx).Info().Str("variant_id", version.VariantID.String()).Msg("variant not found")
+				return dberror.ErrInvalidVariant
 			}
 		}
-		log.Ctx(ctx).Error().Err(err).Str("label", version.Label).Str("variant_id", version.VariantID.String()).Str("catalog_id", version.CatalogID.String()).Msg("failed to insert version")
+		log.Ctx(ctx).Error().Err(err).Str("label", version.Label).Str("variant_id", version.VariantID.String()).Msg("failed to insert version")
 		return dberror.ErrDatabase.Err(err)
 	}
 	version.VersionNum = versionNum
 
-	// Create the parameters, collections, and values directories
-	pd := models.SchemaDirectory{
-		VersionNum: version.VersionNum,
-		VariantID:  version.VariantID,
-		CatalogID:  version.CatalogID,
-		TenantID:   version.TenantID,
-		Directory:  []byte("{}"), // Initialize with empty JSON
-	}
+	pd := models.SchemaDirectory{VersionNum: version.VersionNum, VariantID: version.VariantID, TenantID: version.TenantID, Directory: []byte("{}")}
+	cd := models.SchemaDirectory{VersionNum: version.VersionNum, VariantID: version.VariantID, TenantID: version.TenantID, Directory: []byte("{}")}
+	vd := models.SchemaDirectory{VersionNum: version.VersionNum, VariantID: version.VariantID, TenantID: version.TenantID, Directory: []byte("{}")}
+
 	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeParameterSchema, &pd, tx); err != nil {
 		return err
 	}
-	cd := models.SchemaDirectory{
-		VersionNum: version.VersionNum,
-		VariantID:  version.VariantID,
-		CatalogID:  version.CatalogID,
-		TenantID:   version.TenantID,
-		Directory:  []byte("{}"), // Initialize with empty JSON
-	}
 	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCollectionSchema, &cd, tx); err != nil {
 		return err
-	}
-	vd := models.SchemaDirectory{
-		VersionNum: version.VersionNum,
-		VariantID:  version.VariantID,
-		CatalogID:  version.CatalogID,
-		TenantID:   version.TenantID,
-		Directory:  []byte("{}"), // Initialize with empty JSON
 	}
 	if err := h.createSchemaDirectoryWithTransaction(ctx, types.CatalogObjectTypeCatalogCollection, &vd, tx); err != nil {
 		return err
 	}
 
-	// update the parameter, collections, and values directories in version
 	version.ParametersDir = pd.DirectoryID
 	version.CollectionsDir = cd.DirectoryID
 	version.ValuesDir = vd.DirectoryID
 
 	query = `
 		UPDATE versions SET parameters_directory = $1, collections_directory = $2, values_directory = $3
-		WHERE version_num = $4 AND variant_id = $5 AND catalog_id = $6 AND tenant_id = $7;
+		WHERE version_num = $4 AND variant_id = $5 AND tenant_id = $6;
 	`
-	_, err = tx.ExecContext(ctx, query, version.ParametersDir, version.CollectionsDir, version.ValuesDir, version.VersionNum, version.VariantID, version.CatalogID, version.TenantID)
+	_, err = tx.ExecContext(ctx, query, version.ParametersDir, version.CollectionsDir, version.ValuesDir, version.VersionNum, version.VariantID, version.TenantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to update version with directories")
 		return dberror.ErrDatabase.Err(err)
@@ -139,26 +112,24 @@ func (h *hatchCatalogDb) createVersionWithTransaction(ctx context.Context, versi
 	return nil
 }
 
-// GetVersion retrieves a version from the database based on version_num, variant_id, and catalog_id.
-// Returns the version if found, or an error if the version is not found or there is a database error.
-func (h *hatchCatalogDb) GetVersion(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID) (*models.Version, error) {
+func (h *hatchCatalogDb) GetVersion(ctx context.Context, versionNum int, variantID uuid.UUID) (*models.Version, error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
 	}
 
 	query := `
-		SELECT version_num, label, description, info, variant_id, catalog_id, tenant_id
+		SELECT version_num, label, description, info, parameters_directory, collections_directory, values_directory, variant_id, tenant_id
 		FROM versions
-		WHERE version_num = $1 AND variant_id = $2 AND catalog_id = $3 AND tenant_id = $4;
+		WHERE version_num = $1 AND variant_id = $2 AND tenant_id = $3;
 	`
 
-	row := h.conn().QueryRowContext(ctx, query, versionNum, variantID, catalogID, tenantID)
+	row := h.conn().QueryRowContext(ctx, query, versionNum, variantID, tenantID)
 	version := &models.Version{}
-	err := row.Scan(&version.VersionNum, &version.Label, &version.Description, &version.Info, &version.VariantID, &version.CatalogID, &version.TenantID)
+	err := row.Scan(&version.VersionNum, &version.Label, &version.Description, &version.Info, &version.ParametersDir, &version.CollectionsDir, &version.ValuesDir, &version.VariantID, &version.TenantID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Str("catalog_id", catalogID.String()).Msg("version not found")
+			log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Msg("version not found")
 			return nil, dberror.ErrNotFound.Msg("version not found")
 		}
 		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve version")
@@ -168,10 +139,7 @@ func (h *hatchCatalogDb) GetVersion(ctx context.Context, versionNum int, variant
 	return version, nil
 }
 
-// SetVersionLabel updates the label of a version based on its version_num, variant_id, and catalog_id.
-// Returns an error if the new label already exists for the variant and catalog,
-// the label format is invalid, or there is a database error.
-func (h *hatchCatalogDb) SetVersionLabel(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID, newLabel string) error {
+func (h *hatchCatalogDb) SetVersionLabel(ctx context.Context, versionNum int, variantID uuid.UUID, newLabel string) error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -185,24 +153,24 @@ func (h *hatchCatalogDb) SetVersionLabel(ctx context.Context, versionNum int, va
 	query := `
 		UPDATE versions
 		SET label = $1
-		WHERE version_num = $2 AND variant_id = $3 AND catalog_id = $4 AND tenant_id = $5
+		WHERE version_num = $2 AND variant_id = $3 AND tenant_id = $4
 		RETURNING version_num;
 	`
 
-	row := h.conn().QueryRowContext(ctx, query, newLabel, versionNum, variantID, catalogID, tenantID)
+	row := h.conn().QueryRowContext(ctx, query, newLabel, versionNum, variantID, tenantID)
 	var returnedVersionNum int
 	err := row.Scan(&returnedVersionNum)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Str("catalog_id", catalogID.String()).Msg("version not found")
+			log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Msg("version not found")
 			return dberror.ErrNotFound.Msg("version not found")
 		}
 		if pgErr, ok := err.(*pgconn.PgError); ok {
-			if pgErr.Code == "23505" && pgErr.ConstraintName == "unique_label_variant_catalog_tenant" { // Unique constraint violation
-				log.Ctx(ctx).Error().Str("label", newLabel).Str("variant_id", variantID.String()).Str("catalog_id", catalogID.String()).Msg("label already exists for the given variant and catalog")
-				return dberror.ErrAlreadyExists.Msg("label already exists for the given variant and catalog")
+			if pgErr.Code == "23505" && pgErr.ConstraintName == "unique_label_variant_tenant" {
+				log.Ctx(ctx).Error().Str("label", newLabel).Str("variant_id", variantID.String()).Msg("label already exists for the given variant")
+				return dberror.ErrAlreadyExists.Msg("label already exists for the given variant")
 			}
-			if pgErr.Code == "23514" && pgErr.ConstraintName == "versions_label_check" { // Check constraint violation code
+			if pgErr.Code == "23514" && pgErr.ConstraintName == "versions_label_check" {
 				log.Ctx(ctx).Error().Str("label", newLabel).Msg("invalid label format")
 				return dberror.ErrInvalidInput.Msg("invalid label format")
 			}
@@ -214,9 +182,7 @@ func (h *hatchCatalogDb) SetVersionLabel(ctx context.Context, versionNum int, va
 	return nil
 }
 
-// UpdateVersionDescription updates the description of a version based on its version_num, variant_id, and catalog_id.
-// Returns an error if the version is not found or there is a database error.
-func (h *hatchCatalogDb) UpdateVersionDescription(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID, newDescription string) error {
+func (h *hatchCatalogDb) UpdateVersionDescription(ctx context.Context, versionNum int, variantID uuid.UUID, newDescription string) error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -225,16 +191,16 @@ func (h *hatchCatalogDb) UpdateVersionDescription(ctx context.Context, versionNu
 	query := `
 		UPDATE versions
 		SET description = $1
-		WHERE version_num = $2 AND variant_id = $3 AND catalog_id = $4 AND tenant_id = $5
+		WHERE version_num = $2 AND variant_id = $3 AND tenant_id = $4
 		RETURNING version_num;
 	`
 
-	row := h.conn().QueryRowContext(ctx, query, newDescription, versionNum, variantID, catalogID, tenantID)
+	row := h.conn().QueryRowContext(ctx, query, newDescription, versionNum, variantID, tenantID)
 	var returnedVersionNum int
 	err := row.Scan(&returnedVersionNum)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Str("catalog_id", catalogID.String()).Msg("version not found")
+			log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Msg("version not found")
 			return dberror.ErrNotFound.Msg("version not found")
 		}
 		log.Ctx(ctx).Error().Err(err).Msg("failed to update version description")
@@ -244,9 +210,7 @@ func (h *hatchCatalogDb) UpdateVersionDescription(ctx context.Context, versionNu
 	return nil
 }
 
-// DeleteVersion deletes a version from the database based on version_num, variant_id, and catalog_id.
-// Returns an error if the version is not found or there is a database error.
-func (h *hatchCatalogDb) DeleteVersion(ctx context.Context, versionNum int, variantID, catalogID uuid.UUID) error {
+func (h *hatchCatalogDb) DeleteVersion(ctx context.Context, versionNum int, variantID uuid.UUID) error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -254,10 +218,10 @@ func (h *hatchCatalogDb) DeleteVersion(ctx context.Context, versionNum int, vari
 
 	query := `
 		DELETE FROM versions
-		WHERE version_num = $1 AND variant_id = $2 AND catalog_id = $3 AND tenant_id = $4;
+		WHERE version_num = $1 AND variant_id = $2 AND tenant_id = $3;
 	`
 
-	result, err := h.conn().ExecContext(ctx, query, versionNum, variantID, catalogID, tenantID)
+	result, err := h.conn().ExecContext(ctx, query, versionNum, variantID, tenantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to delete version")
 		return dberror.ErrDatabase.Err(err)
@@ -270,15 +234,14 @@ func (h *hatchCatalogDb) DeleteVersion(ctx context.Context, versionNum int, vari
 	}
 
 	if rowsAffected == 0 {
-		log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Str("catalog_id", catalogID.String()).Msg("version not found")
+		log.Ctx(ctx).Info().Int("version_num", versionNum).Str("variant_id", variantID.String()).Msg("version not found")
 		return dberror.ErrNotFound.Msg("version not found")
 	}
 
 	return nil
 }
 
-// CountVersionsInCatalogAndVariant returns the count of all versions for a given catalog and variant.
-func (h *hatchCatalogDb) CountVersionsInCatalogAndVariant(ctx context.Context, catalogID, variantID uuid.UUID) (int, error) {
+func (h *hatchCatalogDb) CountVersionsInVariant(ctx context.Context, variantID uuid.UUID) (int, error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return 0, dberror.ErrMissingTenantID
@@ -287,11 +250,11 @@ func (h *hatchCatalogDb) CountVersionsInCatalogAndVariant(ctx context.Context, c
 	query := `
 		SELECT COUNT(*)
 		FROM versions
-		WHERE catalog_id = $1 AND variant_id = $2 AND tenant_id = $3;
+		WHERE variant_id = $1 AND tenant_id = $2;
 	`
 
 	var count int
-	err := h.conn().QueryRowContext(ctx, query, catalogID, variantID, tenantID).Scan(&count)
+	err := h.conn().QueryRowContext(ctx, query, variantID, tenantID).Scan(&count)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to count versions")
 		return 0, dberror.ErrDatabase.Err(err)
@@ -300,8 +263,7 @@ func (h *hatchCatalogDb) CountVersionsInCatalogAndVariant(ctx context.Context, c
 	return count, nil
 }
 
-// GetNamedVersions returns all named versions (non-null label) for a given catalog and variant, along with their descriptions.
-func (h *hatchCatalogDb) GetNamedVersions(ctx context.Context, catalogID, variantID uuid.UUID) ([]models.Version, error) {
+func (h *hatchCatalogDb) GetNamedVersions(ctx context.Context, variantID uuid.UUID) ([]models.Version, error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -310,10 +272,10 @@ func (h *hatchCatalogDb) GetNamedVersions(ctx context.Context, catalogID, varian
 	query := `
 		SELECT version_num, label, description
 		FROM versions
-		WHERE catalog_id = $1 AND variant_id = $2 AND tenant_id = $3 AND label IS NOT NULL;
+		WHERE variant_id = $1 AND tenant_id = $2 AND label IS NOT NULL;
 	`
 
-	rows, err := h.conn().QueryContext(ctx, query, catalogID, variantID, tenantID)
+	rows, err := h.conn().QueryContext(ctx, query, variantID, tenantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve named versions")
 		return nil, dberror.ErrDatabase.Err(err)
@@ -339,26 +301,24 @@ func (h *hatchCatalogDb) GetNamedVersions(ctx context.Context, catalogID, varian
 	return namedVersions, nil
 }
 
-// GetVersionByLabel retrieves a version from the database based on label, catalog_id, and variant_id.
-// Returns the version if found, or an error if the version is not found or there is a database error.
-func (h *hatchCatalogDb) GetVersionByLabel(ctx context.Context, label string, catalogID, variantID uuid.UUID) (*models.Version, error) {
+func (h *hatchCatalogDb) GetVersionByLabel(ctx context.Context, label string, variantID uuid.UUID) (*models.Version, error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
 	}
 
 	query := `
-		SELECT version_num, label, description, info, variant_id, catalog_id, tenant_id
+		SELECT version_num, label, description, info, parameters_directory, collections_directory, values_directory, variant_id, tenant_id
 		FROM versions
-		WHERE label = $1 AND catalog_id = $2 AND variant_id = $3 AND tenant_id = $4;
+		WHERE label = $1 AND variant_id = $2 AND tenant_id = $3;
 	`
 
-	row := h.conn().QueryRowContext(ctx, query, label, catalogID, variantID, tenantID)
+	row := h.conn().QueryRowContext(ctx, query, label, variantID, tenantID)
 	version := &models.Version{}
-	err := row.Scan(&version.VersionNum, &version.Label, &version.Description, &version.Info, &version.VariantID, &version.CatalogID, &version.TenantID)
+	err := row.Scan(&version.VersionNum, &version.Label, &version.Description, &version.Info, &version.ParametersDir, &version.CollectionsDir, &version.ValuesDir, &version.VariantID, &version.TenantID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Ctx(ctx).Info().Str("label", label).Str("variant_id", variantID.String()).Str("catalog_id", catalogID.String()).Msg("version not found")
+			log.Ctx(ctx).Info().Str("label", label).Str("variant_id", variantID.String()).Msg("version not found")
 			return nil, dberror.ErrNotFound.Msg("version not found")
 		}
 		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve version by label")

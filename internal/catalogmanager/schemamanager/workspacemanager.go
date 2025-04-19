@@ -11,7 +11,6 @@ type WorkspaceManager interface {
 	ID() uuid.UUID
 	Label() string
 	Description() string
-	CatalogID() uuid.UUID
 	VariantID() uuid.UUID
 	BaseVersion() int
 	ParametersDir() uuid.UUID

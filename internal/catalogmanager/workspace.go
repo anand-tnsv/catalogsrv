@@ -101,7 +101,6 @@ func NewWorkspaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 	w := models.Workspace{
 		Description: ws.Metadata.Description,
 		Info:        pgtype.JSONB{Status: pgtype.Null},
-		CatalogID:   catalogID,
 		VariantID:   variantID,
 		BaseVersion: ws.Metadata.BaseVersion,
 		Label:       ws.Metadata.Label,
@@ -158,10 +157,6 @@ func (wm *workspaceManager) Description() string {
 	return wm.w.Description
 }
 
-func (wm *workspaceManager) CatalogID() uuid.UUID {
-	return wm.w.CatalogID
-}
-
 func (wm *workspaceManager) VariantID() uuid.UUID {
 	return wm.w.VariantID
 }
@@ -199,14 +194,11 @@ func LoadWorkspaceManagerByID(ctx context.Context, workspaceID uuid.UUID) (schem
 	}, nil
 }
 
-func LoadWorkspaceManagerByLabel(ctx context.Context, catalogID, variantID uuid.UUID, label string) (schemamanager.WorkspaceManager, apperrors.Error) {
-	if catalogID == uuid.Nil {
-		return nil, ErrInvalidCatalog
-	}
+func LoadWorkspaceManagerByLabel(ctx context.Context, variantID uuid.UUID, label string) (schemamanager.WorkspaceManager, apperrors.Error) {
 	if variantID == uuid.Nil {
 		return nil, ErrInvalidVariant
 	}
-	w, err := db.DB(ctx).GetWorkspaceByLabel(ctx, catalogID, variantID, label)
+	w, err := db.DB(ctx).GetWorkspaceByLabel(ctx, variantID, label)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			return nil, ErrWorkspaceNotFound
@@ -233,7 +225,7 @@ func (wm *workspaceManager) Save(ctx context.Context) apperrors.Error {
 
 func (wm *workspaceManager) ToJson(ctx context.Context) ([]byte, apperrors.Error) {
 	// Get name of the catalog
-	catalog, err := db.DB(ctx).GetCatalog(ctx, wm.w.CatalogID, "")
+	catalog, err := db.DB(ctx).GetCatalogForWorkspace(ctx, wm.w.WorkspaceID)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			return nil, ErrCatalogNotFound
@@ -243,7 +235,7 @@ func (wm *workspaceManager) ToJson(ctx context.Context) ([]byte, apperrors.Error
 	}
 
 	// Get name of the variant
-	variant, err := db.DB(ctx).GetVariant(ctx, wm.w.CatalogID, wm.w.VariantID, "")
+	variant, err := db.DB(ctx).GetVariant(ctx, catalog.CatalogID, wm.w.VariantID, "")
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			return nil, ErrVariantNotFound
@@ -343,7 +335,7 @@ func (wr *workspaceResource) Get(ctx context.Context) ([]byte, apperrors.Error) 
 		}
 		return workspace.ToJson(ctx)
 	} else if wr.name.WorkspaceLabel != "" {
-		workspace, err := LoadWorkspaceManagerByLabel(ctx, wr.catalogID, wr.variantID, wr.name.WorkspaceLabel)
+		workspace, err := LoadWorkspaceManagerByLabel(ctx, wr.variantID, wr.name.WorkspaceLabel)
 		if err != nil {
 			return nil, err
 		}
@@ -356,7 +348,7 @@ func (wr *workspaceResource) Delete(ctx context.Context) apperrors.Error {
 	id := wr.name.WorkspaceID
 	if id == uuid.Nil {
 		// try to load the workspace by label
-		w, err := LoadWorkspaceManagerByLabel(ctx, wr.catalogID, wr.variantID, wr.name.WorkspaceLabel)
+		w, err := LoadWorkspaceManagerByLabel(ctx, wr.variantID, wr.name.WorkspaceLabel)
 		if err != nil {
 			if errors.Is(err, ErrWorkspaceNotFound) {
 				return nil
@@ -419,7 +411,7 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 			return ErrUnableToLoadObject.Msg("unable to load workspace")
 		}
 	} else if wr.name.WorkspaceLabel != "" {
-		w, err = db.DB(ctx).GetWorkspaceByLabel(ctx, wr.catalogID, wr.variantID, wr.name.WorkspaceLabel)
+		w, err = db.DB(ctx).GetWorkspaceByLabel(ctx, wr.variantID, wr.name.WorkspaceLabel)
 		if err != nil {
 			if errors.Is(err, dberror.ErrNotFound) {
 				return ErrWorkspaceNotFound

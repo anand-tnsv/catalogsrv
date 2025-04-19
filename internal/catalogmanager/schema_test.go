@@ -169,7 +169,6 @@ func TestSaveSchema(t *testing.T) {
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,
 		VariantID:   varId,
-		CatalogID:   cat.CatalogID,
 	}
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)
@@ -438,7 +437,6 @@ func TestSchemaWithNamespaces(t *testing.T) {
 	// create a namespace
 	namespace := &models.Namespace{
 		Name:        "my-namespace",
-		CatalogID:   cat.CatalogID,
 		VariantID:   varId,
 		Description: "An example namespace for testing",
 		Info:        nil,
@@ -451,7 +449,6 @@ func TestSchemaWithNamespaces(t *testing.T) {
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,
 		VariantID:   varId,
-		CatalogID:   cat.CatalogID,
 	}
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)
@@ -898,7 +895,6 @@ func TestSaveHierarchicalSchema(t *testing.T) {
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,
 		VariantID:   varId,
-		CatalogID:   cat.CatalogID,
 	}
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)
@@ -1234,7 +1230,6 @@ func TestSaveHierarchicalValue(t *testing.T) {
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,
 		VariantID:   varId,
-		CatalogID:   cat.CatalogID,
 	}
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)
@@ -1552,7 +1547,6 @@ func TestReferences(t *testing.T) {
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,
 		VariantID:   varId,
-		CatalogID:   cat.CatalogID,
 	}
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)

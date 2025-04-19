@@ -80,6 +80,7 @@ type Directories struct {
 	ParametersDir  uuid.UUID
 	CollectionsDir uuid.UUID
 	ValuesDir      uuid.UUID
+	WorkspaceID    uuid.UUID
 }
 
 func (d Directories) IsNil() bool {
@@ -800,7 +801,7 @@ func validateMetadata(ctx context.Context, m *schemamanager.SchemaMetadata) appe
 	}
 	// check if the namespace exists
 	if !m.Namespace.IsNil() {
-		if _, err := db.DB(ctx).GetNamespace(ctx, m.Namespace.String(), variantId, catalogId); err != nil {
+		if _, err := db.DB(ctx).GetNamespace(ctx, m.Namespace.String(), variantId); err != nil {
 			if errors.Is(err, dberror.ErrNotFound) {
 				return ErrNamespaceNotFound.Prefix(m.Namespace.String())
 			}
@@ -926,6 +927,8 @@ func getDirectoriesForWorkspace(ctx context.Context, workspaceId uuid.UUID) (Dir
 	if dir.ValuesDir = wm.ValuesDir(); dir.ValuesDir == uuid.Nil {
 		return dir, ErrInvalidWorkspace.Msg("workspace does not have a values directory")
 	}
+
+	dir.WorkspaceID = workspaceId
 
 	return dir, nil
 }
@@ -1119,7 +1122,7 @@ func NewSchemaResource(ctx context.Context, rsrcJson []byte, name ResourceName) 
 		if err != nil {
 			name.WorkspaceLabel = name.Workspace
 			// get the workspace id
-			wm, err := LoadWorkspaceManagerByLabel(ctx, catalogID, variantID, name.Workspace)
+			wm, err := LoadWorkspaceManagerByLabel(ctx, variantID, name.Workspace)
 			if err != nil {
 				return nil, err
 			}

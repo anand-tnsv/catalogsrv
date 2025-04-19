@@ -243,7 +243,6 @@ func TestCollection(t *testing.T) {
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,
 		VariantID:   varId,
-		CatalogID:   cat.CatalogID,
 	}
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
 	assert.NoError(t, err)

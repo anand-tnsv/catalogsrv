@@ -86,6 +86,10 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 				log.Ctx(ctx).Info().Str("catalog_id", variant.CatalogID.String()).Msg("catalog not found")
 				return dberror.ErrInvalidCatalog
 			}
+			if pgErr.Code == "23503" || pgErr.ConstraintName == "variants_catalog_id_tenant_id_fkey" { // Unique constraint violation
+				log.Ctx(ctx).Error().Str("name", variant.Name).Msg("catalog not found or invalid")
+				return dberror.ErrInvalidCatalog
+			}
 		}
 		log.Ctx(ctx).Error().Err(err).Str("name", variant.Name).Str("variant_id", variant.VariantID.String()).Msg("failed to insert variant")
 		return dberror.ErrDatabase.Err(err)
@@ -97,7 +101,6 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 	// Create the default version for the variant
 	version := models.Version{
 		VariantID:   variant.VariantID,
-		CatalogID:   variant.CatalogID,
 		TenantID:    tenantID,
 		Label:       types.InitialVersionLabel,
 		Description: "Initial version",
@@ -113,7 +116,6 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 	namespace := models.Namespace{
 		Name:        types.DefaultNamespace,
 		VariantID:   variant.VariantID,
-		CatalogID:   variant.CatalogID,
 		TenantID:    tenantID,
 		Description: "Default namespace for the variant",
 		Info:        nil, // Default info as null

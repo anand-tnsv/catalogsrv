@@ -11,6 +11,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreateNamespace(t *testing.T) {
@@ -37,7 +38,7 @@ func TestCreateNamespace(t *testing.T) {
 		Description: "Catalog for namespace test",
 		Info:        info,
 	}
-	assert.NoError(t, DB(ctx).CreateCatalog(ctx, &catalog))
+	require.NoError(t, DB(ctx).CreateCatalog(ctx, &catalog))
 	defer DB(ctx).DeleteCatalog(ctx, catalog.CatalogID, "")
 
 	variant := models.Variant{
@@ -52,7 +53,6 @@ func TestCreateNamespace(t *testing.T) {
 	ns := models.Namespace{
 		Name:        "ns_create_test",
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 		Description: "testing creation",
 		Info:        info.Bytes,
 	}
@@ -109,20 +109,19 @@ func TestGetNamespace(t *testing.T) {
 	ns := models.Namespace{
 		Name:        "ns_get_test",
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 		Description: "desc",
 		Info:        info.Bytes,
 	}
 	assert.NoError(t, DB(ctx).CreateNamespace(ctx, &ns))
 
 	// Positive case
-	retrieved, err := DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID, ns.CatalogID)
+	retrieved, err := DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID)
 	assert.NoError(t, err)
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, ns.Name, retrieved.Name)
 
 	// Negative case
-	_, err = DB(ctx).GetNamespace(ctx, "does_not_exist", ns.VariantID, ns.CatalogID)
+	_, err = DB(ctx).GetNamespace(ctx, "does_not_exist", ns.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
@@ -156,7 +155,6 @@ func TestUpdateNamespace(t *testing.T) {
 	ns := models.Namespace{
 		Name:        "ns_update_test",
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 		Description: "old description",
 		Info:        info.Bytes,
 	}
@@ -167,7 +165,7 @@ func TestUpdateNamespace(t *testing.T) {
 	err := DB(ctx).UpdateNamespace(ctx, &ns)
 	assert.NoError(t, err)
 
-	retrieved, err := DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID, ns.CatalogID)
+	retrieved, err := DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID)
 	assert.NoError(t, err)
 	assert.Equal(t, "new description", retrieved.Description)
 
@@ -207,22 +205,21 @@ func TestDeleteNamespace(t *testing.T) {
 	ns := models.Namespace{
 		Name:        "ns_delete_test",
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 		Description: "desc",
 		Info:        info.Bytes,
 	}
 	assert.NoError(t, DB(ctx).CreateNamespace(ctx, &ns))
 
 	// Delete
-	err := DB(ctx).DeleteNamespace(ctx, ns.Name, ns.VariantID, ns.CatalogID)
+	err := DB(ctx).DeleteNamespace(ctx, ns.Name, ns.VariantID)
 	assert.NoError(t, err)
 
 	// Verify
-	_, err = DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID, ns.CatalogID)
+	_, err = DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Delete again (should fail as not found)
-	err = DB(ctx).DeleteNamespace(ctx, ns.Name, ns.VariantID, ns.CatalogID)
+	err = DB(ctx).DeleteNamespace(ctx, ns.Name, ns.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
@@ -258,7 +255,6 @@ func TestListNamespacesByVariant(t *testing.T) {
 		ns := models.Namespace{
 			Name:        name,
 			VariantID:   variant.VariantID,
-			CatalogID:   catalog.CatalogID,
 			Description: "desc " + name,
 			Info:        info.Bytes,
 		}
@@ -266,18 +262,18 @@ func TestListNamespacesByVariant(t *testing.T) {
 	}
 
 	// List
-	namespaces, err := DB(ctx).ListNamespacesByVariant(ctx, catalog.CatalogID, variant.VariantID)
+	namespaces, err := DB(ctx).ListNamespacesByVariant(ctx, variant.VariantID)
 	assert.NoError(t, err)
 	assert.Len(t, namespaces, 4)
 
 	// Delete all created namespaces to clean up
 	for _, ns := range namespaces {
-		err := DB(ctx).DeleteNamespace(ctx, ns.Name, ns.VariantID, ns.CatalogID)
+		err := DB(ctx).DeleteNamespace(ctx, ns.Name, ns.VariantID)
 		assert.NoError(t, err, "failed to delete namespace %s: %v", ns.Name, err)
 	}
 	// Verify deletion
 	for _, ns := range namespaces {
-		_, err := DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID, ns.CatalogID)
+		_, err := DB(ctx).GetNamespace(ctx, ns.Name, ns.VariantID)
 		assert.ErrorIs(t, err, dberror.ErrNotFound, "namespace %s should be deleted", ns.Name)
 	}
 }

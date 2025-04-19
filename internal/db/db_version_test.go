@@ -71,14 +71,13 @@ func TestCreateVersion(t *testing.T) {
 		Description: "First version",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Verify that the version was created successfully
-	retrievedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	retrievedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID)
 	assert.NoError(t, err)
 	assert.NotNil(t, retrievedVersion)
 	assert.Equal(t, "v1", retrievedVersion.Label)
@@ -89,23 +88,10 @@ func TestCreateVersion(t *testing.T) {
 		Description: "This version should fail",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &invalidLabelVersion)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
-
-	// Test case: Create a version with invalid catalog ID (should fail)
-	invalidCatalogIDVersion := models.Version{
-		Label:       "v2",
-		Description: "This version should fail due to invalid catalog ID",
-		Info:        info,
-		VariantID:   variant.VariantID,
-		CatalogID:   uuid.New(),
-	}
-	err = DB(ctx).CreateVersion(ctx, &invalidCatalogIDVersion)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidCatalog)
 
 	// Test case: Create a version with invalid variant ID (should fail)
 	invalidVariantIDVersion := models.Version{
@@ -113,11 +99,10 @@ func TestCreateVersion(t *testing.T) {
 		Description: "This version should fail due to invalid variant ID",
 		Info:        info,
 		VariantID:   uuid.New(),
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &invalidVariantIDVersion)
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidCatalog)
+	assert.ErrorIs(t, err, dberror.ErrInvalidVariant)
 
 	// Test case: Create a duplicate version (should fail due to unique constraint when label is non-empty)
 	duplicateVersion := models.Version{
@@ -125,7 +110,6 @@ func TestCreateVersion(t *testing.T) {
 		Description: "This version should fail due to duplicate label",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &duplicateVersion)
 	assert.Error(t, err)
@@ -137,11 +121,10 @@ func TestCreateVersion(t *testing.T) {
 		Description: "This version has an empty label",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &emptyLabelVersion)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, emptyLabelVersion.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, emptyLabelVersion.VersionNum, variant.VariantID)
 
 	// Test case: Missing tenant ID in context (should fail)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
@@ -203,14 +186,13 @@ func TestGetVersion(t *testing.T) {
 		Description: "Test version",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully retrieve the version
-	retrievedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	retrievedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID)
 	assert.NoError(t, err)
 	assert.NotNil(t, retrievedVersion)
 	assert.Equal(t, version.VersionNum, retrievedVersion.VersionNum)
@@ -218,18 +200,17 @@ func TestGetVersion(t *testing.T) {
 	assert.Equal(t, "Test version", retrievedVersion.Description)
 	assert.Equal(t, info, retrievedVersion.Info)
 	assert.Equal(t, variant.VariantID, retrievedVersion.VariantID)
-	assert.Equal(t, catalog.CatalogID, retrievedVersion.CatalogID)
 	assert.Equal(t, tenantID, retrievedVersion.TenantID)
 
 	// Test case: Retrieve a non-existent version (should return an error)
 	nonExistentVersionNum := version.VersionNum + 999
-	_, err = DB(ctx).GetVersion(ctx, nonExistentVersionNum, variant.VariantID, catalog.CatalogID)
+	_, err = DB(ctx).GetVersion(ctx, nonExistentVersionNum, variant.VariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Test case: Retrieve with missing tenant ID in context (should return an error)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	_, err = DB(ctx).GetVersion(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	_, err = DB(ctx).GetVersion(ctxWithoutTenant, version.VersionNum, variant.VariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -287,29 +268,28 @@ func TestDeleteVersion(t *testing.T) {
 		Description: "Test version for deletion",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
 
 	// Test case: Successfully delete the version
-	err = DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	err = DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 	assert.NoError(t, err)
 
 	// Verify that the version was deleted by attempting to retrieve it
-	_, err = DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	_, err = DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Test case: Attempt to delete a non-existent version (should return an error)
 	nonExistentVersionNum := version.VersionNum + 999
-	err = DB(ctx).DeleteVersion(ctx, nonExistentVersionNum, variant.VariantID, catalog.CatalogID)
+	err = DB(ctx).DeleteVersion(ctx, nonExistentVersionNum, variant.VariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Test case: Delete with missing tenant ID in context (should return an error)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	err = DB(ctx).DeleteVersion(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	err = DB(ctx).DeleteVersion(ctxWithoutTenant, version.VersionNum, variant.VariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -367,19 +347,18 @@ func TestSetVersionLabel(t *testing.T) {
 		Description: "Test version for label update",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully update the label
 	newLabel := "v2"
-	err = DB(ctx).SetVersionLabel(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID, newLabel)
+	err = DB(ctx).SetVersionLabel(ctx, version.VersionNum, variant.VariantID, newLabel)
 	assert.NoError(t, err)
 
 	// Verify that the label was updated successfully
-	updatedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	updatedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID)
 	assert.NoError(t, err)
 	assert.NotNil(t, updatedVersion)
 	assert.Equal(t, newLabel, updatedVersion.Label)
@@ -390,30 +369,29 @@ func TestSetVersionLabel(t *testing.T) {
 		Description: "Another test version",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &duplicateVersion)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, duplicateVersion.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, duplicateVersion.VersionNum, variant.VariantID)
 
-	err = DB(ctx).SetVersionLabel(ctx, duplicateVersion.VersionNum, variant.VariantID, catalog.CatalogID, newLabel) // setting label to already used "v2"
+	err = DB(ctx).SetVersionLabel(ctx, duplicateVersion.VersionNum, variant.VariantID, newLabel) // setting label to already used "v2"
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrAlreadyExists)
 
 	// Test case: Attempt to set an invalid label (should fail due to check constraint)
 	invalidLabel := "invalid label with spaces"
-	err = DB(ctx).SetVersionLabel(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID, invalidLabel)
+	err = DB(ctx).SetVersionLabel(ctx, version.VersionNum, variant.VariantID, invalidLabel)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	// Test case: Attempt to set an empty label (should return an error)
-	err = DB(ctx).SetVersionLabel(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID, "")
+	err = DB(ctx).SetVersionLabel(ctx, version.VersionNum, variant.VariantID, "")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	// Test case: Set label with missing tenant ID in context (should return an error)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	err = DB(ctx).SetVersionLabel(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID, "new_label_with_missing_tenant")
+	err = DB(ctx).SetVersionLabel(ctxWithoutTenant, version.VersionNum, variant.VariantID, "new_label_with_missing_tenant")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -471,42 +449,41 @@ func TestUpdateVersionDescription(t *testing.T) {
 		Description: "Original description",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully update the description
 	newDescription := "Updated description"
-	err = DB(ctx).UpdateVersionDescription(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID, newDescription)
+	err = DB(ctx).UpdateVersionDescription(ctx, version.VersionNum, variant.VariantID, newDescription)
 	assert.NoError(t, err)
 
 	// Verify that the description was updated successfully
-	updatedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	updatedVersion, err := DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID)
 	assert.NoError(t, err)
 	assert.NotNil(t, updatedVersion)
 	assert.Equal(t, newDescription, updatedVersion.Description)
 
 	// Test case: Update description with a very long string (edge case)
 	longDescription := strings.Repeat("A", 1024) // Assuming the max length is 1024 for this test
-	err = DB(ctx).UpdateVersionDescription(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID, longDescription)
+	err = DB(ctx).UpdateVersionDescription(ctx, version.VersionNum, variant.VariantID, longDescription)
 	assert.NoError(t, err)
 
 	// Verify the long description was updated successfully
-	updatedVersion, err = DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	updatedVersion, err = DB(ctx).GetVersion(ctx, version.VersionNum, variant.VariantID)
 	assert.NoError(t, err)
 	assert.Equal(t, longDescription, updatedVersion.Description)
 
 	// Test case: Attempt to update description on a non-existent version (should return an error)
 	nonExistentVersionNum := version.VersionNum + 999
-	err = DB(ctx).UpdateVersionDescription(ctx, nonExistentVersionNum, variant.VariantID, catalog.CatalogID, "Non-existent update")
+	err = DB(ctx).UpdateVersionDescription(ctx, nonExistentVersionNum, variant.VariantID, "Non-existent update")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Test case: Update description with missing tenant ID in context (should return an error)
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	err = DB(ctx).UpdateVersionDescription(ctxWithoutTenant, version.VersionNum, variant.VariantID, catalog.CatalogID, "Description with missing tenant")
+	err = DB(ctx).UpdateVersionDescription(ctxWithoutTenant, version.VersionNum, variant.VariantID, "Description with missing tenant")
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 }
@@ -565,22 +542,20 @@ func TestCountVersionsInCatalogAndVariant(t *testing.T) {
 			Description: fmt.Sprintf("Test version %d", i),
 			Info:        info,
 			VariantID:   variant.VariantID,
-			CatalogID:   catalog.CatalogID,
 		}
 		err = DB(ctx).CreateVersion(ctx, &version)
 		assert.NoError(t, err)
-		defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+		defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 	}
 
 	// Test case: Count versions in catalog and variant
-	count, err := DB(ctx).CountVersionsInCatalogAndVariant(ctx, catalog.CatalogID, variant.VariantID)
+	count, err := DB(ctx).CountVersionsInVariant(ctx, variant.VariantID)
 	assert.NoError(t, err)
 	assert.Equal(t, 4, count) //there will be a default version when creating variant
 
 	// Test case: Count versions in a non-existent catalog and variant (should be zero)
-	nonExistentCatalogID := uuid.New()
 	nonExistentVariantID := uuid.New()
-	count, err = DB(ctx).CountVersionsInCatalogAndVariant(ctx, nonExistentCatalogID, nonExistentVariantID)
+	count, err = DB(ctx).CountVersionsInVariant(ctx, nonExistentVariantID)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, count)
 }
@@ -639,11 +614,10 @@ func TestGetNamedVersions(t *testing.T) {
 			Description: fmt.Sprintf("Test named version %d", i),
 			Info:        info,
 			VariantID:   variant.VariantID,
-			CatalogID:   catalog.CatalogID,
 		}
 		err = DB(ctx).CreateVersion(ctx, &version)
 		assert.NoError(t, err)
-		defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+		defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 	}
 
 	// Add an unnamed version (null label) for testing
@@ -652,14 +626,13 @@ func TestGetNamedVersions(t *testing.T) {
 		Description: "Unnamed version",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &unnamedVersion)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, unnamedVersion.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, unnamedVersion.VersionNum, variant.VariantID)
 
 	// Retrieve named versions
-	namedVersions, err := DB(ctx).GetNamedVersions(ctx, catalog.CatalogID, variant.VariantID)
+	namedVersions, err := DB(ctx).GetNamedVersions(ctx, variant.VariantID)
 	assert.NoError(t, err)
 	assert.NotNil(t, namedVersions)
 
@@ -729,14 +702,13 @@ func TestGetVersionByLabel(t *testing.T) {
 		Description: "Version with label v1",
 		Info:        info,
 		VariantID:   variant.VariantID,
-		CatalogID:   catalog.CatalogID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
 	assert.NoError(t, err)
-	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID, catalog.CatalogID)
+	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Test case: Successfully retrieve the version by label
-	retrievedVersion, err := DB(ctx).GetVersionByLabel(ctx, "v1", catalog.CatalogID, variant.VariantID)
+	retrievedVersion, err := DB(ctx).GetVersionByLabel(ctx, "v1", variant.VariantID)
 	assert.NoError(t, err)
 	assert.NotNil(t, retrievedVersion)
 	assert.Equal(t, version.VersionNum, retrievedVersion.VersionNum)
@@ -745,19 +717,13 @@ func TestGetVersionByLabel(t *testing.T) {
 	assert.Equal(t, version.Info, retrievedVersion.Info)
 
 	// Test case: Attempt to retrieve a version with a non-existent label
-	_, err = DB(ctx).GetVersionByLabel(ctx, "non_existent_label", catalog.CatalogID, variant.VariantID)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrNotFound)
-
-	// Test case: Attempt to retrieve a version with an invalid catalog ID (should return not found error)
-	invalidCatalogID := uuid.New()
-	_, err = DB(ctx).GetVersionByLabel(ctx, "v1", invalidCatalogID, variant.VariantID)
+	_, err = DB(ctx).GetVersionByLabel(ctx, "non_existent_label", variant.VariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Test case: Attempt to retrieve a version with an invalid variant ID (should return not found error)
 	invalidVariantID := uuid.New()
-	_, err = DB(ctx).GetVersionByLabel(ctx, "v1", catalog.CatalogID, invalidVariantID)
+	_, err = DB(ctx).GetVersionByLabel(ctx, "v1", invalidVariantID)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
@@ -832,7 +798,6 @@ func TestConcurrentVersionCreate(t *testing.T) {
 				Description: fmt.Sprintf("Concurrent version %d", index+2),
 				Info:        info,
 				VariantID:   variant.VariantID,
-				CatalogID:   catalog.CatalogID,
 			}
 			err := DB(ctx).CreateVersion(ctx, &version)
 			if err != nil {
@@ -851,7 +816,7 @@ func TestConcurrentVersionCreate(t *testing.T) {
 	}
 
 	// Verify that versions were created sequentially, starting from version_num = 1
-	versions, err := DB(ctx).GetNamedVersions(ctx, catalog.CatalogID, variant.VariantID)
+	versions, err := DB(ctx).GetNamedVersions(ctx, variant.VariantID)
 	assert.NoError(t, err)
 
 	// Ensure exactly numGoroutines + 1 versions are created (including the initial default version)

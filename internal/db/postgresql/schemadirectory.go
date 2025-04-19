@@ -29,9 +29,6 @@ func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.Cata
 	if dir.VariantID == uuid.Nil {
 		return dberror.ErrInvalidInput.Msg("variant_id cannot be empty")
 	}
-	if dir.CatalogID == uuid.Nil {
-		return dberror.ErrInvalidInput.Msg("catalog_id cannot be empty")
-	}
 	if dir.TenantID == "" {
 		return dberror.ErrInvalidInput.Msg("tenant_id cannot be empty")
 	}
@@ -134,12 +131,12 @@ func (h *hatchCatalogDb) createSchemaDirectoryWithTransaction(ctx context.Contex
 	}
 
 	// Insert the schema directory into the database and get created uuid
-	query := ` INSERT INTO ` + tableName + ` (directory_id, ` + refName + `, variant_id, catalog_id, tenant_id, directory)
-		VALUES ($1, $2, $3, $4, $5, $6)
+	query := ` INSERT INTO ` + tableName + ` (directory_id, ` + refName + `, variant_id, tenant_id, directory)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (directory_id, tenant_id) DO NOTHING RETURNING directory_id;`
 
 	var directoryID uuid.UUID
-	err := tx.QueryRowContext(ctx, query, dir.DirectoryID, refId, dir.VariantID, dir.CatalogID, dir.TenantID, dir.Directory).Scan(&directoryID)
+	err := tx.QueryRowContext(ctx, query, dir.DirectoryID, refId, dir.VariantID, dir.TenantID, dir.Directory).Scan(&directoryID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return dberror.ErrAlreadyExists.Msg("schema directory already exists")
@@ -163,12 +160,12 @@ func (h *hatchCatalogDb) GetSchemaDirectory(ctx context.Context, t types.Catalog
 		return nil, dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
 
-	query := `SELECT directory_id, variant_id, catalog_id, tenant_id, directory
+	query := `SELECT directory_id, variant_id, tenant_id, directory
 		FROM ` + tableName + `
 		WHERE directory_id = $1 AND tenant_id = $2;`
 
 	dir := &models.SchemaDirectory{}
-	err := h.conn().QueryRowContext(ctx, query, directoryID, tenantID).Scan(&dir.DirectoryID, &dir.VariantID, &dir.CatalogID, &dir.TenantID, &dir.Directory)
+	err := h.conn().QueryRowContext(ctx, query, directoryID, tenantID).Scan(&dir.DirectoryID, &dir.VariantID, &dir.TenantID, &dir.Directory)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("schema directory not found")

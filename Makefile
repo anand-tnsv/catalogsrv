@@ -31,5 +31,5 @@ clean:
 
 test:
 	@echo "Running tests..."
-	$(GOTEST) -count=1 ./...
+	$(GOTEST) -p=1 -count=1 ./...
 

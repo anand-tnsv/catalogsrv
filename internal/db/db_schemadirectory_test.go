@@ -59,7 +59,6 @@ func TestSchemaDirectory(t *testing.T) {
 	// create a workspace
 	workspace := models.Workspace{
 		Description: "A test workspace",
-		CatalogID:   catalog.CatalogID,
 		VariantID:   variant.VariantID,
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,

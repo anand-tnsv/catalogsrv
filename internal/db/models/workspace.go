@@ -9,7 +9,7 @@ import (
 )
 
 /*
-           Column         |           Type           | Collation | Nullable |      Default
+        Column         |           Type           | Collation | Nullable |      Default
 -----------------------+--------------------------+-----------+----------+--------------------
  workspace_id          | uuid                     |           | not null | uuid_generate_v4()
  label                 | character varying(128)   |           |          |
@@ -18,22 +18,23 @@ import (
  base_version          | integer                  |           | not null |
  parameters_directory  | uuid                     |           |          | uuid_nil()
  collections_directory | uuid                     |           |          | uuid_nil()
+ values_directory      | uuid                     |           |          | uuid_nil()
  variant_id            | uuid                     |           | not null |
- catalog_id            | uuid                     |           | not null |
  tenant_id             | character varying(10)    |           | not null |
  created_at            | timestamp with time zone |           |          | now()
  updated_at            | timestamp with time zone |           |          | now()
 Indexes:
     "workspaces_pkey" PRIMARY KEY, btree (workspace_id, tenant_id)
-    "workspaces_label_variant_id_catalog_id_tenant_id_key" UNIQUE CONSTRAINT, btree (label, variant_id, catalog_id, tenant_id)
+    "workspaces_label_variant_id_key" UNIQUE CONSTRAINT, btree (label, variant_id)
 Check constraints:
-    "workspaces_label_check" CHECK (label IS NULL OR label::text ~ '^[A-Za-z0-9_]+$'::text)
+    "workspaces_label_check" CHECK (label IS NULL OR label::text ~ '^[A-Za-z0-9_-]+$'::text)
 Foreign-key constraints:
-    "workspaces_base_version_variant_id_catalog_id_tenant_id_fkey" FOREIGN KEY (base_version, variant_id, catalog_id, tenant_id) REFERENCES versions(version_num, variant_id, catalog_id, tenant_id)
-    "workspaces_variant_id_catalog_id_tenant_id_fkey" FOREIGN KEY (variant_id, catalog_id, tenant_id) REFERENCES variants(variant_id, catalog_id, tenant_id) ON DELETE CASCADE
+    "workspaces_base_version_variant_id_tenant_id_fkey" FOREIGN KEY (base_version, variant_id, tenant_id) REFERENCES versions(version_num, variant_id, tenant_id)
+    "workspaces_variant_id_tenant_id_fkey" FOREIGN KEY (variant_id, tenant_id) REFERENCES variants(variant_id, tenant_id) ON DELETE CASCADE
 Referenced by:
     TABLE "collections_directory" CONSTRAINT "collections_directory_workspace_id_tenant_id_fkey" FOREIGN KEY (workspace_id, tenant_id) REFERENCES workspaces(workspace_id, tenant_id) ON DELETE CASCADE
     TABLE "parameters_directory" CONSTRAINT "parameters_directory_workspace_id_tenant_id_fkey" FOREIGN KEY (workspace_id, tenant_id) REFERENCES workspaces(workspace_id, tenant_id) ON DELETE CASCADE
+    TABLE "values_directory" CONSTRAINT "values_directory_workspace_id_tenant_id_fkey" FOREIGN KEY (workspace_id, tenant_id) REFERENCES workspaces(workspace_id, tenant_id) ON DELETE CASCADE
 Triggers:
     update_workspaces_updated_at BEFORE UPDATE ON workspaces FOR EACH ROW EXECUTE FUNCTION set_updated_at()
 */
@@ -48,7 +49,6 @@ type Workspace struct {
 	CollectionsDir uuid.UUID      `db:"collections_directory"`
 	ValuesDir      uuid.UUID      `db:"values_directory"`
 	VariantID      uuid.UUID      `db:"variant_id"`
-	CatalogID      uuid.UUID      `db:"catalog_id"`
 	TenantID       types.TenantId `db:"tenant_id"`
 	CreatedAt      time.Time      `db:"created_at"`
 	UpdatedAt      time.Time      `db:"updated_at"`
