@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (h *hatchCatalogDb) CreateCollection(ctx context.Context, c *models.Collection) (err apperrors.Error) {
+func (h *hatchCatalogDb) CreateCollection(ctx context.Context, c *models.Collection, ref ...models.CollectionRef) (err apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -33,7 +33,7 @@ func (h *hatchCatalogDb) CreateCollection(ctx context.Context, c *models.Collect
 		}
 	}()
 
-	err = h.createCollectionWithTransaction(ctx, c, tx)
+	err = h.createCollectionWithTransaction(ctx, c, tx, ref...)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to create collection")
 		return err
@@ -47,7 +47,7 @@ func (h *hatchCatalogDb) CreateCollection(ctx context.Context, c *models.Collect
 	return nil
 }
 
-func (h *hatchCatalogDb) createCollectionWithTransaction(ctx context.Context, c *models.Collection, tx *sql.Tx) apperrors.Error {
+func (h *hatchCatalogDb) createCollectionWithTransaction(ctx context.Context, c *models.Collection, tx *sql.Tx, ref ...models.CollectionRef) apperrors.Error {
 	description := sql.NullString{String: c.Description, Valid: c.Description != ""}
 
 	collectionID := c.CollectionID
@@ -55,19 +55,55 @@ func (h *hatchCatalogDb) createCollectionWithTransaction(ctx context.Context, c 
 		collectionID = uuid.New()
 	}
 
-	query := `
-		INSERT INTO collections (
-			collection_id, path, hash, description, namespace, collection_schema,
-			info, repo_id, variant_id, tenant_id
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		RETURNING collection_id
-	`
+	var row *sql.Row
+	if len(ref) > 0 && ref[0].IsValid() {
+		query := `
+			INSERT INTO collections (
+				collection_id, path, hash, description, namespace, collection_schema,
+				info, repo_id, variant_id, tenant_id
+			)
+			VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8,
+				(SELECT variant_id FROM variants
+				WHERE name = $9
+				AND catalog_id = (
+					SELECT catalog_id FROM catalogs
+					WHERE name = $10 AND tenant_id = $11
+				)
+				AND tenant_id = $11),
+				$11
+			)
+			RETURNING collection_id;
+		`
 
-	row := tx.QueryRowContext(ctx, query,
-		collectionID, c.Path, c.Hash, description, c.Namespace, c.CollectionSchema,
-		c.Info, c.RepoID, c.VariantID, c.TenantID,
-	)
+		row = tx.QueryRowContext(ctx, query,
+			collectionID,       // $1
+			c.Path,             // $2
+			c.Hash,             // $3
+			description,        // $4
+			ref[0].Namespace,   // $5
+			c.CollectionSchema, // $6
+			c.Info,             // $7
+			c.RepoID,           // $8
+			ref[0].Variant,     // $9 - variant name
+			ref[0].Catalog,     // $10 - catalog name
+			c.TenantID,         // $11
+		)
+	} else {
+		query := `
+			INSERT INTO collections (
+				collection_id, path, hash, description, namespace, collection_schema,
+				info, repo_id, variant_id, tenant_id
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			RETURNING collection_id
+		`
+
+		row = tx.QueryRowContext(ctx, query,
+			collectionID, c.Path, c.Hash, description, c.Namespace, c.CollectionSchema,
+			c.Info, c.RepoID, c.VariantID, c.TenantID,
+		)
+	}
 	var insertedID uuid.UUID
 	err := row.Scan(&insertedID)
 	if err != nil {

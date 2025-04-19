@@ -8,7 +8,7 @@ type CatalogId uuid.UUID
 
 const DefaultVariant = "default"
 const InitialVersionLabel = "init"
-const DefaultNamespace = "default"
+const DefaultNamespace = "--root--"
 
 func (u CatalogId) String() string {
 	return uuid.UUID(u).String()

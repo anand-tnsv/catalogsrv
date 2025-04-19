@@ -48,3 +48,16 @@ type Collection struct {
 	CreatedAt        time.Time      `db:"created_at"`
 	UpdatedAt        time.Time      `db:"updated_at"`
 }
+
+type CollectionRef struct {
+	Catalog   string
+	Variant   string
+	Namespace string
+}
+
+func (c *CollectionRef) IsValid() bool {
+	if c.Catalog == "" || c.Variant == "" || c.Namespace == "" {
+		return false
+	}
+	return true
+}

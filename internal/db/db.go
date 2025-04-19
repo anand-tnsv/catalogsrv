@@ -57,7 +57,7 @@ type DB_ interface {
 	GetCatalogForWorkspace(ctx context.Context, workspaceID uuid.UUID) (models.Catalog, apperrors.Error)
 
 	//Collections
-	CreateCollection(ctx context.Context, wc *models.Collection) (err apperrors.Error)
+	CreateCollection(ctx context.Context, wc *models.Collection, ref ...models.CollectionRef) (err apperrors.Error)
 	GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error)
 	UpdateCollection(ctx context.Context, wc *models.Collection) apperrors.Error
 	DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) apperrors.Error

@@ -106,7 +106,10 @@ func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata,
 		Version: s.Version,
 		Data:    data,
 	}
-	return saveCollectionObject(ctx, &obj, dir, path.Clean(m.Path+"/"+m.Name), cm.Schema())
+
+	// TODO:
+	ref := models.CollectionRef{}
+	return saveCollectionObject(ctx, ref, &obj, dir, path.Clean(m.Path+"/"+m.Name), cm.Schema())
 }
 
 func NewCollectionManager(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
@@ -238,11 +241,16 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		Version: s.Version,
 		Data:    data,
 	}
+	ref := models.CollectionRef{
+		Catalog:   cm.Metadata().Catalog,
+		Variant:   cm.Metadata().Variant.String(),
+		Namespace: cm.Metadata().Namespace.String(),
+	}
 
-	return saveCollectionObject(ctx, &obj, dir, pathWithName, cm.Schema())
+	return saveCollectionObject(ctx, ref, &obj, dir, pathWithName, cm.Schema())
 }
 
-func saveCollectionObject(ctx context.Context, obj *models.CatalogObject, dir Directories, pathWithName, collectionSchema string) apperrors.Error {
+func saveCollectionObject(ctx context.Context, ref models.CollectionRef, obj *models.CatalogObject, dir Directories, pathWithName, collectionSchema string) apperrors.Error {
 	dberr := db.DB(ctx).CreateCatalogObject(ctx, obj)
 	if dberr != nil {
 		if errors.Is(dberr, dberror.ErrAlreadyExists) {
@@ -251,6 +259,34 @@ func saveCollectionObject(ctx context.Context, obj *models.CatalogObject, dir Di
 		}
 		log.Ctx(ctx).Error().Err(dberr).Msg("failed to save catalog object")
 		return dberr
+	}
+
+	repoId := uuid.Nil
+	if dir.WorkspaceID != uuid.Nil {
+		repoId = dir.WorkspaceID
+	}
+
+	if ref.Namespace == "" {
+		ref.Namespace = types.DefaultNamespace
+	}
+
+	c := models.Collection{
+		Path:             pathWithName,
+		Hash:             obj.Hash,
+		Description:      obj.Version, // using Version as description for backward compatibility
+		Namespace:        ref.Namespace,
+		CollectionSchema: collectionSchema,
+		Info:             nil,
+		RepoID:           repoId,
+	}
+
+	if err := db.DB(ctx).CreateCollection(ctx, &c, ref); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to create collection in database")
+		// If the collection creation fails, we should also delete the catalog object
+		if _, delErr := db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir.ValuesDir, pathWithName); delErr != nil {
+			log.Ctx(ctx).Error().Err(delErr).Msg("failed to delete catalog object after collection creation failure")
+		}
+		return ErrCatalogError.Err(err)
 	}
 
 	// the reference will point to the collection schema

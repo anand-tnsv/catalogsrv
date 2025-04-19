@@ -500,6 +500,9 @@ func TestCreateCollection(t *testing.T) {
 	err := DB(ctx).CreateCollection(ctx, &wc)
 	assert.NoError(t, err)
 
+	// keep this wc
+	wc_keep := wc
+
 	// Test case: Duplicate collection (same path, namespace, etc.)
 	err = DB(ctx).CreateCollection(ctx, &wc)
 	assert.Error(t, err)
@@ -533,6 +536,22 @@ func TestCreateCollection(t *testing.T) {
 	err = DB(ctx).CreateCollection(ctxWithoutTenant, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrMissingTenantID)
+
+	// create the collection with variant name instead of id
+	ref := models.CollectionRef{
+		Catalog:   "test_catalog_wc",
+		Variant:   "test_variant_wc",
+		Namespace: types.DefaultNamespace,
+	}
+	err = DB(ctx).CreateCollection(ctx, &wc_keep, ref)
+	assert.Error(t, err)
+	// Delete the collection
+	err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.Namespace, wc_keep.RepoID, wc_keep.VariantID)
+	assert.NoError(t, err)
+	// create the collection with variant name instead of id
+	wc_keep.VariantID = uuid.Nil // Resetting to an invalid variant ID to test deletion
+	err = DB(ctx).CreateCollection(ctx, &wc_keep, ref)
+	assert.NoError(t, err)
 }
 
 func TestGetCollection(t *testing.T) {

@@ -76,7 +76,7 @@ func canonicalizeMetadata(rsrcJson []byte, kind string, metadata *schemamanager.
 	}
 
 	if m.Variant.IsNil() {
-		m.Variant = types.NullableString{Value: types.DefaultVariant, Valid: true} // set default variant if nil
+		m.Variant = types.NullableStringFrom(types.DefaultVariant) // set default variant if nil
 	}
 
 	if kind == types.CollectionSchemaKind || kind == types.ParameterSchemaKind {
