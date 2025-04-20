@@ -568,41 +568,58 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.SchemaManage
 	return
 }
 
-func deleteCollectionSchema(ctx context.Context, pathWithName string, dir Directories) apperrors.Error {
-	d := models.DirectoryIDs{
-		{
-			ID:   dir.CollectionsDir,
-			Type: types.CatalogObjectTypeCollectionSchema,
-		},
-		{
-			ID:   dir.ParametersDir,
-			Type: types.CatalogObjectTypeParameterSchema,
-		},
+func deleteCollectionSchema(ctx context.Context, t types.CatalogObjectType, m *schemamanager.SchemaMetadata, dir Directories) apperrors.Error {
+	// check if there are references to this schema
+	pathWithName := path.Clean(m.GetStoragePath(t) + "/" + m.Name)
+	repoId := m.IDS.VariantID
+	if !dir.IsNil() && dir.WorkspaceID != uuid.Nil {
+		repoId = dir.WorkspaceID
+	}
+	namespace := types.DefaultNamespace
+	if !m.Namespace.IsNil() {
+		namespace = m.Namespace.String()
 	}
 
-	// delete the collection in the directory, and all objects in all subpaths and remove all references
-	var objs []string
-	var err apperrors.Error
-	if objs, err = db.DB(ctx).DeleteTree(ctx, d, pathWithName); err != nil {
-		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete tree")
-		return ErrUnableToDeleteObject.Msg("unable to delete collection")
+	exists, err := db.DB(ctx).HasReferencesToCollectionSchema(ctx, pathWithName, namespace, repoId, m.IDS.VariantID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to check if collection schema has references")
+		return ErrCatalogError
+	}
+	if exists {
+		log.Ctx(ctx).Info().Str("path", pathWithName).Msg("collection schema has references, cannot delete")
+		return ErrUnableToDeleteCollectionWithReferences
 	}
 
-	// delete the objects from the database
-	for _, obj := range objs {
-		if err := db.DB(ctx).DeleteCatalogObject(ctx, obj); err != nil {
-			if !errors.Is(err, dberror.ErrNotFound) {
-				// we don't return an error since the object reference has already been removed and
-				// we cannot roll this back.
-				log.Ctx(ctx).Error().Err(err).Str("hash", obj).Msg("failed to delete objects from database")
-			}
+	// Remove all references in parameters and delete the object from the directory
+	var hash string
+	if hash, err = db.DB(ctx).DeleteObjectWithReferences(ctx,
+		types.CatalogObjectTypeCollectionSchema,
+		models.DirectoryIDs{
+			{ID: dir.CollectionsDir, Type: types.CatalogObjectTypeCollectionSchema},
+			{ID: dir.ParametersDir, Type: types.CatalogObjectTypeParameterSchema},
+		},
+		pathWithName,
+		models.DeleteReferences(true),
+	); err != nil {
+		return ErrCatalogError.Err(err).Msg("unable to delete collection schema from directory")
+	}
+
+	// delete the object from the database
+	if err := db.DB(ctx).DeleteCatalogObject(ctx, string(hash)); err != nil {
+		if !errors.Is(err, dberror.ErrNotFound) {
+			// we don't return an error since the object reference has already been removed and
+			// we cannot roll this back.
+			log.Ctx(ctx).Error().Err(err).Str("hash", string(hash)).Msg("failed to delete object from database")
 		}
 	}
-
 	return nil
 }
 
-func deleteParameterSchema(ctx context.Context, pathWithName string, dir Directories) apperrors.Error {
+func deleteParameterSchema(ctx context.Context, t types.CatalogObjectType, m *schemamanager.SchemaMetadata, dir Directories) apperrors.Error {
+	// check if there are references to this schema
+	pathWithName := path.Clean(m.GetStoragePath(t) + "/" + m.Name)
+	var hash types.Hash
+
 	// if there are references to this schema, don't delete it.
 	refs, err := db.DB(ctx).GetAllReferences(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName)
 	if err != nil {
@@ -618,42 +635,16 @@ func deleteParameterSchema(ctx context.Context, pathWithName string, dir Directo
 		return ErrUnableToDeleteParameterWithReferences
 	}
 
-	// Get this object
-	obj, err := db.DB(ctx).LoadObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			log.Ctx(ctx).Info().Str("path", pathWithName).Msg("parameter schema not found, nothing to delete")
-			return nil // nothing to delete, return success
-		}
-		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to load object by path")
-		return ErrCatalogError.Err(err).Msg("unable to delete parameter schema")
-	}
-	if obj == nil {
-		log.Ctx(ctx).Info().Str("path", pathWithName).Msg("parameter schema not found, nothing to delete")
-		return nil // nothing to delete, return success
-	}
-
-	// objHash, err := db.DB(ctx).DeleteObjectWithReferences(ctx, types.CatalogObjectTypeParameterSchema, d, pathWithName, models.ReplaceReferencesWithAncestor(true))
-	// if err != nil {
-	// 	log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete object with references")
-	// 	if errors.Is(err, dberror.ErrNoAncestorReferencesFound) {
-	// 		if config.HierarchicalSchemas {
-	// 			return ErrNoAncestorReferencesFound
-	// 		}
-	// 		return ErrUnableToDeleteParameterWithReferences
-	// 	}
-	// }
-
 	// delete the object from the directory
-	if _, err = db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName); err != nil {
+	if hash, err = db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName); err != nil {
 		return ErrCatalogError.Err(err).Msg("unable to delete parameter schema from directory")
 	}
 	// delete the object from the database
-	if err := db.DB(ctx).DeleteCatalogObject(ctx, obj.Hash); err != nil {
+	if err := db.DB(ctx).DeleteCatalogObject(ctx, string(hash)); err != nil {
 		if !errors.Is(err, dberror.ErrNotFound) {
 			// we don't return an error since the object reference has already been removed and
 			// we cannot roll this back.
-			log.Ctx(ctx).Error().Err(err).Str("hash", obj.Hash).Msg("failed to delete objects from database")
+			log.Ctx(ctx).Error().Err(err).Str("hash", string(hash)).Msg("failed to delete objects from database")
 		}
 	}
 	return nil
@@ -735,12 +726,11 @@ func DeleteSchema(ctx context.Context, t types.CatalogObjectType, m *schemamanag
 	if m == nil {
 		return ErrEmptyMetadata
 	}
-	pathWithName := path.Clean(m.GetStoragePath(t) + "/" + m.Name)
 	switch t {
 	case types.CatalogObjectTypeCollectionSchema:
-		return deleteCollectionSchema(ctx, pathWithName, dir)
+		return deleteCollectionSchema(ctx, t, m, dir)
 	case types.CatalogObjectTypeParameterSchema:
-		return deleteParameterSchema(ctx, pathWithName, dir)
+		return deleteParameterSchema(ctx, t, m, dir)
 	default:
 		return ErrInvalidSchema
 	}

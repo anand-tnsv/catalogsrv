@@ -475,34 +475,42 @@ func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.
 	return nil
 }
 
-func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error) {
+func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (types.Hash, apperrors.Error) {
+	var hash types.Hash = ""
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
-		return false, dberror.ErrMissingTenantID
+		return hash, dberror.ErrMissingTenantID
 	}
 	tableName := getSchemaDirectoryTableName(t)
 	if tableName == "" {
-		return false, dberror.ErrInvalidInput.Msg("invalid catalog object type")
+		return hash, dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
-
+	log.Ctx(ctx).Debug().Str("path", path).Str("DirectoryID", directoryID.String()).Msg("Deleting object by path")
 	// Update and return whether the key was removed
 	query := `
+		WITH to_delete AS (
+			SELECT directory -> $1 ->> 'hash' AS deleted_hash
+			FROM ` + tableName + `
+			WHERE directory_id = $2 AND tenant_id = $3 AND directory ? $1
+		)
 		UPDATE ` + tableName + `
 		SET directory = directory - $1
 		WHERE directory_id = $2 AND tenant_id = $3 AND directory ? $1
-		RETURNING TRUE;
+		RETURNING (SELECT deleted_hash FROM to_delete);
+
 	`
-
-	var wasRemoved bool
-	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&wasRemoved)
+	var result sql.NullString
+	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&result)
 	if err == sql.ErrNoRows {
-		// Key did not exist, so nothing was removed
-		return false, nil
+		return hash, nil // Key did not exist, so nothing was removed
 	} else if err != nil {
-		return false, dberror.ErrDatabase.Err(err)
+		return hash, dberror.ErrDatabase.Err(err)
+	} else if !result.Valid {
+		return hash, dberror.ErrNotFound.Msg("object not found")
 	}
+	hash = types.Hash(result.String)
 
-	return wasRemoved, nil
+	return hash, nil
 }
 
 func (h *hatchCatalogDb) UpdateObjectHashForPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, hash string) apperrors.Error {

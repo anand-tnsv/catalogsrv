@@ -180,14 +180,23 @@ func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path, namespac
 		return nil, dberror.ErrMissingTenantID
 	}
 	log.Ctx(ctx).Debug().Msgf("GetCollectionObject: path=%s, namespace=%s, repoID=%s, variantID=%s, tenantID=%s", path, namespace, repoID.String(), variantID.String(), tenantID)
+	// If the collection is not found in the specified repo, try to find it in the active repo which is the variant_id
 	query := `
 		SELECT hash, type, version, tenant_id, data
 		FROM catalog_objects
 		WHERE hash = (
-			SELECT hash FROM collections WHERE path = $1 AND namespace = $2
-			AND repo_id =$3 AND variant_id = $4 AND tenant_id = $5
+			SELECT hash FROM (
+				SELECT hash FROM collections
+				WHERE path = $1 AND namespace = $2
+				AND repo_id = $3 AND variant_id = $4 AND tenant_id = $5
+				UNION ALL
+				SELECT hash FROM collections
+				WHERE path = $1 AND namespace = $2
+				AND repo_id = $4 AND variant_id = $4 AND tenant_id = $5
+			) AS fallback
 			LIMIT 1
-		) AND tenant_id = $5;
+		)
+		AND tenant_id = $5;
 	`
 	var hash, version string
 	var objType types.CatalogObjectType
@@ -323,4 +332,28 @@ func (h *hatchCatalogDb) ListCollectionsByNamespace(ctx context.Context, namespa
 	}
 
 	return collections, nil
+}
+
+func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema, namespace string, repoID, variantID uuid.UUID) (bool, apperrors.Error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return false, dberror.ErrMissingTenantID
+	}
+
+	query := `
+		SELECT EXISTS (
+			SELECT 1 FROM collections
+			WHERE collection_schema = $1
+			  AND namespace = $2
+			  AND repo_id = $3
+			  AND variant_id = $4
+			  AND tenant_id = $5
+		);
+	`
+	var exists bool
+	err := h.conn().QueryRowContext(ctx, query, collectionSchema, namespace, repoID, variantID, tenantID).Scan(&exists)
+	if err != nil {
+		return false, dberror.ErrDatabase.Err(err)
+	}
+	return exists, nil
 }

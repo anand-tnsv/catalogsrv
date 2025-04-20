@@ -237,9 +237,9 @@ func TestSchemaDirectory(t *testing.T) {
 	assert.ElementsMatch(t, references, []models.Reference{{Name: "ref1"}})
 
 	// Delete object by path
-	result, err := DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
+	hash, err := DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.NoError(t, err)
-	assert.True(t, result)
+	assert.NotEmpty(t, hash)
 	object, err = DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, pd, "/a/b3/c/d/e/f")
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 	assert.Nil(t, object)

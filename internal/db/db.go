@@ -63,6 +63,7 @@ type DB_ interface {
 	UpdateCollection(ctx context.Context, wc *models.Collection) apperrors.Error
 	DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (string, apperrors.Error)
 	ListCollectionsByNamespace(ctx context.Context, namespace string, repoID, variantID uuid.UUID) ([]*models.Collection, apperrors.Error)
+	HasReferencesToCollectionSchema(ctx context.Context, collectionSchema, namespace string, repoID, variantID uuid.UUID) (bool, apperrors.Error)
 
 	// Namespace
 	CreateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error
@@ -88,7 +89,7 @@ type DB_ interface {
 	AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references models.References) apperrors.Error
 	GetAllReferences(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (models.References, apperrors.Error)
 	DeleteReferenceFromObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, reference string) apperrors.Error
-	DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error)
+	DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (types.Hash, apperrors.Error)
 	FindClosestObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, targetName, startPath string) (string, *models.ObjectRef, apperrors.Error)
 	PathExists(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error)
 	DeleteTree(ctx context.Context, directoryIds models.DirectoryIDs, path string) ([]string, apperrors.Error)
