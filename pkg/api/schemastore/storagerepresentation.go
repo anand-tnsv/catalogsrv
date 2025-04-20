@@ -15,6 +15,7 @@ type SchemaStorageRepresentation struct {
 	Description string                  `json:"description"`
 	Schema      json.RawMessage         `json:"schema"`
 	Values      json.RawMessage         `json:"values"`
+	Reserved    json.RawMessage         `json:"reserved"`
 	Entropy     []byte                  `json:"entropy,omitempty"`
 }
 

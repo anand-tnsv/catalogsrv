@@ -29,8 +29,8 @@ func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata,
 	}
 
 	var dir Directories
-	pathWithName := path.Clean(m.Path + "/" + m.Name)
 	t := types.CatalogObjectTypeCatalogCollection
+	pathWithName := path.Clean(m.GetStoragePath(t) + "/" + m.Name)
 
 	// get the directory
 	if !options.Dir.IsNil() {
@@ -45,7 +45,7 @@ func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata,
 		return ErrInvalidVersionOrWorkspace
 	}
 
-	existingCollection, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir.ValuesDir, pathWithName)
+	existingCollection, err := loadCollectionObjectByPath(ctx, m, opts...)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			existingCollection = nil
@@ -72,14 +72,12 @@ func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata,
 		return nil
 	}
 
-	if err := loadCollectionSchemaManager(ctx, cm, WithDirectories(dir)); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
+	schemaPath, schemaLoaders, err := setCollectionSchemaManager(ctx, cm, dir)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to set collection schema manager")
 		return err
 	}
-	schemaLoaders := getSchemaLoaders(ctx, *m, WithDirectories(dir))
-	schemaLoaders.ParameterRef = func(name string) string {
-		return "/" + path.Base(name)
-	}
+
 	err = cm.SetValue(ctx, schemaLoaders, param, value)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to set value in collection manager")
@@ -107,9 +105,12 @@ func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata,
 		Data:    data,
 	}
 
-	// TODO:
-	ref := models.CollectionRef{}
-	return saveCollectionObject(ctx, ref, &obj, dir, path.Clean(m.Path+"/"+m.Name), cm.Schema())
+	ref := models.CollectionRef{
+		Catalog:   m.Catalog,
+		Variant:   m.Variant.String(),
+		Namespace: m.Namespace.String(),
+	}
+	return saveCollectionObject(ctx, ref, &obj, dir, pathWithName, schemaPath)
 }
 
 func NewCollectionManager(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
@@ -138,6 +139,8 @@ func NewCollectionManager(ctx context.Context, rsrcJson []byte, m *schemamanager
 		return nil, err
 	}
 
+	cs.Metadata = *m
+
 	return &collectionManager{
 		schema: cs,
 	}, nil
@@ -152,10 +155,11 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 	for _, opt := range opts {
 		opt(&options)
 	}
-	rsrcPath := cm.Metadata().Path
-	pathWithName := path.Clean(rsrcPath + "/" + cm.Metadata().Name)
+
 	t := types.CatalogObjectTypeCatalogCollection
 	var dir Directories
+	rsrcPath := cm.Metadata().GetStoragePath(t)
+	pathWithName := path.Clean(rsrcPath + "/" + cm.Metadata().Name)
 
 	// get the directory
 	if !options.Dir.IsNil() {
@@ -170,7 +174,8 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		return ErrInvalidVersionOrWorkspace
 	}
 	// TODO: handle version number
-	existingCollection, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir.ValuesDir, pathWithName)
+	m := cm.Metadata()
+	existingCollection, err := loadCollectionObjectByPath(ctx, &m, opts...)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			existingCollection = nil
@@ -185,7 +190,6 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		if options.ErrorIfExists {
 			return ErrAlreadyExists.Msg("collection already exists")
 		}
-		m := cm.Metadata()
 		cmCurrent, err = collectionManagerFromObject(ctx, existingCollection, &m)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msg("failed to load existing collection")
@@ -197,20 +201,12 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		}
 	}
 
-	schemaPath := "/" + path.Base(string(cm.Schema()))
-	if collectionSchemaExists(ctx, dir.CollectionsDir, schemaPath) != nil {
-		return ErrInvalidCollectionSchema
-	}
-
-	if err := loadCollectionSchemaManager(ctx, cm, WithDirectories(dir)); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
+	schemaPath, schemaLoaders, err := setCollectionSchemaManager(ctx, cm, dir)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to set collection schema manager")
 		return err
 	}
-
-	schemaLoaders := getSchemaLoaders(ctx, cm.Metadata(), WithDirectories(dir))
-	schemaLoaders.ParameterRef = func(name string) string {
-		return "/" + path.Base(name)
-	}
+	cm.SetCollectionSchemaPath(schemaPath)
 
 	var cmCurrentValues schemamanager.ParamValues = nil
 	if cmCurrent != nil {
@@ -247,7 +243,51 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		Namespace: cm.Metadata().Namespace.String(),
 	}
 
-	return saveCollectionObject(ctx, ref, &obj, dir, pathWithName, cm.Schema())
+	return saveCollectionObject(ctx, ref, &obj, dir, pathWithName, schemaPath)
+}
+
+func setCollectionSchemaManager(ctx context.Context, cm schemamanager.CollectionManager, dir Directories) (string, schemamanager.SchemaLoaders, apperrors.Error) {
+	var schemaPath string
+	var schemaObj *models.ObjectRef
+	var err apperrors.Error
+	var schemaLoaders schemamanager.SchemaLoaders
+
+	// Now we try for the schema either in the namespace or in the root namespace
+	schemaPath = cm.GetCollectionSchemaPath()
+	if schemaPath != "" {
+		schemaObj, err = db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, schemaPath)
+	} else {
+		m := cm.Metadata()
+		if !cm.Metadata().Namespace.IsNil() {
+			schemaPath = path.Clean(m.GetStoragePath(types.CatalogObjectTypeCollectionSchema) + "/" + cm.Schema())
+			schemaObj, err = db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, schemaPath)
+		}
+		if schemaObj == nil {
+			m.Namespace = types.NullString()
+			schemaPath = path.Clean(m.GetStoragePath(types.CatalogObjectTypeCollectionSchema) + "/" + cm.Schema())
+			schemaObj, err = db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeCollectionSchema, dir.CollectionsDir, schemaPath)
+		}
+	}
+
+	if err != nil || schemaObj == nil {
+		return schemaPath, schemaLoaders, ErrInvalidCollectionSchema
+	}
+
+	if err := loadCollectionSchemaManager(ctx, schemaObj.Hash, cm, WithDirectories(dir)); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
+		return schemaPath, schemaLoaders, err
+	}
+
+	schemaLoaders = getSchemaLoaders(ctx, cm.Metadata(), WithDirectories(dir), SkipCanonicalizePaths())
+	schemaLoaders.ParameterRef = func(name string) string {
+		for _, ref := range schemaObj.References {
+			if name == path.Base(ref.Name) {
+				return ref.Name
+			}
+		}
+		return ""
+	}
+	return schemaPath, schemaLoaders, nil
 }
 
 func saveCollectionObject(ctx context.Context, ref models.CollectionRef, obj *models.CatalogObject, dir Directories, pathWithName, collectionSchema string) apperrors.Error {
@@ -280,7 +320,7 @@ func saveCollectionObject(ctx context.Context, ref models.CollectionRef, obj *mo
 		RepoID:           repoId,
 	}
 
-	if err := db.DB(ctx).CreateCollection(ctx, &c, ref); err != nil {
+	if err := db.DB(ctx).UpsertCollection(ctx, &c, ref); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to create collection in database")
 		// If the collection creation fails, we should also delete the catalog object
 		if _, delErr := db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir.ValuesDir, pathWithName); delErr != nil {
@@ -288,28 +328,79 @@ func saveCollectionObject(ctx context.Context, ref models.CollectionRef, obj *mo
 		}
 		return ErrCatalogError.Err(err)
 	}
+	/*
+		// the reference will point to the collection schema
+		var refModel models.References
+		refModel = append(refModel, models.Reference{
+			Name: collectionSchema,
+		})
 
-	// the reference will point to the collection schema
-	var refModel models.References
-	refModel = append(refModel, models.Reference{
-		Name: collectionSchema,
-	})
-
-	// store the reference in the directory
-	if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir.ValuesDir, pathWithName, models.ObjectRef{
-		Hash:       obj.Hash,
-		References: refModel,
-	}); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to save object to directory")
-		return ErrCatalogError
-	}
-
+		// store the reference in the directory
+		if err := db.DB(ctx).AddOrUpdateObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir.ValuesDir, pathWithName, models.ObjectRef{
+			Hash:       obj.Hash,
+			References: refModel,
+		}); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to save object to directory")
+			return ErrCatalogError
+		}
+	*/
 	return nil
 }
 
-func LoadCollectionByHash(ctx context.Context, hash string, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
+func DeleteCollection(ctx context.Context, m *schemamanager.SchemaMetadata, opts ...ObjectStoreOption) apperrors.Error {
+	if m == nil {
+		return validationerrors.ErrEmptySchema
+	}
+
+	options := storeOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	t := types.CatalogObjectTypeCatalogCollection
+	rsrcPath := m.GetStoragePath(t)
+	pathWithName := path.Clean(rsrcPath + "/" + m.Name)
+
+	// get the directory
+	var repoId uuid.UUID = uuid.Nil
+	if !options.Dir.IsNil() {
+		if options.Dir.WorkspaceID != uuid.Nil {
+			repoId = options.Dir.WorkspaceID
+		}
+	} else if options.WorkspaceID != uuid.Nil {
+		repoId = options.WorkspaceID
+	} else {
+		repoId = m.IDS.VariantID
+	}
+
+	namespace := types.DefaultNamespace
+	if !m.Namespace.IsNil() {
+		namespace = m.Namespace.String()
+	}
+
+	hash, err := db.DB(ctx).DeleteCollection(ctx, pathWithName, namespace, repoId, m.IDS.VariantID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to delete collection")
+		if errors.Is(err, dberror.ErrNotFound) {
+			return nil // already deleted
+		}
+		return err
+	}
+	err = db.DB(ctx).DeleteCatalogObject(ctx, hash)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to delete catalog object")
+		return err
+	}
+	return nil
+}
+
+func LoadCollectionByHash(ctx context.Context, hash string, m *schemamanager.SchemaMetadata, opts ...ObjectStoreOption) (schemamanager.CollectionManager, apperrors.Error) {
 	if hash == "" {
 		return nil, validationerrors.ErrEmptySchema
+	}
+	o := storeOptions{}
+	for _, opt := range opts {
+		opt(&o)
 	}
 
 	obj, err := db.DB(ctx).GetCatalogObject(ctx, hash)
@@ -320,10 +411,15 @@ func LoadCollectionByHash(ctx context.Context, hash string, m *schemamanager.Sch
 		return nil, ErrUnableToLoadObject.Err(err)
 	}
 
+	if obj.Type != types.CatalogObjectTypeCatalogCollection {
+		log.Ctx(ctx).Error().Msg("invalid collection type")
+		return nil, ErrUnableToLoadObject
+	}
+
 	return collectionManagerFromObject(ctx, obj, m)
 }
 
-func LoadCollectionByPath(ctx context.Context, m *schemamanager.SchemaMetadata, opts ...ObjectStoreOption) (schemamanager.CollectionManager, apperrors.Error) {
+func loadCollectionObjectByPath(ctx context.Context, m *schemamanager.SchemaMetadata, opts ...ObjectStoreOption) (*models.CatalogObject, apperrors.Error) {
 	if m == nil {
 		return nil, validationerrors.ErrEmptySchema
 	}
@@ -332,44 +428,55 @@ func LoadCollectionByPath(ctx context.Context, m *schemamanager.SchemaMetadata, 
 	for _, opt := range opts {
 		opt(&options)
 	}
-	rsrcPath := m.Path
-	pathWithName := path.Clean(rsrcPath + "/" + m.Name)
+
 	t := types.CatalogObjectTypeCatalogCollection
-	var dir Directories
+	rsrcPath := m.GetStoragePath(t)
+	pathWithName := path.Clean(rsrcPath + "/" + m.Name)
 
 	// get the directory
+	var repoId uuid.UUID = uuid.Nil
 	if !options.Dir.IsNil() {
-		dir = options.Dir
-	} else if options.WorkspaceID != uuid.Nil {
-		var err apperrors.Error
-		dir, err = getDirectoriesForWorkspace(ctx, options.WorkspaceID)
-		if err != nil {
-			return nil, err
+		if options.Dir.WorkspaceID != uuid.Nil {
+			repoId = options.Dir.WorkspaceID
 		}
+	} else if options.WorkspaceID != uuid.Nil {
+		repoId = options.WorkspaceID
 	} else {
-		return nil, ErrInvalidVersionOrWorkspace
+		repoId = m.IDS.VariantID
 	}
 
-	obj, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir.ValuesDir, pathWithName)
+	namespace := types.DefaultNamespace
+	if !m.Namespace.IsNil() {
+		namespace = m.Namespace.String()
+	}
+
+	// get the collection from DB
+	obj, err := db.DB(ctx).GetCollectionObject(ctx, pathWithName, namespace, repoId, m.IDS.VariantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to load object by path")
 		return nil, err
 	}
 
-	return collectionManagerFromObject(ctx, obj, m)
+	return obj, nil
 }
 
-func loadCollectionSchemaManager(ctx context.Context, cm schemamanager.CollectionManager, opts ...ObjectStoreOption) apperrors.Error {
+func LoadCollectionByPath(ctx context.Context, m *schemamanager.SchemaMetadata, opts ...ObjectStoreOption) (schemamanager.CollectionManager, apperrors.Error) {
+	obj, err := loadCollectionObjectByPath(ctx, m, opts...)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to load object by path")
+		return nil, err
+	}
+	cm, err := collectionManagerFromObject(ctx, obj, m)
+	return cm, err
+}
+
+func loadCollectionSchemaManager(ctx context.Context, hash string, cm schemamanager.CollectionManager, opts ...ObjectStoreOption) apperrors.Error {
 	m := &schemamanager.SchemaMetadata{
 		Name:    cm.Schema(),
 		Catalog: cm.Metadata().Catalog,
 		Variant: cm.Metadata().Variant,
 	}
-	sm, err := LoadSchemaByPath(ctx,
-		types.CatalogObjectTypeCollectionSchema,
-		m,
-		opts...,
-	)
+	sm, err := LoadSchemaByHash(ctx, hash, m, opts...)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to load collection schema manager")
 		return err
@@ -408,11 +515,11 @@ func collectionManagerFromObject(ctx context.Context, obj *models.CatalogObject,
 	}
 	cm.schema.Kind = types.CollectionKind
 	cm.schema.Version = s.Version
-	cm.schema.Metadata.Name = m.Name
-	cm.schema.Metadata.Catalog = m.Catalog
-	cm.schema.Metadata.Variant = m.Variant
-	cm.schema.Metadata.Path = m.Path
-	cm.schema.Metadata.Description = s.Description
-
+	cm.schema.Metadata = *m
+	var schemaPathNS types.NullableString
+	err := json.Unmarshal(s.Reserved, &schemaPathNS)
+	if err == nil {
+		cm.schema.SchemaPath = schemaPathNS.String()
+	}
 	return cm, nil
 }

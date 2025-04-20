@@ -2,15 +2,17 @@ package schemamanager
 
 import (
 	"encoding/json"
+	"path"
 	"reflect"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
-// Modifying this struct should also change the Json Marshaler
+// Modifying this struct should also change the json
 type SchemaMetadata struct {
 	Name        string               `json:"name" validate:"required,resourceNameValidator"`
 	Catalog     string               `json:"catalog" validate:"required,resourceNameValidator"`
@@ -18,6 +20,12 @@ type SchemaMetadata struct {
 	Namespace   types.NullableString `json:"namespace,omitempty" validate:"omitempty,resourceNameValidator"`
 	Path        string               `json:"path,omitempty" validate:"omitempty,resourcePathValidator"`
 	Description string               `json:"description"`
+	IDS         IDS                  `json:"-"`
+}
+
+type IDS struct {
+	CatalogID uuid.UUID
+	VariantID uuid.UUID
 }
 
 var _ json.Marshaler = SchemaMetadata{}
@@ -75,4 +83,20 @@ func (s SchemaMetadata) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(m)
+}
+
+func (s SchemaMetadata) GetStoragePath(t types.CatalogObjectType) string {
+	if t == types.CatalogObjectTypeCatalogCollection {
+		if s.Namespace.IsNil() {
+			return path.Clean("/" + types.DefaultNamespace + "/" + s.Path)
+		} else {
+			return path.Clean("/" + types.DefaultNamespace + "/" + s.Namespace.String() + "/" + s.Path)
+		}
+	} else {
+		if s.Namespace.IsNil() {
+			return "/" + types.DefaultNamespace
+		} else {
+			return "/" + types.DefaultNamespace + "/" + s.Namespace.String()
+		}
+	}
 }

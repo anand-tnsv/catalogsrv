@@ -15,19 +15,12 @@ import (
 )
 
 type collectionSchema struct {
-	Version  string                    `json:"version" validate:"required"`
-	Kind     string                    `json:"kind" validate:"required,oneof=Collection"`
-	Metadata CollectionMetadata        `json:"metadata" validate:"required"`
-	Spec     collectionSpec            `json:"spec" validate:"required"`
-	Values   schemamanager.ParamValues `json:"-"`
-}
-
-type CollectionMetadata struct {
-	Name        string               `json:"name" validate:"required,nameFormatValidator"`
-	Catalog     string               `json:"catalog" validate:"required,resourceNameValidator"`
-	Variant     types.NullableString `json:"variant" validate:"required,resourceNameValidator"`
-	Path        string               `json:"path" validate:"required,resourcePathValidator"`
-	Description string               `json:"description"`
+	Version    string                       `json:"version" validate:"required"`
+	Kind       string                       `json:"kind" validate:"required,oneof=Collection"`
+	Metadata   schemamanager.SchemaMetadata `json:"metadata" validate:"required"`
+	Spec       collectionSpec               `json:"spec" validate:"required"`
+	Values     schemamanager.ParamValues    `json:"-"`
+	SchemaPath string                       `json:"-"`
 }
 
 type collectionSpec struct {
@@ -85,17 +78,19 @@ func (cm *collectionManager) CollectionSchema() []byte {
 }
 
 func (cm *collectionManager) Metadata() schemamanager.SchemaMetadata {
-	return schemamanager.SchemaMetadata{
-		Name:        cm.schema.Metadata.Name,
-		Catalog:     cm.schema.Metadata.Catalog,
-		Variant:     cm.schema.Metadata.Variant,
-		Path:        cm.schema.Metadata.Path,
-		Description: cm.schema.Metadata.Description,
-	}
+	return cm.schema.Metadata
 }
 
 func (cm *collectionManager) CollectionSchemaManager() schemamanager.CollectionSchemaManager {
 	return cm.csm
+}
+
+func (cm *collectionManager) SetCollectionSchemaPath(path string) {
+	cm.schema.SchemaPath = path
+}
+
+func (cm *collectionManager) GetCollectionSchemaPath() string {
+	return cm.schema.SchemaPath
 }
 
 func (cm *collectionManager) StorageRepresentation() *schemastore.SchemaStorageRepresentation {

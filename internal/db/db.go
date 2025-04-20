@@ -57,10 +57,11 @@ type DB_ interface {
 	GetCatalogForWorkspace(ctx context.Context, workspaceID uuid.UUID) (models.Catalog, apperrors.Error)
 
 	//Collections
-	CreateCollection(ctx context.Context, wc *models.Collection, ref ...models.CollectionRef) (err apperrors.Error)
+	UpsertCollection(ctx context.Context, wc *models.Collection, ref ...models.CollectionRef) (err apperrors.Error)
 	GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error)
+	GetCollectionObject(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error)
 	UpdateCollection(ctx context.Context, wc *models.Collection) apperrors.Error
-	DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) apperrors.Error
+	DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (string, apperrors.Error)
 	ListCollectionsByNamespace(ctx context.Context, namespace string, repoID, variantID uuid.UUID) ([]*models.Collection, apperrors.Error)
 
 	// Namespace

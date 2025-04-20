@@ -5,6 +5,7 @@ import "github.com/google/uuid"
 type TenantId string
 type ProjectId string
 type CatalogId uuid.UUID
+type Hash string
 
 const DefaultVariant = "default"
 const InitialVersionLabel = "init"
@@ -67,6 +68,7 @@ type CatalogObjectType string
 const (
 	CatalogObjectTypeInvalid           CatalogObjectType = "invalid"
 	CatalogObjectTypeUnknown           CatalogObjectType = "unknown"
+	CatalogObjectTypeSchema            CatalogObjectType = "schema"
 	CatalogObjectTypeParameterSchema   CatalogObjectType = "parameter_schema"
 	CatalogObjectTypeCollectionSchema  CatalogObjectType = "collection_schema"
 	CatalogObjectTypeCatalogCollection CatalogObjectType = "collection"

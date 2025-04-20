@@ -278,14 +278,20 @@ func TestSaveSchema(t *testing.T) {
 	// try to delete the parameter schema
 	dir, err := getDirectoriesForWorkspace(ctx, ws.WorkspaceID)
 	require.NoError(t, err)
-	err = deleteParameterSchema(ctx, "/integer-param-schema", dir)
+	md := parameterSchema.Metadata()
+	md.Name = "integer-param-schema" // set name to load the deleted collection schema
+	md.Namespace = types.NullString()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &md, dir)
 	require.ErrorIs(t, err, ErrUnableToDeleteParameterWithReferences)
 
 	// delete the collection
-	err = deleteCollectionSchema(ctx, "/path", dir)
+	md.Name = "path"
+	err = DeleteSchema(ctx, types.CatalogObjectTypeCollectionSchema, &md, dir)
 	require.NoError(t, err)
 	// delete the parameter schema
-	err = deleteParameterSchema(ctx, "/integer-param-schema", dir)
+	md.Name = "integer-param-schema" // set name to load the deleted collection schema
+	md.Namespace = types.NullString()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &md, dir)
 	require.NoError(t, err)
 }
 
@@ -493,6 +499,11 @@ func TestSchemaWithNamespaces(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, collectionSchema.StorageRepresentation().GetHash(), lr.StorageRepresentation().GetHash())
 
+	// create new namespace called default
+	namespace.Name = "default"
+	err = db.DB(ctx).CreateNamespace(ctx, namespace)
+	assert.NoError(t, err)
+
 	// create the same collection in a different namespace
 	b, err = sjson.Set(string(jsonData), "metadata.namespace", "default")
 	require.NoError(t, err)
@@ -621,7 +632,10 @@ func TestSchemaWithNamespaces(t *testing.T) {
 
 	// delete the parameter schema
 	dir, err := getDirectoriesForWorkspace(ctx, ws.WorkspaceID)
-	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, "/my-namespace/integer-param-schema-modified", dir)
+	md := parameterSchema.Metadata()
+	md.Name = "integer-param-schema-modified" // set name to load the deleted collection schema
+	md.Namespace = types.NullableStringFrom("my-namespace")
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &md, dir)
 	require.NoError(t, err)
 	// Verify the parameter schema is deleted
 	m = parameterSchema.Metadata()
@@ -632,11 +646,14 @@ func TestSchemaWithNamespaces(t *testing.T) {
 	require.Error(t, err)
 
 	// delete the parameter schema that has references
-	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, "/integer-param-schema", dir)
+	md.Name = "integer-param-schema" // set name to load the deleted collection schema
+	md.Namespace = types.NullString()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &md, dir)
 	require.ErrorIs(t, err, ErrUnableToDeleteParameterWithReferences)
 
 	// delete the collection schema
-	err = deleteCollectionSchema(ctx, "/valid", dir)
+	md.Name = "valid"
+	err = DeleteSchema(ctx, types.CatalogObjectTypeCollectionSchema, &md, dir)
 	require.NoError(t, err)
 	// Verify the collection schema is deleted
 	m = collectionSchema.Metadata()
@@ -645,7 +662,9 @@ func TestSchemaWithNamespaces(t *testing.T) {
 	m.Path = "/" // clear path to load the deleted collection schema
 	_, err = LoadSchemaByPath(ctx, types.CatalogObjectTypeCollectionSchema, &m, WithWorkspaceID(ws.WorkspaceID))
 	require.Error(t, err, "Expected error when loading deleted collection schema")
-	err = deleteCollectionSchema(ctx, "/my-namespace/path", dir)
+	md.Name = "path"
+	md.Namespace = types.NullableStringFrom("my-namespace")
+	err = DeleteSchema(ctx, types.CatalogObjectTypeCollectionSchema, &md, dir)
 	require.NoError(t, err)
 	// Verify the root collection schema is deleted
 	m = collectionSchema.Metadata()
@@ -656,12 +675,17 @@ func TestSchemaWithNamespaces(t *testing.T) {
 	require.Error(t, err, "Expected error when loading deleted root collection schema")
 
 	// delete the parameter schema that has references
-	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, "/integer-param-schema", dir)
+	md.Name = "integer-param-schema" // set name to load the deleted collection schema
+	md.Namespace = types.NullString()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &md, dir)
 	require.ErrorIs(t, err, ErrUnableToDeleteParameterWithReferences)
 
-	err = deleteCollectionSchema(ctx, "/path", dir)
+	md.Name = "path"
+	md.Namespace = types.NullString()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeCollectionSchema, &md, dir)
 	require.NoError(t, err)
-	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, "/integer-param-schema", dir)
+	md.Name = "integer-param-schema" // set name to load the deleted collection schema
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &md, dir)
 	require.NoError(t, err)
 
 	// create two identical parameter schemas in differentnamespaces
@@ -685,7 +709,9 @@ func TestSchemaWithNamespaces(t *testing.T) {
 	require.NoError(t, err)
 
 	// delete one
-	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, "/my-namespace/integer-param-schema", dir)
+	md.Name = "integer-param-schema" // set name to load the deleted collection schema
+	md.Namespace = types.NullableStringFrom("my-namespace")
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &md, dir)
 	require.NoError(t, err)
 	// Verify the parameter schema in the other namespace is still available
 	m = parameterSchema.Metadata()

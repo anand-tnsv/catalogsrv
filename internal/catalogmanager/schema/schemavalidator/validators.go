@@ -68,7 +68,6 @@ func resourceNameValidator(fl validator.FieldLevel) bool {
 		return false
 	}
 
-	// Compile and check against the Kubernetes naming convention regex
 	re := regexp.MustCompile(resourceNameRegex)
 	return re.MatchString(str)
 }
@@ -99,12 +98,14 @@ func resourcePathValidator(fl validator.FieldLevel) bool {
 	collections := strings.Split(path, "/")[1:]
 	re := regexp.MustCompile(resourceNameRegex)
 
-	for _, collection := range collections {
+	for n, collection := range collections {
 		// If a segment is empty, continue (e.g., trailing slash is allowed)
 		if collection == "" {
 			continue
 		}
-
+		if n == 0 && collection == types.DefaultNamespace {
+			continue // Skip the first segment if it's the default namespace
+		}
 		// Validate each folder name using the regex
 		if !re.MatchString(collection) {
 			return false

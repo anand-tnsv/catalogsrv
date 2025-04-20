@@ -10,6 +10,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/sjson"
 	"sigs.k8s.io/yaml"
 )
 
@@ -299,7 +300,8 @@ func TestCollection(t *testing.T) {
 
 	// check the collection
 	m := collection.Metadata()
-	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
+	validateMetadata(ctx, &m)
+	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID), SkipCanonicalizePaths())
 	require.NoError(t, err)
 	assert.NotNil(t, collection)
 	assert.Equal(t, "my-collection", collection.Metadata().Name)
@@ -454,4 +456,204 @@ func TestCollection(t *testing.T) {
 	valAny, _ = types.NullableAnyFrom(7) // same value for maxRetries
 	err = UpdateCollectionValue(ctx, &m, "maxRetries", valAny, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
+}
+
+func TestCollectionWithNamespaces(t *testing.T) {
+
+	parameterYaml := `
+		version: v1
+		kind: ParameterSchema
+		metadata:
+			name: integer-param-schema
+			catalog: example-catalog
+		spec:
+			dataType: Integer
+			validation:
+			minValue: 1
+			maxValue: 10
+			default: 5		
+	`
+	collectionYaml := `
+		version: v1
+		kind: CollectionSchema
+		metadata:
+			name: example-collection-schema
+			catalog: example-catalog
+			Namespace: my-namespace
+			description: An example collection schema
+		spec:
+			parameters:
+				maxAttempts:
+					schema: integer-param-schema
+				maxRetries:
+					schema: integer-param-schema
+					default: 5
+				maxDelay:
+					dataType: Integer
+					default: 1000
+	`
+
+	invalidCollectionvalueYaml := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			invalid: invalid
+	`
+	validCollectionValueYaml := `
+		version: v1
+		kind: Collection
+		metadata:
+			name: my-collection
+			catalog: example-catalog
+			description: An example collection
+			path: /some/random/path
+		spec:
+			schema: example-collection-schema
+	`
+
+	// Run tests
+	// Initialize context with logger and database connection
+	ctx := newDb()
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
+	replaceTabsWithSpaces(&parameterYaml)
+	replaceTabsWithSpaces(&collectionYaml)
+	replaceTabsWithSpaces(&invalidCollectionvalueYaml)
+	replaceTabsWithSpaces(&validCollectionValueYaml)
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant and project for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+
+	// create catalog example-catalog
+	cat := &models.Catalog{
+		Name:        "example-catalog",
+		Description: "An example catalog",
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		ProjectID:   projectID,
+	}
+	err = db.DB(ctx).CreateCatalog(ctx, cat)
+	assert.NoError(t, err)
+
+	varId, err := db.DB(ctx).GetVariantIDFromName(ctx, cat.CatalogID, types.DefaultVariant)
+	assert.NoError(t, err)
+
+	// create a namespace
+	namespace := &models.Namespace{
+		Name:        "my-namespace",
+		VariantID:   varId,
+		Description: "An example namespace for testing",
+		Info:        nil,
+	}
+	err = db.DB(ctx).CreateNamespace(ctx, namespace)
+	assert.NoError(t, err)
+
+	// create a workspace
+	ws := &models.Workspace{
+		Info:        pgtype.JSONB{Status: pgtype.Null},
+		BaseVersion: 1,
+		VariantID:   varId,
+	}
+	err = db.DB(ctx).CreateWorkspace(ctx, ws)
+	assert.NoError(t, err)
+
+	// create the parameter schema
+	jsonData, err := yaml.YAMLToJSON([]byte(parameterYaml))
+	require.NoError(t, err)
+	parameterSchema, err := NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, parameterSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	// create the collection schema
+	jsonData, err = yaml.YAMLToJSON([]byte(collectionYaml))
+	require.NoError(t, err)
+	collectionSchema, err := NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, collectionSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+
+	// create the collection
+	jsonData, err = yaml.YAMLToJSON([]byte(invalidCollectionvalueYaml))
+	require.NoError(t, err)
+	collection, err := NewCollectionManager(ctx, jsonData, nil)
+	require.Error(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+
+	//create valid collection
+	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionValueYaml))
+	require.NoError(t, err)
+	collection, err = NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, collection, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+	// create the valid collection in valid namespace
+	b, err := sjson.Set(string(jsonData), "metadata.namespace", "my-namespace")
+	require.NoError(t, err)
+	jsonData = []byte(b)
+	validCollection, err := NewCollectionManager(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveCollection(ctx, validCollection, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	// load the collection
+	m := validCollection.Metadata()
+	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
+	require.NoError(t, err)
+	assert.NotNil(t, collection)
+	assert.Equal(t, "my-collection", collection.Metadata().Name)
+	assert.Equal(t, "example-collection-schema", collection.Schema())
+	assert.Equal(t, "An example collection", collection.Metadata().Description)
+	assert.Equal(t, "/some/random/path", collection.Metadata().Path)
+	values := collection.Values()
+	assert.NotNil(t, values)
+	assert.Equal(t, 3, len(values)) // maxRetries and maxDelay should be set
+
+	// create valid collection in invalid namespace
+	b, err = sjson.Set(string(jsonData), "metadata.namespace", "invalid-namespace")
+	require.NoError(t, err)
+	jsonData = []byte(b)
+	_, err = NewCollectionManager(ctx, jsonData, nil)
+	require.Error(t, err)
+	// create the same parameter schema in the same namespace
+	jsonData, err = yaml.YAMLToJSON([]byte(parameterYaml))
+	require.NoError(t, err)
+	b, err = sjson.Set(string(jsonData), "metadata.namespace", "my-namespace")
+	jsonData = []byte(b)
+	require.NoError(t, err)
+	parameterSchema, err = NewSchema(ctx, jsonData, nil)
+	require.NoError(t, err)
+	err = SaveSchema(ctx, parameterSchema, WithWorkspaceID(ws.WorkspaceID))
+	require.Error(t, err)
+	// delete the parameter schema
+	dir, err := getDirectoriesForWorkspace(ctx, ws.WorkspaceID)
+	require.NoError(t, err)
+	m = parameterSchema.Metadata()
+	m.Namespace = types.NullString()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &m, dir)
+	require.Error(t, err)
+	// delete the collection
+	m = validCollection.Metadata()
+	err = DeleteCollection(ctx, &m, WithDirectories(dir))
+	require.NoError(t, err)
+	// load the collection
+	_, err = LoadCollectionByPath(ctx, &m, WithDirectories(dir))
+	require.Error(t, err)
 }

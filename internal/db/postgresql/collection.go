@@ -3,17 +3,21 @@ package postgresql
 import (
 	"context"
 	"database/sql"
+	"errors"
 
+	"github.com/golang/snappy"
 	"github.com/google/uuid"
 	"github.com/jackc/pgconn"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
-func (h *hatchCatalogDb) CreateCollection(ctx context.Context, c *models.Collection, ref ...models.CollectionRef) (err apperrors.Error) {
+func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection, ref ...models.CollectionRef) (err apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -65,14 +69,18 @@ func (h *hatchCatalogDb) createCollectionWithTransaction(ctx context.Context, c 
 			VALUES (
 				$1, $2, $3, $4, $5, $6, $7, $8,
 				(SELECT variant_id FROM variants
-				WHERE name = $9
-				AND catalog_id = (
-					SELECT catalog_id FROM catalogs
-					WHERE name = $10 AND tenant_id = $11
-				)
-				AND tenant_id = $11),
+					WHERE name = $9
+					AND catalog_id = (
+						SELECT catalog_id FROM catalogs
+						WHERE name = $10 AND tenant_id = $11
+					)
+					AND tenant_id = $11),
 				$11
 			)
+			ON CONFLICT (path, namespace, repo_id, variant_id, tenant_id) DO UPDATE
+			SET hash = EXCLUDED.hash,
+				description = EXCLUDED.description,
+				info = EXCLUDED.info
 			RETURNING collection_id;
 		`
 
@@ -96,7 +104,12 @@ func (h *hatchCatalogDb) createCollectionWithTransaction(ctx context.Context, c 
 				info, repo_id, variant_id, tenant_id
 			)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			RETURNING collection_id
+			ON CONFLICT (path, namespace, repo_id, variant_id, tenant_id) DO UPDATE
+			SET hash = EXCLUDED.hash,
+				description = EXCLUDED.description,
+				info = EXCLUDED.info
+			RETURNING collection_id;
+
 		`
 
 		row = tx.QueryRowContext(ctx, query,
@@ -161,6 +174,54 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace stri
 	return &c, nil
 }
 
+func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return nil, dberror.ErrMissingTenantID
+	}
+	log.Ctx(ctx).Debug().Msgf("GetCollectionObject: path=%s, namespace=%s, repoID=%s, variantID=%s, tenantID=%s", path, namespace, repoID.String(), variantID.String(), tenantID)
+	query := `
+		SELECT hash, type, version, tenant_id, data
+		FROM catalog_objects
+		WHERE hash = (
+			SELECT hash FROM collections WHERE path = $1 AND namespace = $2
+			AND repo_id =$3 AND variant_id = $4 AND tenant_id = $5
+			LIMIT 1
+		) AND tenant_id = $5;
+	`
+	var hash, version string
+	var objType types.CatalogObjectType
+	var data []byte
+	err := h.conn().QueryRowContext(ctx, query, path, namespace, repoID, variantID, tenantID).
+		Scan(&hash, &objType, &version, &tenantID, &data)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, dberror.ErrNotFound.Msg("collection not found")
+		}
+		return nil, dberror.ErrDatabase.Err(err)
+	}
+
+	// Create and populate the CatalogObject
+	catalogObj := &models.CatalogObject{
+		Hash:     hash,
+		Type:     objType,
+		Version:  version,
+		TenantID: tenantID,
+	}
+
+	catalogObj.Data = data
+	// Decompress the data
+	if config.CompressCatalogObjects {
+		catalogObj.Data, err = snappy.Decode(nil, data)
+		if err != nil {
+			return nil, dberror.ErrDatabase.Err(err)
+		}
+	}
+
+	return catalogObj, nil
+}
+
 func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collection) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
@@ -198,32 +259,32 @@ func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collect
 	return nil
 }
 
-func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) apperrors.Error {
+func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (string, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
-		return dberror.ErrMissingTenantID
+		return "", dberror.ErrMissingTenantID
 	}
 
 	query := `
-		DELETE FROM collections
-		WHERE path = $1 AND namespace = $2 AND repo_id = $3
-		  AND variant_id = $4 AND tenant_id = $5
+		WITH deleted AS (
+			DELETE FROM collections
+			WHERE path = $1 AND namespace = $2 AND repo_id = $3
+			  AND variant_id = $4 AND tenant_id = $5
+			RETURNING hash
+		)
+		SELECT hash FROM deleted;
 	`
 
-	result, err := h.conn().ExecContext(ctx, query, path, namespace, repoID, variantID, tenantID)
+	var deletedHash string
+	err := h.conn().QueryRowContext(ctx, query, path, namespace, repoID, variantID, tenantID).Scan(&deletedHash)
 	if err != nil {
-		return dberror.ErrDatabase.Err(err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", dberror.ErrNotFound.Msg("collection not found")
+		}
+		return "", dberror.ErrDatabase.Err(err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return dberror.ErrDatabase.Err(err)
-	}
-	if rowsAffected == 0 {
-		return dberror.ErrNotFound.Msg("collection not found")
-	}
-
-	return nil
+	return deletedHash, nil
 }
 
 func (h *hatchCatalogDb) ListCollectionsByNamespace(ctx context.Context, namespace string, repoID, variantID uuid.UUID) ([]*models.Collection, apperrors.Error) {

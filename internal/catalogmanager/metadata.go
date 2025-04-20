@@ -3,7 +3,6 @@ package catalogmanager
 import (
 	"context"
 	"encoding/json"
-	"path"
 
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
@@ -79,10 +78,6 @@ func canonicalizeMetadata(rsrcJson []byte, kind string, metadata *schemamanager.
 		m.Variant = types.NullableStringFrom(types.DefaultVariant) // set default variant if nil
 	}
 
-	if kind == types.CollectionSchemaKind || kind == types.ParameterSchemaKind {
-		canonicalizePath(kind, &m)
-	}
-
 	// marshal updated metadata back to json
 	j, err := json.Marshal(m)
 	if err != nil {
@@ -96,30 +91,4 @@ func canonicalizeMetadata(rsrcJson []byte, kind string, metadata *schemamanager.
 	}
 
 	return rs, &m, nil
-}
-
-// We morph the paths here, so that these are under the correct namespace.
-// Internally, namespaces are separated by pathnames at the root level. Schemas can only exist at the catalog root
-// or at the root of a namespace.  However, collections are hierarchically stored.
-// For a schema:
-// - /my-schema or /my-namespace/my-schema is valid
-// - /my-namespace/some-path/my-schema is invalid
-// For a collection:
-// - /my-collection or /my-namespace/my-collection is valid
-// - /my-namespace/some-path/my-collection is valid
-func canonicalizePath(kind string, m *schemamanager.SchemaMetadata) {
-	if m == nil {
-		return
-	}
-	if kind == types.CollectionSchemaKind || kind == types.ParameterSchemaKind {
-		if m.Namespace.IsNil() {
-			m.Path = "/"
-		} else {
-			m.Path = "/" + m.Namespace.Value
-		}
-	} else if kind == types.CollectionKind {
-		if !m.Namespace.IsNil() {
-			m.Path = path.Clean("/" + m.Namespace.String() + "/" + m.Path)
-		}
-	}
 }

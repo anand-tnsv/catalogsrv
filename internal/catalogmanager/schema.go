@@ -176,11 +176,11 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 	}
 
 	var (
-		t                  types.CatalogObjectType = om.Type() // object type
-		dir                Directories                         // directories for this object type
-		hash               string                              // hash of the object's storage representation
-		rsrcPath           string                  = m.Path    // path to the object in the directory
-		pathWithName       string                  = ""        // fully qualified resource path with name
+		t                  types.CatalogObjectType = om.Type()           // object type
+		dir                Directories                                   // directories for this object type
+		hash               string                                        // hash of the object's storage representation
+		rsrcPath           string                  = m.GetStoragePath(t) // path to the object in the directory
+		pathWithName       string                  = ""                  // fully qualified resource path with name
 		refs, existingRefs schemamanager.SchemaReferences
 		existingParamPath  string
 		existingParamRef   *models.ObjectRef
@@ -188,7 +188,6 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 	)
 
 	// strip path with any trailing slashes and append the name to get a FQRP
-	rsrcPath = strings.TrimRight(rsrcPath, "/")
 	pathWithName = path.Clean(rsrcPath + "/" + m.Name)
 
 	// get the directory
@@ -239,7 +238,7 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 	// namespaces. We need to keep track of references so we don't inadvertently delete the object when there are
 	// hanging references. We still keep the entropy to be predictable so we can track if the object has changed for
 	// a specific schema location. catalog:variant:path:name:type is a unique identifier for a resource.
-	entropy := m.Catalog + ":" + m.Variant.String() + ":" + m.Path + ":" + m.Name + ":" + string(t)
+	entropy := m.Catalog + ":" + m.Variant.String() + ":" + m.GetStoragePath(t) + ":" + m.Name + ":" + string(t)
 	s.SetEntropy([]byte(entropy))
 
 	hash = s.GetHash()
@@ -395,7 +394,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.SchemaManager
 	err apperrors.Error) {
 
 	m := om.Metadata()
-	pathWithName := path.Clean(m.Path + "/" + m.Name)
+	pathWithName := path.Clean(m.GetStoragePath(types.CatalogObjectTypeParameterSchema) + "/" + m.Name)
 
 	// get this objectRef from the directory
 	r, err := db.DB(ctx).GetObjectRefByPath(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, pathWithName)
@@ -443,7 +442,12 @@ func validateParameterSchema(ctx context.Context, om schemamanager.SchemaManager
 		existingObjHash = r.Hash
 	} else {
 		// check if there are existing parameters with the same name in this namespace or the root namespace
-		existingPath, existingParamRef, err = db.DB(ctx).FindClosestObject(ctx, types.CatalogObjectTypeParameterSchema, dir.ParametersDir, m.Name, m.Path)
+		existingPath, existingParamRef, err = db.DB(ctx).FindClosestObject(ctx,
+			types.CatalogObjectTypeParameterSchema,
+			dir.ParametersDir,
+			m.Name,
+			m.GetStoragePath(types.CatalogObjectTypeParameterSchema),
+		)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Str("path", existingPath).Msg("failed to find closest object")
 			err = ErrCatalogError.Msg("unable to save schema")
@@ -453,7 +457,7 @@ func validateParameterSchema(ctx context.Context, om schemamanager.SchemaManager
 			collectionRefs := existingParamRef.References
 			var refsToAdd schemamanager.SchemaReferences
 			for _, ref := range collectionRefs {
-				if isParentOrSame(m.Path, path.Dir(ref.Name)) {
+				if isParentOrSame(m.GetStoragePath(types.CatalogObjectTypeCollectionSchema), path.Dir(ref.Name)) {
 					refsToAdd = append(refsToAdd, schemamanager.SchemaReference{
 						Name: ref.Name,
 					})
@@ -516,7 +520,7 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.SchemaManage
 	}
 
 	m := om.Metadata()
-	parentPath := m.Path
+	parentPath := m.GetStoragePath(types.CatalogObjectTypeCollectionSchema)
 	pathWithName := path.Clean(parentPath + "/" + m.Name)
 
 	// get this objectRef from the directory
@@ -655,6 +659,8 @@ func deleteParameterSchema(ctx context.Context, pathWithName string, dir Directo
 	return nil
 }
 
+var _ = collectionSchemaExists
+
 func collectionSchemaExists(ctx context.Context, collectionsDir uuid.UUID, path string) apperrors.Error {
 	if path != "/" {
 		var (
@@ -677,9 +683,7 @@ func LoadSchemaByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 	for _, opt := range opts {
 		opt(o)
 	}
-	if !o.SkipCanonicalizePaths {
-		canonicalizePath(types.Kind(t), m)
-	}
+
 	var dir uuid.UUID
 	if !o.Dir.IsNil() && o.Dir.DirForType(t) != uuid.Nil {
 		dir = o.Dir.DirForType(t)
@@ -693,7 +697,12 @@ func LoadSchemaByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 		return nil, ErrInvalidVersionOrWorkspace
 	}
 
-	rsrcPath := m.Path + "/" + m.Name
+	rsrcPath := ""
+	if o.SkipCanonicalizePaths {
+		rsrcPath = m.Path + "/" + m.Name
+	} else {
+		rsrcPath = m.GetStoragePath(t) + "/" + m.Name
+	}
 	rsrcPath = path.Clean(rsrcPath)
 
 	obj, err := db.DB(ctx).LoadObjectByPath(ctx, t, dir, rsrcPath)
@@ -722,7 +731,11 @@ func LoadSchemaByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 	return v1Schema.LoadV1SchemaManager(ctx, s, m)
 }
 
-func DeleteSchema(ctx context.Context, t types.CatalogObjectType, pathWithName string, dir Directories) apperrors.Error {
+func DeleteSchema(ctx context.Context, t types.CatalogObjectType, m *schemamanager.SchemaMetadata, dir Directories) apperrors.Error {
+	if m == nil {
+		return ErrEmptyMetadata
+	}
+	pathWithName := path.Clean(m.GetStoragePath(t) + "/" + m.Name)
 	switch t {
 	case types.CatalogObjectTypeCollectionSchema:
 		return deleteCollectionSchema(ctx, pathWithName, dir)
@@ -749,10 +762,6 @@ func LoadSchemaByHash(ctx context.Context, hash string, m *schemamanager.SchemaM
 			return nil, ErrObjectNotFound.Err(err)
 		}
 		return nil, ErrUnableToLoadObject.Err(err)
-	}
-
-	if !o.SkipCanonicalizePaths {
-		canonicalizePath(types.Kind(obj.Type), m)
 	}
 
 	s := &schemastore.SchemaStorageRepresentation{}
@@ -809,6 +818,8 @@ func validateMetadata(ctx context.Context, m *schemamanager.SchemaMetadata) appe
 		}
 	}
 	// we won't handle resource path here
+	m.IDS.CatalogID = catalogId
+	m.IDS.VariantID = variantId
 	return nil
 }
 
@@ -834,9 +845,8 @@ func getClosestParentSchemaFinder(ctx context.Context, m schemamanager.SchemaMet
 		return nil
 	}
 
-	startPath := path.Clean(m.Path)
-
 	return func(ctx context.Context, t types.CatalogObjectType, targetName string) (path string, hash string, err apperrors.Error) {
+		startPath := m.GetStoragePath(t)
 		path, obj, err := db.DB(ctx).FindClosestObject(ctx, t, dir.DirForType(t), targetName, startPath)
 		if err != nil {
 			if errors.Is(err, dberror.ErrNotFound) {
@@ -1076,8 +1086,14 @@ func (or *objectResource) Delete(ctx context.Context) apperrors.Error {
 		log.Ctx(ctx).Error().Err(err).Str("workspace_id", or.workspaceID.String()).Msg("failed to get directories for workspace")
 		return ErrInvalidWorkspace
 	}
-	pathWithName := path.Clean(or.name.ObjectPath + "/" + or.name.ObjectName)
-	err = DeleteSchema(ctx, or.name.ObjectType, pathWithName, dir)
+	m := &schemamanager.SchemaMetadata{
+		Catalog: or.name.Catalog,
+		Variant: types.NullableStringFrom(or.name.Variant),
+		Path:    or.name.ObjectPath,
+		Name:    or.name.ObjectName,
+	}
+	pathWithName := path.Clean(m.GetStoragePath(or.name.ObjectType) + "/" + or.name.ObjectName)
+	err = DeleteSchema(ctx, or.name.ObjectType, m, dir)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete object")
 		return ErrUnableToDeleteObject

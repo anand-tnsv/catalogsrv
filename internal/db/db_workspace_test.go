@@ -492,26 +492,25 @@ func TestCreateCollection(t *testing.T) {
 		Hash:             "a3f1f81c9d26b37286f0828b8fecd851e35b0e7dfc51c58c9fd1a038d451de56",
 		Description:      "initial db config",
 		Namespace:        types.DefaultNamespace, // use default
-		CollectionSchema: "DbSchema",
+		CollectionSchema: "/DbSchema",
 		Info:             info.Bytes,
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	err := DB(ctx).CreateCollection(ctx, &wc)
+	err := DB(ctx).UpsertCollection(ctx, &wc)
 	assert.NoError(t, err)
 
 	// keep this wc
 	wc_keep := wc
 
 	// Test case: Duplicate collection (same path, namespace, etc.)
-	err = DB(ctx).CreateCollection(ctx, &wc)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrAlreadyExists)
+	err = DB(ctx).UpsertCollection(ctx, &wc)
+	assert.NoError(t, err)
 
 	// Test case: Invalid path format
 	wc.Path = "invalid path"
 	wc.CollectionID = uuid.New()
-	err = DB(ctx).CreateCollection(ctx, &wc)
+	err = DB(ctx).UpsertCollection(ctx, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
@@ -519,7 +518,7 @@ func TestCreateCollection(t *testing.T) {
 	wc.Path = "/config/valid"
 	wc.Namespace = "invalid namespace with spaces"
 	wc.CollectionID = uuid.New()
-	err = DB(ctx).CreateCollection(ctx, &wc)
+	err = DB(ctx).UpsertCollection(ctx, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
@@ -527,13 +526,13 @@ func TestCreateCollection(t *testing.T) {
 	wc.Namespace = types.DefaultNamespace
 	wc.CollectionSchema = "invalid schema!"
 	wc.CollectionID = uuid.New()
-	err = DB(ctx).CreateCollection(ctx, &wc)
+	err = DB(ctx).UpsertCollection(ctx, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	// Test case: Missing tenant ID
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	err = DB(ctx).CreateCollection(ctxWithoutTenant, &wc)
+	err = DB(ctx).UpsertCollection(ctxWithoutTenant, &wc)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrMissingTenantID)
 
@@ -543,14 +542,14 @@ func TestCreateCollection(t *testing.T) {
 		Variant:   "test_variant_wc",
 		Namespace: types.DefaultNamespace,
 	}
-	err = DB(ctx).CreateCollection(ctx, &wc_keep, ref)
-	assert.Error(t, err)
+	err = DB(ctx).UpsertCollection(ctx, &wc_keep, ref)
+	assert.NoError(t, err)
 	// Delete the collection
-	err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.Namespace, wc_keep.RepoID, wc_keep.VariantID)
+	_, err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.Namespace, wc_keep.RepoID, wc_keep.VariantID)
 	assert.NoError(t, err)
 	// create the collection with variant name instead of id
-	wc_keep.VariantID = uuid.Nil // Resetting to an invalid variant ID to test deletion
-	err = DB(ctx).CreateCollection(ctx, &wc_keep, ref)
+	wc_keep.VariantID = uuid.Nil
+	err = DB(ctx).UpsertCollection(ctx, &wc_keep, ref)
 	assert.NoError(t, err)
 }
 
@@ -597,12 +596,12 @@ func TestGetCollection(t *testing.T) {
 		Hash:             "abcd1234",
 		Description:      "desc",
 		Namespace:        types.DefaultNamespace,
-		CollectionSchema: "BasicSchema",
+		CollectionSchema: "/BasicSchema",
 		Info:             info.Bytes,
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
 
 	// Valid get
 	result, err := DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
@@ -657,12 +656,12 @@ func TestUpdateCollection(t *testing.T) {
 		Hash:             schemastore.HexEncodedSHA512([]byte("original_hash")),
 		Description:      "original description",
 		Namespace:        types.DefaultNamespace,
-		CollectionSchema: "UpdateSchema",
+		CollectionSchema: "/UpdateSchema",
 		Info:             info.Bytes,
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
 
 	// Update
 	wc.Hash = schemastore.HexEncodedSHA512([]byte("updated_hash"))
@@ -724,15 +723,15 @@ func TestDeleteCollection(t *testing.T) {
 		Hash:             "xyz123",
 		Description:      "desc",
 		Namespace:        types.DefaultNamespace,
-		CollectionSchema: "DeleteSchema",
+		CollectionSchema: "/DeleteSchema",
 		Info:             info.Bytes,
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
 
 	// Delete
-	err := DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
+	_, err := DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
 	assert.NoError(t, err)
 
 	// Confirm
@@ -740,7 +739,7 @@ func TestDeleteCollection(t *testing.T) {
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Delete again
-	err = DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
+	_, err = DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
@@ -788,12 +787,12 @@ func TestListCollectionsByNamespace(t *testing.T) {
 			Hash:             "abc123",
 			Description:      "desc " + path,
 			Namespace:        types.DefaultNamespace,
-			CollectionSchema: "SchemaX",
+			CollectionSchema: "/SchemaX",
 			Info:             info.Bytes,
 			RepoID:           workspace.WorkspaceID,
 			VariantID:        variant.VariantID,
 		}
-		assert.NoError(t, DB(ctx).CreateCollection(ctx, &wc))
+		assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
 	}
 
 	list, err := DB(ctx).ListCollectionsByNamespace(ctx, types.DefaultNamespace, workspace.WorkspaceID, variant.VariantID)

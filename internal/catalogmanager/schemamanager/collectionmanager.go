@@ -13,6 +13,8 @@ type CollectionManager interface {
 	Metadata() SchemaMetadata
 	CollectionSchemaManager() CollectionSchemaManager
 	CollectionSchema() []byte
+	SetCollectionSchemaPath(string)
+	GetCollectionSchemaPath() string
 	SetCollectionSchemaManager(csm CollectionSchemaManager)
 	SetDefaultValues() apperrors.Error
 	GetValue(ctx context.Context, param string) (types.NullableAny, apperrors.Error)
