@@ -234,13 +234,6 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 		return validationerrors.ErrEmptySchema
 	}
 
-	// We add entropy here because two schemas that have the same storage representation can exist in multiple
-	// namespaces. We need to keep track of references so we don't inadvertently delete the object when there are
-	// hanging references. We still keep the entropy to be predictable so we can track if the object has changed for
-	// a specific schema location. catalog:variant:path:name:type is a unique identifier for a resource.
-	entropy := m.Catalog + ":" + m.Variant.String() + ":" + m.GetStoragePath(t) + ":" + m.Name + ":" + string(t)
-	s.SetEntropy([]byte(entropy))
-
 	hash = s.GetHash()
 	if hash == existingObjHash {
 		if options.ErrorIfEqualToExisting {

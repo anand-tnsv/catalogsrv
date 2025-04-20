@@ -219,6 +219,7 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 	}
 
 	s := cm.StorageRepresentation()
+
 	data, err := s.Serialize()
 	if err != nil {
 		return err
@@ -386,11 +387,16 @@ func DeleteCollection(ctx context.Context, m *schemamanager.SchemaMetadata, opts
 		}
 		return err
 	}
-	err = db.DB(ctx).DeleteCatalogObject(ctx, hash)
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to delete catalog object")
-		return err
+	// If the collection is not deleted, but is only marked for deletion, then the returned hash will be empty.
+	// This is the case when the collection is deleted in a workspace.
+	if hash != "" {
+		err = db.DB(ctx).DeleteCatalogObject(ctx, hash)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to delete catalog object")
+			return err
+		}
 	}
+
 	return nil
 }
 

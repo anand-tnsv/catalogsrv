@@ -101,6 +101,7 @@ func (cm *collectionManager) StorageRepresentation() *schemastore.SchemaStorageR
 	s.Values, _ = json.Marshal(cm.schema.Values)
 	s.Schema, _ = json.Marshal(cm.schema.Spec)
 	s.Description = cm.schema.Metadata.Description
+	s.Entropy = cm.schema.Metadata.GetEntropyBytes(types.CatalogObjectTypeCatalogCollection)
 	return &s
 }
 

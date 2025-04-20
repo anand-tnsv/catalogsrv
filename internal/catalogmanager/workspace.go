@@ -95,7 +95,8 @@ func NewWorkspaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 		return nil, err
 	}
 
-	// handle the base version
+	// We don't support multiple versions of a variant. But we'll keep the version construct.
+	// Therefore the base version is always 1
 	ws.Metadata.BaseVersion = 1
 
 	w := models.Workspace{

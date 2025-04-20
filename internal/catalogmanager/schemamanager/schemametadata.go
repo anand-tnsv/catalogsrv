@@ -85,18 +85,23 @@ func (s SchemaMetadata) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
-func (s SchemaMetadata) GetStoragePath(t types.CatalogObjectType) string {
+func (m SchemaMetadata) GetStoragePath(t types.CatalogObjectType) string {
 	if t == types.CatalogObjectTypeCatalogCollection {
-		if s.Namespace.IsNil() {
-			return path.Clean("/" + types.DefaultNamespace + "/" + s.Path)
+		if m.Namespace.IsNil() {
+			return path.Clean("/" + types.DefaultNamespace + "/" + m.Path)
 		} else {
-			return path.Clean("/" + types.DefaultNamespace + "/" + s.Namespace.String() + "/" + s.Path)
+			return path.Clean("/" + types.DefaultNamespace + "/" + m.Namespace.String() + "/" + m.Path)
 		}
 	} else {
-		if s.Namespace.IsNil() {
+		if m.Namespace.IsNil() {
 			return "/" + types.DefaultNamespace
 		} else {
-			return "/" + types.DefaultNamespace + "/" + s.Namespace.String()
+			return "/" + types.DefaultNamespace + "/" + m.Namespace.String()
 		}
 	}
+}
+
+func (m SchemaMetadata) GetEntropyBytes(t types.CatalogObjectType) []byte {
+	entropy := m.Catalog + ":" + m.Variant.String() + ":" + m.GetStoragePath(t) + ":" + m.Name + ":" + string(t)
+	return []byte(entropy)
 }

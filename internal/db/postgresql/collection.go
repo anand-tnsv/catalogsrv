@@ -274,15 +274,30 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 		return "", dberror.ErrMissingTenantID
 	}
 
-	query := `
-		WITH deleted AS (
-			DELETE FROM collections
-			WHERE path = $1 AND namespace = $2 AND repo_id = $3
-			  AND variant_id = $4 AND tenant_id = $5
-			RETURNING hash
-		)
-		SELECT hash FROM deleted;
-	`
+	isWorkspace := (repoID != variantID)
+
+	var query string
+	if isWorkspace {
+		query = `
+			WITH deleted AS (
+				UPDATE collections SET namespace = '--deleted--'
+				WHERE path = $1 AND namespace = $2 AND repo_id = $3
+				  AND variant_id = $4 AND tenant_id = $5
+				RETURNING hash
+			)
+			SELECT hash FROM deleted;
+		`
+	} else {
+		query = `
+			WITH deleted AS (
+				DELETE FROM collections
+				WHERE path = $1 AND namespace = $2 AND repo_id = $3
+				  AND variant_id = $4 AND tenant_id = $5
+				RETURNING hash
+			)
+			SELECT hash FROM deleted;
+		`
+	}
 
 	var deletedHash string
 	err := h.conn().QueryRowContext(ctx, query, path, namespace, repoID, variantID, tenantID).Scan(&deletedHash)
@@ -291,6 +306,10 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 			return "", dberror.ErrNotFound.Msg("collection not found")
 		}
 		return "", dberror.ErrDatabase.Err(err)
+	}
+
+	if isWorkspace {
+		deletedHash = ""
 	}
 
 	return deletedHash, nil

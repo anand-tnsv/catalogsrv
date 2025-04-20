@@ -181,6 +181,11 @@ func (rm *V1SchemaManager) StorageRepresentation() *schemastore.SchemaStorageRep
 		}
 	}
 	s.Description = rm.resourceSchema.Metadata.Description
+	// We add entropy here because two schemas that have the same storage representation can exist in multiple
+	// namespaces. We need to keep track of references so we don't inadvertently delete the object when there are
+	// hanging references. We still keep the entropy to be predictable so we can track if the object has changed for
+	// a specific schema location. catalog:variant:path:name:type is a unique identifier for a resource.
+	s.Entropy = rm.resourceSchema.Metadata.GetEntropyBytes(rm.Type())
 	return s
 }
 
