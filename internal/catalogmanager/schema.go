@@ -571,6 +571,12 @@ func validateCollectionSchema(ctx context.Context, om schemamanager.SchemaManage
 func deleteCollectionSchema(ctx context.Context, t types.CatalogObjectType, m *schemamanager.SchemaMetadata, dir Directories) apperrors.Error {
 	// check if there are references to this schema
 	pathWithName := path.Clean(m.GetStoragePath(t) + "/" + m.Name)
+	if m.IDS.VariantID == uuid.Nil {
+		err := validateMetadata(ctx, m)
+		if err != nil {
+			return err
+		}
+	}
 	repoId := m.IDS.VariantID
 	if !dir.IsNil() && dir.WorkspaceID != uuid.Nil {
 		repoId = dir.WorkspaceID

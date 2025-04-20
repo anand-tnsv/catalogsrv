@@ -649,6 +649,10 @@ func TestCollectionWithNamespaces(t *testing.T) {
 	m.Namespace = types.NullString()
 	err = DeleteSchema(ctx, types.CatalogObjectTypeParameterSchema, &m, dir)
 	require.Error(t, err)
+	// delete the collection schema
+	m = collectionSchema.Metadata()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeCollectionSchema, &m, dir)
+	require.Error(t, err)
 	// delete the collection
 	m = validCollection.Metadata()
 	err = DeleteCollection(ctx, &m, WithDirectories(dir))
@@ -656,4 +660,8 @@ func TestCollectionWithNamespaces(t *testing.T) {
 	// load the collection
 	_, err = LoadCollectionByPath(ctx, &m, WithDirectories(dir))
 	require.Error(t, err)
+	// delete the collection schema
+	m = collectionSchema.Metadata()
+	err = DeleteSchema(ctx, types.CatalogObjectTypeCollectionSchema, &m, dir)
+	require.NoError(t, err)
 }
