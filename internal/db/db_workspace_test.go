@@ -498,14 +498,14 @@ func TestCreateCollection(t *testing.T) {
 		VariantID:        variant.VariantID,
 	}
 	err := DB(ctx).UpsertCollection(ctx, &wc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// keep this wc
 	wc_keep := wc
 
 	// Test case: Duplicate collection (same path, namespace, etc.)
 	err = DB(ctx).UpsertCollection(ctx, &wc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test case: Invalid path format
 	wc.Path = "invalid path"
@@ -667,7 +667,7 @@ func TestUpdateCollection(t *testing.T) {
 	// Update
 	wc.Hash = schemastore.HexEncodedSHA512([]byte("updated_hash"))
 	wc.Description = "updated description"
-	assert.NoError(t, DB(ctx).UpdateCollection(ctx, &wc))
+	require.NoError(t, DB(ctx).UpdateCollection(ctx, &wc))
 
 	// Verify
 	got, err := DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
@@ -741,62 +741,5 @@ func TestDeleteCollection(t *testing.T) {
 
 	// Delete again
 	_, err = DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
-	assert.ErrorIs(t, err, dberror.ErrNotFound)
-}
-
-func TestListCollectionsByNamespace(t *testing.T) {
-	ctx := log.Logger.WithContext(context.Background())
-	ctx = newDb(ctx)
-	defer DB(ctx).Close(ctx)
-
-	tenantID := types.TenantId("TABCDE")
-	projectID := types.ProjectId("P12345")
-	ctx = common.SetTenantIdInContext(ctx, tenantID)
-	ctx = common.SetProjectIdInContext(ctx, projectID)
-
-	assert.NoError(t, DB(ctx).CreateTenant(ctx, tenantID))
-	defer DB(ctx).DeleteTenant(ctx, tenantID)
-
-	assert.NoError(t, DB(ctx).CreateProject(ctx, projectID))
-	defer DB(ctx).DeleteProject(ctx, projectID)
-
-	var info pgtype.JSONB
-	assert.NoError(t, info.Set(`{"key": "value"}`))
-
-	catalog := models.Catalog{Name: "list_test_catalog", Info: info}
-	assert.NoError(t, DB(ctx).CreateCatalog(ctx, &catalog))
-	defer DB(ctx).DeleteCatalog(ctx, catalog.CatalogID, "")
-
-	variant := models.Variant{Name: "list_test_variant", CatalogID: catalog.CatalogID, Info: info}
-	assert.NoError(t, DB(ctx).CreateVariant(ctx, &variant))
-	defer DB(ctx).DeleteVariant(ctx, catalog.CatalogID, variant.VariantID, "")
-
-	workspace := models.Workspace{
-		Label:       "original_label",
-		Description: "A test workspace",
-		Info:        info,
-		BaseVersion: 1,
-		VariantID:   variant.VariantID,
-	}
-	assert.NoError(t, DB(ctx).CreateWorkspace(ctx, &workspace))
-	defer DB(ctx).DeleteWorkspace(ctx, workspace.WorkspaceID)
-
-	for _, path := range []string{"/x/a", "/x/b", "/x/c"} {
-		wc := models.Collection{
-			CollectionID:     uuid.New(),
-			Path:             path,
-			Hash:             "abc123",
-			Description:      "desc " + path,
-			Namespace:        types.DefaultNamespace,
-			CollectionSchema: "/SchemaX",
-			Info:             info.Bytes,
-			RepoID:           workspace.WorkspaceID,
-			VariantID:        variant.VariantID,
-		}
-		assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
-	}
-
-	list, err := DB(ctx).ListCollectionsByNamespace(ctx, types.DefaultNamespace, workspace.WorkspaceID, variant.VariantID)
-	assert.NoError(t, err)
-	assert.Len(t, list, 3)
+	assert.NoError(t, err) // should not error
 }

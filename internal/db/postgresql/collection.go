@@ -17,114 +17,93 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection, ref ...models.CollectionRef) (err apperrors.Error) {
+func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection, ref ...models.CollectionRef) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
 	}
 	c.TenantID = tenantID
 
-	tx, errStd := h.conn().BeginTx(ctx, nil)
-	if errStd != nil {
-		log.Ctx(ctx).Error().Err(errStd).Msg("failed to begin transaction")
-		return dberror.ErrDatabase.Err(errStd)
-	}
-	defer func() {
-		if err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				log.Ctx(ctx).Error().Err(rollbackErr).Msg("failed to rollback transaction")
-			}
-		}
-	}()
-
-	err = h.createCollectionWithTransaction(ctx, c, tx, ref...)
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to create collection")
-		return err
-	}
-
-	if errStd := tx.Commit(); errStd != nil {
-		log.Ctx(ctx).Error().Err(errStd).Msg("failed to commit transaction")
-		return dberror.ErrDatabase.Err(errStd)
-	}
-
-	return nil
-}
-
-func (h *hatchCatalogDb) createCollectionWithTransaction(ctx context.Context, c *models.Collection, tx *sql.Tx, ref ...models.CollectionRef) apperrors.Error {
 	description := sql.NullString{String: c.Description, Valid: c.Description != ""}
 
-	collectionID := c.CollectionID
-	if collectionID == uuid.Nil {
-		collectionID = uuid.New()
-	}
-
-	var row *sql.Row
-	if len(ref) > 0 && ref[0].IsValid() {
-		query := `
-			INSERT INTO collections (
-				collection_id, path, hash, description, namespace, collection_schema,
-				info, repo_id, variant_id, tenant_id
-			)
-			VALUES (
-				$1, $2, $3, $4, $5, $6, $7, $8,
-				(SELECT variant_id FROM variants
-					WHERE name = $9
-					AND catalog_id = (
-						SELECT catalog_id FROM catalogs
-						WHERE name = $10 AND tenant_id = $11
-					)
-					AND tenant_id = $11),
-				$11
-			)
-			ON CONFLICT (path, namespace, repo_id, variant_id, tenant_id) DO UPDATE
-			SET hash = EXCLUDED.hash,
-				description = EXCLUDED.description,
-				info = EXCLUDED.info
-			RETURNING collection_id;
-		`
-
-		row = tx.QueryRowContext(ctx, query,
-			collectionID,       // $1
-			c.Path,             // $2
-			c.Hash,             // $3
-			description,        // $4
-			ref[0].Namespace,   // $5
-			c.CollectionSchema, // $6
-			c.Info,             // $7
-			c.RepoID,           // $8
-			ref[0].Variant,     // $9 - variant name
-			ref[0].Catalog,     // $10 - catalog name
-			c.TenantID,         // $11
-		)
-	} else {
-		query := `
-			INSERT INTO collections (
-				collection_id, path, hash, description, namespace, collection_schema,
-				info, repo_id, variant_id, tenant_id
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (path, namespace, repo_id, variant_id, tenant_id) DO UPDATE
-			SET hash = EXCLUDED.hash,
-				description = EXCLUDED.description,
-				info = EXCLUDED.info
-			RETURNING collection_id;
-
-		`
-
-		row = tx.QueryRowContext(ctx, query,
-			collectionID, c.Path, c.Hash, description, c.Namespace, c.CollectionSchema,
-			c.Info, c.RepoID, c.VariantID, c.TenantID,
-		)
-	}
-	var insertedID uuid.UUID
-	err := row.Scan(&insertedID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return dberror.ErrAlreadyExists.Msg("collection already exists")
+	// attempt upsert up to 2 times (original + one retry on pkey conflict)
+	for attempt := 0; attempt < 2; attempt++ {
+		if c.CollectionID == uuid.Nil {
+			c.CollectionID = uuid.New()
 		}
+
+		var row *sql.Row
+		if len(ref) > 0 && ref[0].IsValid() {
+			query := `
+				INSERT INTO collections (
+					collection_id, path, hash, description, namespace, collection_schema,
+					info, repo_id, variant_id, tenant_id
+				)
+				VALUES (
+					$1, $2, $3, $4, $5, $6, $7, $8,
+					(SELECT variant_id FROM variants
+						WHERE name = $9
+						AND catalog_id = (
+							SELECT catalog_id FROM catalogs
+							WHERE name = $10 AND tenant_id = $11
+						)
+						AND tenant_id = $11),
+					$11
+				)
+				ON CONFLICT (path, repo_id, variant_id, tenant_id) DO UPDATE
+				SET hash = EXCLUDED.hash,
+					description = EXCLUDED.description,
+					info = EXCLUDED.info
+				RETURNING collection_id;
+			`
+
+			row = h.conn().QueryRowContext(ctx, query,
+				c.CollectionID,     // $1
+				c.Path,             // $2
+				c.Hash,             // $3
+				description,        // $4
+				ref[0].Namespace,   // $5
+				c.CollectionSchema, // $6
+				c.Info,             // $7
+				c.RepoID,           // $8
+				ref[0].Variant,     // $9
+				ref[0].Catalog,     // $10
+				c.TenantID,         // $11
+			)
+		} else {
+			query := `
+				INSERT INTO collections (
+					collection_id, path, hash, description, namespace, collection_schema,
+					info, repo_id, variant_id, tenant_id
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				ON CONFLICT (path, repo_id, variant_id, tenant_id) DO UPDATE
+				SET hash = EXCLUDED.hash,
+					description = EXCLUDED.description,
+					info = EXCLUDED.info
+				RETURNING collection_id;
+			`
+
+			row = h.conn().QueryRowContext(ctx, query,
+				c.CollectionID, c.Path, c.Hash, description, c.Namespace, c.CollectionSchema,
+				c.Info, c.RepoID, c.VariantID, c.TenantID,
+			)
+		}
+
+		var insertedID uuid.UUID
+		err := row.Scan(&insertedID)
+		if err == nil {
+			c.CollectionID = insertedID
+			return nil
+		}
+
+		// handle error
 		if pgErr, ok := err.(*pgconn.PgError); ok {
 			switch {
+			case pgErr.ConstraintName == "collections_pkey" && attempt == 0:
+				log.Ctx(ctx).Info().Msg("collection_id conflict, generating new ID and retrying")
+				c.CollectionID = uuid.Nil // will regenerate next loop
+				continue
 			case pgErr.Code == "23505":
 				return dberror.ErrAlreadyExists.Msg("collection already exists")
 			case pgErr.Code == "23514" && pgErr.ConstraintName == "collections_path_check":
@@ -140,9 +119,7 @@ func (h *hatchCatalogDb) createCollectionWithTransaction(ctx context.Context, c 
 		return dberror.ErrDatabase.Err(err)
 	}
 
-	c.CollectionID = insertedID
-
-	return nil
+	return dberror.ErrDatabase.Msg("collection insert retry exhausted")
 }
 
 func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error) {
@@ -150,18 +127,29 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace stri
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
 	}
-
+	var description sql.NullString
 	query := `
 		SELECT collection_id, path, hash, description, namespace, collection_schema, info,
-		       repo_id, variant_id, tenant_id
-		FROM collections
-		WHERE path = $1 AND namespace = $2 AND repo_id = $3
-		  AND variant_id = $4 AND tenant_id = $5
+			repo_id, variant_id, tenant_id
+		FROM (
+			SELECT collection_id, path, hash, description, namespace, collection_schema, info,
+				repo_id, variant_id, tenant_id
+			FROM collections
+			WHERE path = $1 AND repo_id = $2
+			AND variant_id = $3 AND tenant_id = $4 AND namespace != '--deleted--'
+			UNION ALL
+			SELECT collection_id, path, hash, description, namespace, collection_schema, info,
+				repo_id, variant_id, tenant_id
+			FROM collections
+			WHERE path = $1 AND repo_id = $3
+			AND variant_id = $3 AND tenant_id = $4 AND namespace != '--deleted--'
+		) AS fallback
+		LIMIT 1;
 	`
 
 	var c models.Collection
-	err := h.conn().QueryRowContext(ctx, query, path, namespace, repoID, variantID, tenantID).
-		Scan(&c.CollectionID, &c.Path, &c.Hash, &c.Description, &c.Namespace, &c.CollectionSchema,
+	err := h.conn().QueryRowContext(ctx, query, path, repoID, variantID, tenantID).
+		Scan(&c.CollectionID, &c.Path, &c.Hash, &description, &c.Namespace, &c.CollectionSchema,
 			&c.Info, &c.RepoID, &c.VariantID, &c.TenantID)
 
 	if err != nil {
@@ -169,6 +157,9 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace stri
 			return nil, dberror.ErrNotFound.Msg("collection not found")
 		}
 		return nil, dberror.ErrDatabase.Err(err)
+	}
+	if description.Valid {
+		c.Description = description.String
 	}
 
 	return &c, nil
@@ -187,21 +178,23 @@ func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path, namespac
 		WHERE hash = (
 			SELECT hash FROM (
 				SELECT hash FROM collections
-				WHERE path = $1 AND namespace = $2
-				AND repo_id = $3 AND variant_id = $4 AND tenant_id = $5
+				WHERE path = $1 AND repo_id = $2
+				AND variant_id = $3 AND tenant_id = $4
+				AND namespace != '--deleted--'
 				UNION ALL
 				SELECT hash FROM collections
-				WHERE path = $1 AND namespace = $2
-				AND repo_id = $4 AND variant_id = $4 AND tenant_id = $5
+				WHERE path = $1 AND repo_id = $3
+				AND variant_id = $3 AND tenant_id = $4
+				AND namespace != '--deleted--'
 			) AS fallback
 			LIMIT 1
 		)
-		AND tenant_id = $5;
+		AND tenant_id = $4;
 	`
 	var hash, version string
 	var objType types.CatalogObjectType
 	var data []byte
-	err := h.conn().QueryRowContext(ctx, query, path, namespace, repoID, variantID, tenantID).
+	err := h.conn().QueryRowContext(ctx, query, path, repoID, variantID, tenantID).
 		Scan(&hash, &objType, &version, &tenantID, &data)
 
 	if err != nil {
@@ -242,15 +235,18 @@ func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collect
 	query := `
 		UPDATE collections
 		SET hash = $1,
-		    description = $2,
-		    info = $3
-		WHERE path = $4 AND namespace = $5 AND repo_id = $6
-		  AND variant_id = $7 AND tenant_id = $8
+			description = $2,
+			info = $3
+		WHERE path = $4
+		AND repo_id = $5
+		AND variant_id = $6
+		AND tenant_id = $7
+		AND namespace != '--deleted--';
 	`
 
 	result, err := h.conn().ExecContext(ctx, query,
 		c.Hash, description, c.Info,
-		c.Path, c.Namespace, c.RepoID, c.VariantID, tenantID,
+		c.Path, c.RepoID, c.VariantID, tenantID,
 	)
 
 	if err != nil {
@@ -281,8 +277,8 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 		query = `
 			WITH deleted AS (
 				UPDATE collections SET namespace = '--deleted--'
-				WHERE path = $1 AND namespace = $2 AND repo_id = $3
-				  AND variant_id = $4 AND tenant_id = $5
+				WHERE path = $1 AND repo_id = $2
+				  AND variant_id = $3 AND tenant_id = $4
 				RETURNING hash
 			)
 			SELECT hash FROM deleted;
@@ -291,8 +287,8 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 		query = `
 			WITH deleted AS (
 				DELETE FROM collections
-				WHERE path = $1 AND namespace = $2 AND repo_id = $3
-				  AND variant_id = $4 AND tenant_id = $5
+				WHERE path = $1 AND repo_id = $2
+				  AND variant_id = $3 AND tenant_id = $4
 				RETURNING hash
 			)
 			SELECT hash FROM deleted;
@@ -300,7 +296,7 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 	}
 
 	var deletedHash string
-	err := h.conn().QueryRowContext(ctx, query, path, namespace, repoID, variantID, tenantID).Scan(&deletedHash)
+	err := h.conn().QueryRowContext(ctx, query, path, repoID, variantID, tenantID).Scan(&deletedHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", dberror.ErrNotFound.Msg("collection not found")
@@ -313,44 +309,6 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 	}
 
 	return deletedHash, nil
-}
-
-func (h *hatchCatalogDb) ListCollectionsByNamespace(ctx context.Context, namespace string, repoID, variantID uuid.UUID) ([]*models.Collection, apperrors.Error) {
-	tenantID := common.TenantIdFromContext(ctx)
-	if tenantID == "" {
-		return nil, dberror.ErrMissingTenantID
-	}
-
-	query := `
-		SELECT collection_id, path, hash, description, namespace, collection_schema, info,
-		       repo_id, variant_id, tenant_id
-		FROM collections
-		WHERE namespace = $1 AND repo_id = $2
-		  AND variant_id = $3 AND tenant_id = $4
-		ORDER BY path
-	`
-
-	rows, err := h.conn().QueryContext(ctx, query, namespace, repoID, variantID, tenantID)
-	if err != nil {
-		return nil, dberror.ErrDatabase.Err(err)
-	}
-	defer rows.Close()
-
-	var collections []*models.Collection
-	for rows.Next() {
-		var c models.Collection
-		err := rows.Scan(&c.CollectionID, &c.Path, &c.Hash, &c.Description, &c.Namespace,
-			&c.CollectionSchema, &c.Info, &c.RepoID, &c.VariantID, &c.TenantID)
-		if err != nil {
-			return nil, dberror.ErrDatabase.Err(err)
-		}
-		collections = append(collections, &c)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, dberror.ErrDatabase.Err(err)
-	}
-
-	return collections, nil
 }
 
 func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema, namespace string, repoID, variantID uuid.UUID) (bool, apperrors.Error) {

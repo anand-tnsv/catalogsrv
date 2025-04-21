@@ -1,7 +1,9 @@
 package db
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -11,6 +13,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCommitWorkspace(t *testing.T) {
@@ -23,7 +26,7 @@ func TestCommitWorkspace(t *testing.T) {
 	tenantID := types.TenantId("TABCDE")
 	projectID := types.ProjectId("P12345")
 
-	// Set the tenant ID and project ID in the context
+	// Set the tenant ID and project ID in the ctx
 	ctx = common.SetTenantIdInContext(ctx, tenantID)
 	ctx = common.SetProjectIdInContext(ctx, projectID)
 
@@ -109,28 +112,149 @@ func TestCommitWorkspace(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
+	// get the directory
+	cd_dir, err := DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeCollectionSchema, cd)
+	assert.NoError(t, err)
+	pd_dir, err := DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeParameterSchema, pd)
+	assert.NoError(t, err)
+
 	err = DB(ctx).CommitWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// fetching this workspace should return an error
 	_, err = DB(ctx).GetWorkspace(ctx, workspace.WorkspaceID)
 	assert.Error(t, err)
+
+	// get the directories of the committed version
+	version, err := DB(ctx).GetVersion(ctx, 1, variant.VariantID)
+	assert.NoError(t, err)
+	dirRetJson, err = DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeCollectionSchema, version.CollectionsDir)
+	assert.NoError(t, err)
+	assert.True(t, bytes.Equal(cd_dir, dirRetJson))
+	dirRetJson, err = DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeParameterSchema, version.ParametersDir)
+	assert.NoError(t, err)
+	assert.True(t, bytes.Equal(pd_dir, dirRetJson))
+
 	// create another workspace
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the directory
+	dirRetJson, err = DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeCollectionSchema, workspace.CollectionsDir)
+	assert.NoError(t, err)
+	assert.True(t, bytes.Equal(cd_dir, dirRetJson))
 	dirRetJson, err = DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeParameterSchema, workspace.ParametersDir)
 	assert.NoError(t, err)
-	_, err = models.JSONToDirectory(dirRetJson)
-	assert.NoError(t, err)
+	assert.True(t, bytes.Equal(pd_dir, dirRetJson))
 
 	// now set an empty directory
 	err = DB(ctx).SetDirectory(ctx, types.CatalogObjectTypeParameterSchema, workspace.ParametersDir, []byte("{}"))
 	assert.NoError(t, err)
+	pd_dir = []byte("{}")
 
 	// commit the workspace
 	err = DB(ctx).CommitWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
-	// get the directory
+
 	_, err = DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeParameterSchema, pd)
 	assert.Error(t, err)
+	// get the version
+	version, err = DB(ctx).GetVersion(ctx, 1, variant.VariantID)
+	assert.NoError(t, err)
+	dirRetJson, err = DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeParameterSchema, version.ParametersDir)
+	assert.NoError(t, err)
+	assert.True(t, bytes.Equal(pd_dir, dirRetJson))
+	dirRetJson, err = DB(ctx).GetDirectory(ctx, types.CatalogObjectTypeCollectionSchema, version.CollectionsDir)
+	assert.NoError(t, err)
+	assert.True(t, bytes.Equal(cd_dir, dirRetJson))
+
+	// let's create a new workspace
+	err = DB(ctx).CreateWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+
+	// let's create a new collection
+	collection := models.Collection{
+		Path:             "/col/a/b",
+		Hash:             "hash",
+		Namespace:        "--root--",
+		VariantID:        variant.VariantID,
+		RepoID:           workspace.WorkspaceID,
+		CollectionSchema: "/col/a/b",
+		Info:             nil,
+	}
+	err = DB(ctx).UpsertCollection(ctx, &collection)
+	assert.NoError(t, err)
+	collection2 := collection
+	collection2.CollectionID = uuid.Nil
+	collection2.Path = "/col/a/b/c"
+	collection2.CollectionSchema = "/col/a/b/c"
+	err = DB(ctx).UpsertCollection(ctx, &collection2)
+	assert.NoError(t, err)
+	// commit the workspace
+	err = DB(ctx).CommitWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+	// get the collection
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", "--root--", variant.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", collection.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+
+	// create another workspace
+	err = DB(ctx).CreateWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+	// get the collection
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.NoError(t, err)
+	collection3, err := DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.NoError(t, err)
+
+	// modify the collection
+	collection3.Hash = "hash2"
+	collection3.Description = "new description"
+	collection3.RepoID = workspace.WorkspaceID
+	err = DB(ctx).UpsertCollection(ctx, collection3)
+	require.NoError(t, err)
+	// get the collection
+	c, err := DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, collection3.Hash, strings.Trim(c.Hash, " "))
+	assert.Equal(t, collection3.Description, c.Description)
+	// get the collection from the variant
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", variant.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, collection2.Hash, strings.Trim(c.Hash, " "))
+	assert.Equal(t, collection2.Description, c.Description)
+
+	// commit the workspace
+	err = DB(ctx).CommitWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+	// get the collection
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", variant.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, collection3.Hash, strings.Trim(c.Hash, " "))
+	assert.Equal(t, collection3.Description, c.Description)
+
+	// modify the collection directly in the variant
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", variant.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+	c.Hash = "hash3"
+	err = DB(ctx).UpsertCollection(ctx, c)
+	assert.NoError(t, err)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", variant.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, "hash3", strings.Trim(c.Hash, " "))
+	collection3 = c
+
+	// create a workspace
+	err = DB(ctx).CreateWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+	// get the collection
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, collection3.Hash, c.Hash)
+	/*
+		// delete this collection
+		hash, err := DB(ctx).DeleteCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
+		assert.NoError(t, err)
+		assert.Equal(t, collection3.Hash, hash)
+	*/
+
 }
