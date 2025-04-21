@@ -43,7 +43,8 @@ type DirectoryIDs []DirectoryID
 
 type ObjectRef struct {
 	Hash       string     `json:"hash"`
-	References References `json:"references"`
+	References References `json:"references"`  // used for objects that reference other objects, e.g. schemas
+	BaseSchema string     `json:"base_schema"` // used for objects that are based on a schema, e.g. collections
 }
 
 // we'll keep Reference as a struct for future extensibility at the cost of increased storage space

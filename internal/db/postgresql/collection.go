@@ -3,18 +3,13 @@ package postgresql
 import (
 	"context"
 	"database/sql"
-	"errors"
 
-	"github.com/golang/snappy"
 	"github.com/google/uuid"
-	"github.com/jackc/pgconn"
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
-	"github.com/mugiliam/hatchcatalogsrv/internal/db/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
-	"github.com/rs/zerolog/log"
 )
 
 func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection) apperrors.Error {
@@ -24,63 +19,29 @@ func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collect
 	}
 	c.TenantID = tenantID
 
-	description := sql.NullString{String: c.Description, Valid: c.Description != ""}
-
-	// attempt upsert up to 2 times (original + one retry on pkey conflict)
-	for attempt := 0; attempt < 2; attempt++ {
-		if c.CollectionID == uuid.Nil {
-			c.CollectionID = uuid.New()
-		}
-
-		var row *sql.Row
-		query := `
-				INSERT INTO collections (
-					collection_id, path, hash, description, namespace, collection_schema,
-					info, repo_id, variant_id, tenant_id
-				)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-				ON CONFLICT (path, repo_id, variant_id, tenant_id) DO UPDATE
-				SET hash = EXCLUDED.hash,
-					description = EXCLUDED.description,
-					info = EXCLUDED.info
-				RETURNING collection_id;
-			`
-
-		row = h.conn().QueryRowContext(ctx, query,
-			c.CollectionID, c.Path, c.Hash, description, c.Namespace, c.CollectionSchema,
-			c.Info, c.RepoID, c.VariantID, c.TenantID,
-		)
-
-		var insertedID uuid.UUID
-		err := row.Scan(&insertedID)
-		if err == nil {
-			c.CollectionID = insertedID
-			return nil
-		}
-
-		// handle error
-		if pgErr, ok := err.(*pgconn.PgError); ok {
-			switch {
-			case pgErr.ConstraintName == "collections_pkey" && attempt == 0:
-				log.Ctx(ctx).Info().Msg("collection_id conflict, generating new ID and retrying")
-				c.CollectionID = uuid.Nil // will regenerate next loop
-				continue
-			case pgErr.Code == "23505":
-				return dberror.ErrAlreadyExists.Msg("collection already exists")
-			case pgErr.Code == "23514" && pgErr.ConstraintName == "collections_path_check":
-				return dberror.ErrInvalidInput.Msg("invalid path format")
-			case pgErr.Code == "23514" && pgErr.ConstraintName == "collections_namespace_check":
-				return dberror.ErrInvalidInput.Msg("invalid namespace format")
-			case pgErr.Code == "23514" && pgErr.ConstraintName == "collections_collection_schema_check":
-				return dberror.ErrInvalidInput.Msg("invalid collection_schema format")
-			case pgErr.ConstraintName == "collections_variant_id_tenant_id_fkey":
-				return dberror.ErrInvalidInput.Msg("referenced variant not found")
-			}
-		}
-		return dberror.ErrDatabase.Err(err)
+	dir, err := h.getValuesDirectory(ctx, c.RepoID, c.VariantID)
+	if err != nil {
+		return err
 	}
 
-	return dberror.ErrDatabase.Msg("collection insert retry exhausted")
+	if !isValidPath(c.CollectionSchema) {
+		return dberror.ErrInvalidInput.Msg("invalid collection schema")
+	}
+
+	err = h.AddOrUpdateObjectByPath(ctx,
+		types.CatalogObjectTypeCatalogCollection,
+		dir,
+		c.Path,
+		models.ObjectRef{
+			Hash:       c.Hash,
+			BaseSchema: c.CollectionSchema,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error) {
@@ -88,51 +49,25 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace stri
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
 	}
-	var description sql.NullString
-	query := `
-		SELECT collection_id, path, hash, description, namespace, collection_schema, info,
-			repo_id, variant_id, tenant_id
-		FROM (
-			SELECT collection_id, path, hash, description, namespace, collection_schema, info,
-				repo_id, variant_id, tenant_id
-			FROM collections
-			WHERE path = $1 AND repo_id = $2
-			AND variant_id = $3 AND tenant_id = $4
-			UNION ALL
-			SELECT collection_id, path, hash, description, namespace, collection_schema, info,
-				repo_id, variant_id, tenant_id
-			FROM collections
-			WHERE path = $1 AND repo_id = $3
-			AND variant_id = $3 AND tenant_id = $4
-		) AS fallback
-		LIMIT 1;
-	`
 
-	var c models.Collection
-	err := h.conn().QueryRowContext(ctx, query, path, repoID, variantID, tenantID).
-		Scan(&c.CollectionID, &c.Path, &c.Hash, &description, &c.Namespace, &c.CollectionSchema,
-			&c.Info, &c.RepoID, &c.VariantID, &c.TenantID)
-
+	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, dberror.ErrNotFound.Msg("collection not found")
-		}
-		return nil, dberror.ErrDatabase.Err(err)
+		return nil, err
 	}
 
-	if c.Namespace == "--deleted--" {
-		return nil, dberror.ErrNotFound.Msg("collection not found")
-	}
-	if description.Valid {
-		c.Description = description.String
-	}
-	// If the collection is from the active repo, set the collectionID to nil if the request is for a workspace
-	if c.RepoID != repoID {
-		c.CollectionID = uuid.Nil
-		c.RepoID = repoID
+	objRef, err := h.GetObjectRefByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
+	if err != nil {
+		return nil, err
 	}
 
-	return &c, nil
+	return &models.Collection{
+		Path:             path,
+		Hash:             objRef.Hash,
+		CollectionSchema: objRef.BaseSchema,
+		RepoID:           repoID,
+		VariantID:        variantID,
+		TenantID:         tenantID,
+	}, nil
 }
 
 func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error) {
@@ -140,58 +75,13 @@ func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path, namespac
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
 	}
-	log.Ctx(ctx).Debug().Msgf("GetCollectionObject: path=%s, namespace=%s, repoID=%s, variantID=%s, tenantID=%s", path, namespace, repoID.String(), variantID.String(), tenantID)
-	// If the collection is not found in the specified repo, try to find it in the active repo which is the variant_id
-	query := `
-		SELECT hash, type, version, tenant_id, data
-		FROM catalog_objects
-		WHERE hash = (
-			SELECT hash FROM (
-				SELECT hash FROM collections
-				WHERE path = $1 AND repo_id = $2
-				AND variant_id = $3 AND tenant_id = $4
-				AND namespace != '--deleted--'
-				UNION ALL
-				SELECT hash FROM collections
-				WHERE path = $1 AND repo_id = $3
-				AND variant_id = $3 AND tenant_id = $4
-				AND namespace != '--deleted--'
-			) AS fallback
-			LIMIT 1
-		)
-		AND tenant_id = $4;
-	`
-	var hash, version string
-	var objType types.CatalogObjectType
-	var data []byte
-	err := h.conn().QueryRowContext(ctx, query, path, repoID, variantID, tenantID).
-		Scan(&hash, &objType, &version, &tenantID, &data)
 
+	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, dberror.ErrNotFound.Msg("collection not found")
-		}
-		return nil, dberror.ErrDatabase.Err(err)
+		return nil, err
 	}
 
-	// Create and populate the CatalogObject
-	catalogObj := &models.CatalogObject{
-		Hash:     hash,
-		Type:     objType,
-		Version:  version,
-		TenantID: tenantID,
-	}
-
-	catalogObj.Data = data
-	// Decompress the data
-	if config.CompressCatalogObjects {
-		catalogObj.Data, err = snappy.Decode(nil, data)
-		if err != nil {
-			return nil, dberror.ErrDatabase.Err(err)
-		}
-	}
-
-	return catalogObj, nil
+	return h.LoadObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
 }
 
 func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collection) apperrors.Error {
@@ -200,37 +90,30 @@ func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collect
 		return dberror.ErrMissingTenantID
 	}
 
-	description := sql.NullString{String: c.Description, Valid: c.Description != ""}
+	if !isValidPath(c.CollectionSchema) {
+		return dberror.ErrInvalidInput.Msg("invalid collection schema")
+	}
 
-	query := `
-		UPDATE collections
-		SET hash = $1,
-			description = $2,
-			info = $3
-		WHERE path = $4
-		AND repo_id = $5
-		AND variant_id = $6
-		AND tenant_id = $7
-		AND namespace != '--deleted--';
-	`
+	dir, err := h.getValuesDirectory(ctx, c.RepoID, c.VariantID)
+	if err != nil {
+		return err
+	}
 
-	result, err := h.conn().ExecContext(ctx, query,
-		c.Hash, description, c.Info,
-		c.Path, c.RepoID, c.VariantID, tenantID,
+	objRef, err := h.GetObjectRefByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, c.Path)
+	if err != nil {
+		return err
+	}
+	objRef.Hash = c.Hash
+	objRef.BaseSchema = c.CollectionSchema
+	err = h.AddOrUpdateObjectByPath(ctx,
+		types.CatalogObjectTypeCatalogCollection,
+		dir,
+		c.Path,
+		*objRef,
 	)
-
 	if err != nil {
-		return dberror.ErrDatabase.Err(err)
+		return err
 	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return dberror.ErrDatabase.Err(err)
-	}
-	if rowsAffected == 0 {
-		return dberror.ErrNotFound.Msg("collection not found")
-	}
-
 	return nil
 }
 
@@ -240,72 +123,17 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 		return "", dberror.ErrMissingTenantID
 	}
 
-	isWorkspace := (repoID != variantID)
-
-	var query string
-	if isWorkspace {
-		query = `
-			WITH deleted AS (
-				UPDATE collections SET namespace = '--deleted--'
-				WHERE path = $1 AND repo_id = $2
-				  AND variant_id = $3 AND tenant_id = $4
-				RETURNING hash
-			)
-			SELECT hash FROM deleted;
-		`
-	} else {
-		query = `
-			WITH deleted AS (
-				DELETE FROM collections
-				WHERE path = $1 AND repo_id = $2
-				  AND variant_id = $3 AND tenant_id = $4
-				RETURNING hash
-			)
-			SELECT hash FROM deleted;
-		`
-	}
-
-	var deletedHash string
-	err := h.conn().QueryRowContext(ctx, query, path, repoID, variantID, tenantID).Scan(&deletedHash)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			deletedHash = ""
-			_, err := h.cloneCollectionToDeleteInWorkspace(ctx, path, namespace, repoID, variantID)
-			if err != nil {
-				return "", err
-			}
-			return deletedHash, nil
-		}
-		return "", dberror.ErrDatabase.Err(err)
-	}
-
-	if isWorkspace {
-		deletedHash = ""
-	}
-
-	return deletedHash, nil
-}
-
-func (h *hatchCatalogDb) cloneCollectionToDeleteInWorkspace(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (string, apperrors.Error) {
-	tenantID := common.TenantIdFromContext(ctx)
-	if tenantID == "" {
-		return "", dberror.ErrMissingTenantID
-	}
-
-	c, err := h.GetCollection(ctx, path, namespace, variantID, variantID)
+	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
 	if err != nil {
 		return "", err
 	}
 
-	// insert the collection in workspace as deleted
-	c.CollectionID = uuid.New()
-	c.RepoID = repoID
-	c.Namespace = "--deleted--"
-	err = h.UpsertCollection(ctx, c)
+	deletedHash, err := h.DeleteObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
 	if err != nil {
 		return "", err
 	}
-	return c.Hash, nil
+
+	return string(deletedHash), nil
 }
 
 func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema, namespace string, repoID, variantID uuid.UUID) (bool, apperrors.Error) {
@@ -314,20 +142,44 @@ func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, co
 		return false, dberror.ErrMissingTenantID
 	}
 
-	query := `
-		SELECT EXISTS (
-			SELECT 1 FROM collections
-			WHERE collection_schema = $1
-			  AND namespace = $2
-			  AND repo_id = $3
-			  AND variant_id = $4
-			  AND tenant_id = $5
-		);
-	`
-	var exists bool
-	err := h.conn().QueryRowContext(ctx, query, collectionSchema, namespace, repoID, variantID, tenantID).Scan(&exists)
+	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
 	if err != nil {
-		return false, dberror.ErrDatabase.Err(err)
+		return false, err
+	}
+
+	query := `
+		SELECT 1
+		FROM values_directory
+		WHERE jsonb_path_query_array(directory, '$.*.base_schema') @> to_jsonb($1::text)
+		AND directory_id = $2
+		AND tenant_id = $3
+		LIMIT 1;
+	`
+	var exists bool // we'll probably just hit the ErrNoRows case in case of false
+	dberr := h.conn().QueryRowContext(ctx, query, collectionSchema, dir, tenantID).Scan(&exists)
+	if dberr != nil {
+		if dberr == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, dberror.ErrDatabase.Err(dberr)
 	}
 	return exists, nil
+}
+
+func (h *hatchCatalogDb) getValuesDirectory(ctx context.Context, repoId, variantId uuid.UUID) (uuid.UUID, apperrors.Error) {
+	var dir uuid.UUID
+	if repoId != variantId {
+		w, err := h.GetWorkspace(ctx, repoId)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		dir = w.ValuesDir
+	} else {
+		v, err := h.GetVersion(ctx, 1, variantId)
+		if err != nil {
+			return uuid.Nil, dberror.ErrDatabase.Err(err)
+		}
+		dir = v.ValuesDir
+	}
+	return dir, nil
 }

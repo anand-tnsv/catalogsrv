@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/golang/snappy"
@@ -283,6 +284,10 @@ func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.Ca
 	tableName := getSchemaDirectoryTableName(t)
 	if tableName == "" {
 		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	if !isValidPath(path) {
+		return dberror.ErrInvalidInput.Msg("invalid path")
 	}
 
 	// Convert the object to JSON
@@ -1034,4 +1039,9 @@ func getSchemaDirectoryTableName(t types.CatalogObjectType) string {
 	default:
 		return ""
 	}
+}
+
+func isValidPath(path string) bool {
+	var validPathPattern = regexp.MustCompile(`^(/[A-Za-z0-9_-]+)+$`)
+	return validPathPattern.MatchString(path)
 }

@@ -319,10 +319,8 @@ func saveCollectionObject(ctx context.Context, m *schemamanager.SchemaMetadata, 
 	c := models.Collection{
 		Path:             pathWithName,
 		Hash:             obj.Hash,
-		Description:      obj.Version, // using Version as description for backward compatibility
 		Namespace:        namespace,
 		CollectionSchema: collectionSchema,
-		Info:             nil,
 		RepoID:           repoId,
 		VariantID:        m.IDS.VariantID,
 	}

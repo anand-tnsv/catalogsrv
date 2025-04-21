@@ -38,26 +38,11 @@ type Collection struct {
 	CollectionID     uuid.UUID      `db:"collection_id"`
 	Path             string         `db:"path"`
 	Hash             string         `db:"hash"`
-	Description      string         `db:"description"`
 	Namespace        string         `db:"namespace"`
 	CollectionSchema string         `db:"collection_schema"`
-	Info             []byte         `db:"info"`
 	RepoID           uuid.UUID      `db:"repo_id"`
 	VariantID        uuid.UUID      `db:"variant_id"`
 	TenantID         types.TenantId `db:"tenant_id"`
 	CreatedAt        time.Time      `db:"created_at"`
 	UpdatedAt        time.Time      `db:"updated_at"`
-}
-
-type CollectionRef struct {
-	Catalog   string
-	Variant   string
-	Namespace string
-}
-
-func (c *CollectionRef) IsValid() bool {
-	if c.Catalog == "" || c.Variant == "" || c.Namespace == "" {
-		return false
-	}
-	return true
 }

@@ -146,9 +146,9 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, va
 		query = `
 			SELECT variant_id, name, description, info, catalog_id
 			FROM variants
-			WHERE variant_id = $1 AND catalog_id = $2 AND tenant_id = $3;
+			WHERE variant_id = $1 AND tenant_id = $2;
 		`
-		row = h.conn().QueryRowContext(ctx, query, variantID, catalogID, tenantID)
+		row = h.conn().QueryRowContext(ctx, query, variantID, tenantID)
 	} else if name != "" {
 		query = `
 			SELECT variant_id, name, description, info, catalog_id
