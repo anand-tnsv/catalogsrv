@@ -536,21 +536,10 @@ func TestCreateCollection(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrMissingTenantID)
 
-	// create the collection with variant name instead of id
-	ref := models.CollectionRef{
-		Catalog:   "test_catalog_wc",
-		Variant:   "test_variant_wc",
-		Namespace: types.DefaultNamespace,
-	}
-	err = DB(ctx).UpsertCollection(ctx, &wc_keep, ref)
+	err = DB(ctx).UpsertCollection(ctx, &wc_keep)
 	assert.NoError(t, err)
 	// Delete the collection
 	_, err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.Namespace, wc_keep.RepoID, wc_keep.VariantID)
-	assert.NoError(t, err)
-	// create the collection with variant name instead of id
-	wc_keep.CollectionID = uuid.Nil
-	wc_keep.VariantID = uuid.Nil
-	err = DB(ctx).UpsertCollection(ctx, &wc_keep, ref)
 	assert.NoError(t, err)
 }
 

@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection, ref ...models.CollectionRef) apperrors.Error {
+func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -33,45 +33,7 @@ func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collect
 		}
 
 		var row *sql.Row
-		if len(ref) > 0 && ref[0].IsValid() {
-			query := `
-				INSERT INTO collections (
-					collection_id, path, hash, description, namespace, collection_schema,
-					info, repo_id, variant_id, tenant_id
-				)
-				VALUES (
-					$1, $2, $3, $4, $5, $6, $7, $8,
-					(SELECT variant_id FROM variants
-						WHERE name = $9
-						AND catalog_id = (
-							SELECT catalog_id FROM catalogs
-							WHERE name = $10 AND tenant_id = $11
-						)
-						AND tenant_id = $11),
-					$11
-				)
-				ON CONFLICT (path, repo_id, variant_id, tenant_id) DO UPDATE
-				SET hash = EXCLUDED.hash,
-					description = EXCLUDED.description,
-					info = EXCLUDED.info
-				RETURNING collection_id;
-			`
-
-			row = h.conn().QueryRowContext(ctx, query,
-				c.CollectionID,     // $1
-				c.Path,             // $2
-				c.Hash,             // $3
-				description,        // $4
-				ref[0].Namespace,   // $5
-				c.CollectionSchema, // $6
-				c.Info,             // $7
-				c.RepoID,           // $8
-				ref[0].Variant,     // $9
-				ref[0].Catalog,     // $10
-				c.TenantID,         // $11
-			)
-		} else {
-			query := `
+		query := `
 				INSERT INTO collections (
 					collection_id, path, hash, description, namespace, collection_schema,
 					info, repo_id, variant_id, tenant_id
@@ -84,11 +46,10 @@ func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collect
 				RETURNING collection_id;
 			`
 
-			row = h.conn().QueryRowContext(ctx, query,
-				c.CollectionID, c.Path, c.Hash, description, c.Namespace, c.CollectionSchema,
-				c.Info, c.RepoID, c.VariantID, c.TenantID,
-			)
-		}
+		row = h.conn().QueryRowContext(ctx, query,
+			c.CollectionID, c.Path, c.Hash, description, c.Namespace, c.CollectionSchema,
+			c.Info, c.RepoID, c.VariantID, c.TenantID,
+		)
 
 		var insertedID uuid.UUID
 		err := row.Scan(&insertedID)
@@ -136,13 +97,13 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace stri
 				repo_id, variant_id, tenant_id
 			FROM collections
 			WHERE path = $1 AND repo_id = $2
-			AND variant_id = $3 AND tenant_id = $4 AND namespace != '--deleted--'
+			AND variant_id = $3 AND tenant_id = $4
 			UNION ALL
 			SELECT collection_id, path, hash, description, namespace, collection_schema, info,
 				repo_id, variant_id, tenant_id
 			FROM collections
 			WHERE path = $1 AND repo_id = $3
-			AND variant_id = $3 AND tenant_id = $4 AND namespace != '--deleted--'
+			AND variant_id = $3 AND tenant_id = $4
 		) AS fallback
 		LIMIT 1;
 	`
@@ -158,8 +119,17 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace stri
 		}
 		return nil, dberror.ErrDatabase.Err(err)
 	}
+
+	if c.Namespace == "--deleted--" {
+		return nil, dberror.ErrNotFound.Msg("collection not found")
+	}
 	if description.Valid {
 		c.Description = description.String
+	}
+	// If the collection is from the active repo, set the collectionID to nil if the request is for a workspace
+	if c.RepoID != repoID {
+		c.CollectionID = uuid.Nil
+		c.RepoID = repoID
 	}
 
 	return &c, nil
@@ -299,7 +269,12 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 	err := h.conn().QueryRowContext(ctx, query, path, repoID, variantID, tenantID).Scan(&deletedHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", dberror.ErrNotFound.Msg("collection not found")
+			deletedHash = ""
+			_, err := h.cloneCollectionToDeleteInWorkspace(ctx, path, namespace, repoID, variantID)
+			if err != nil {
+				return "", err
+			}
+			return deletedHash, nil
 		}
 		return "", dberror.ErrDatabase.Err(err)
 	}
@@ -309,6 +284,28 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 	}
 
 	return deletedHash, nil
+}
+
+func (h *hatchCatalogDb) cloneCollectionToDeleteInWorkspace(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (string, apperrors.Error) {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return "", dberror.ErrMissingTenantID
+	}
+
+	c, err := h.GetCollection(ctx, path, namespace, variantID, variantID)
+	if err != nil {
+		return "", err
+	}
+
+	// insert the collection in workspace as deleted
+	c.CollectionID = uuid.New()
+	c.RepoID = repoID
+	c.Namespace = "--deleted--"
+	err = h.UpsertCollection(ctx, c)
+	if err != nil {
+		return "", err
+	}
+	return c.Hash, nil
 }
 
 func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema, namespace string, repoID, variantID uuid.UUID) (bool, apperrors.Error) {

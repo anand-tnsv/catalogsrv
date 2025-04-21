@@ -616,15 +616,16 @@ func deleteCollectionSchema(ctx context.Context, t types.CatalogObjectType, m *s
 	); err != nil {
 		return ErrCatalogError.Err(err).Msg("unable to delete collection schema from directory")
 	}
-
+	var _ = hash
+	// TODO - Handle hash deletion
 	// delete the object from the database
-	if err := db.DB(ctx).DeleteCatalogObject(ctx, string(hash)); err != nil {
-		if !errors.Is(err, dberror.ErrNotFound) {
-			// we don't return an error since the object reference has already been removed and
-			// we cannot roll this back.
-			log.Ctx(ctx).Error().Err(err).Str("hash", string(hash)).Msg("failed to delete object from database")
-		}
-	}
+	// if err := db.DB(ctx).DeleteCatalogObject(ctx, string(hash)); err != nil {
+	// 	if !errors.Is(err, dberror.ErrNotFound) {
+	// 		// we don't return an error since the object reference has already been removed and
+	// 		// we cannot roll this back.
+	// 		log.Ctx(ctx).Error().Err(err).Str("hash", string(hash)).Msg("failed to delete object from database")
+	// 	}
+	// }
 	return nil
 }
 

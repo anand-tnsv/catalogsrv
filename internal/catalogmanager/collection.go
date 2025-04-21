@@ -41,6 +41,12 @@ func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata,
 		if err != nil {
 			return err
 		}
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
+			return err
+		}
 	} else {
 		return ErrInvalidVersionOrWorkspace
 	}
@@ -105,12 +111,7 @@ func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata,
 		Data:    data,
 	}
 
-	ref := models.CollectionRef{
-		Catalog:   m.Catalog,
-		Variant:   m.Variant.String(),
-		Namespace: m.Namespace.String(),
-	}
-	return saveCollectionObject(ctx, ref, &obj, dir, pathWithName, schemaPath)
+	return saveCollectionObject(ctx, m, &obj, dir, pathWithName, schemaPath)
 }
 
 func NewCollectionManager(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
@@ -161,6 +162,7 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 	rsrcPath := cm.Metadata().GetStoragePath(t)
 	pathWithName := path.Clean(rsrcPath + "/" + cm.Metadata().Name)
 
+	m := cm.Metadata()
 	// get the directory
 	if !options.Dir.IsNil() {
 		dir = options.Dir
@@ -170,11 +172,16 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		if err != nil {
 			return err
 		}
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
+			return err
+		}
 	} else {
 		return ErrInvalidVersionOrWorkspace
 	}
-	// TODO: handle version number
-	m := cm.Metadata()
+
 	existingCollection, err := loadCollectionObjectByPath(ctx, &m, opts...)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
@@ -238,13 +245,8 @@ func SaveCollection(ctx context.Context, cm schemamanager.CollectionManager, opt
 		Version: s.Version,
 		Data:    data,
 	}
-	ref := models.CollectionRef{
-		Catalog:   cm.Metadata().Catalog,
-		Variant:   cm.Metadata().Variant.String(),
-		Namespace: cm.Metadata().Namespace.String(),
-	}
 
-	return saveCollectionObject(ctx, ref, &obj, dir, pathWithName, schemaPath)
+	return saveCollectionObject(ctx, &m, &obj, dir, pathWithName, schemaPath)
 }
 
 func setCollectionSchemaManager(ctx context.Context, cm schemamanager.CollectionManager, dir Directories) (string, schemamanager.SchemaLoaders, apperrors.Error) {
@@ -291,7 +293,7 @@ func setCollectionSchemaManager(ctx context.Context, cm schemamanager.Collection
 	return schemaPath, schemaLoaders, nil
 }
 
-func saveCollectionObject(ctx context.Context, ref models.CollectionRef, obj *models.CatalogObject, dir Directories, pathWithName, collectionSchema string) apperrors.Error {
+func saveCollectionObject(ctx context.Context, m *schemamanager.SchemaMetadata, obj *models.CatalogObject, dir Directories, pathWithName, collectionSchema string) apperrors.Error {
 	dberr := db.DB(ctx).CreateCatalogObject(ctx, obj)
 	if dberr != nil {
 		if errors.Is(dberr, dberror.ErrAlreadyExists) {
@@ -305,23 +307,27 @@ func saveCollectionObject(ctx context.Context, ref models.CollectionRef, obj *mo
 	repoId := uuid.Nil
 	if dir.WorkspaceID != uuid.Nil {
 		repoId = dir.WorkspaceID
+	} else if dir.VariantID != uuid.Nil {
+		repoId = dir.VariantID
 	}
 
-	if ref.Namespace == "" {
-		ref.Namespace = types.DefaultNamespace
+	namespace := m.Namespace.String()
+	if namespace == "" {
+		namespace = types.DefaultNamespace
 	}
 
 	c := models.Collection{
 		Path:             pathWithName,
 		Hash:             obj.Hash,
 		Description:      obj.Version, // using Version as description for backward compatibility
-		Namespace:        ref.Namespace,
+		Namespace:        namespace,
 		CollectionSchema: collectionSchema,
 		Info:             nil,
 		RepoID:           repoId,
+		VariantID:        m.IDS.VariantID,
 	}
 
-	if err := db.DB(ctx).UpsertCollection(ctx, &c, ref); err != nil {
+	if err := db.DB(ctx).UpsertCollection(ctx, &c); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to create collection in database")
 		// If the collection creation fails, we should also delete the catalog object
 		if _, delErr := db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir.ValuesDir, pathWithName); delErr != nil {
@@ -387,15 +393,17 @@ func DeleteCollection(ctx context.Context, m *schemamanager.SchemaMetadata, opts
 		}
 		return err
 	}
+	var _ = hash
+	// TODO - Handle object deletion
 	// If the collection is not deleted, but is only marked for deletion, then the returned hash will be empty.
 	// This is the case when the collection is deleted in a workspace.
-	if hash != "" {
-		err = db.DB(ctx).DeleteCatalogObject(ctx, hash)
-		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to delete catalog object")
-			return err
-		}
-	}
+	// if hash != "" {
+	// 	err = db.DB(ctx).DeleteCatalogObject(ctx, hash)
+	// 	if err != nil {
+	// 		log.Ctx(ctx).Error().Err(err).Msg("failed to delete catalog object")
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -250,11 +251,55 @@ func TestCommitWorkspace(t *testing.T) {
 	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
 	assert.NoError(t, err)
 	assert.Equal(t, collection3.Hash, c.Hash)
-	/*
-		// delete this collection
-		hash, err := DB(ctx).DeleteCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
-		assert.NoError(t, err)
-		assert.Equal(t, collection3.Hash, hash)
-	*/
+
+	// delete this collection
+	hash, err := DB(ctx).DeleteCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, "", hash)
+	// get this collection
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, dberror.ErrNotFound)
+	// get the collection from the variant
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", variant.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, collection3.Hash, c.Hash)
+
+	// commit the workspace
+	err = DB(ctx).CommitWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+	// get the collection
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", "--root--", variant.VariantID, variant.VariantID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, dberror.ErrNotFound)
+
+	// create a workspace
+	err = DB(ctx).CreateWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+	// get the collection
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, c.CollectionID, uuid.Nil)
+	// save collection in workspace
+	err = DB(ctx).UpsertCollection(ctx, c)
+	assert.NoError(t, err)
+
+	// delete the collection from the variant
+	hash, err = DB(ctx).DeleteCollection(ctx, "/col/a/b", "--root--", variant.VariantID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, c.Hash, hash)
+
+	// delete the collection from the workspace
+	hash, err = DB(ctx).DeleteCollection(ctx, "/col/a/b", "--root--", workspace.WorkspaceID, variant.VariantID)
+	assert.NoError(t, err)
+	assert.Equal(t, "", hash)
+
+	// commit the workspace
+	err = DB(ctx).CommitWorkspace(ctx, &workspace)
+	assert.NoError(t, err)
+	// get the collection
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", "--root--", variant.VariantID, variant.VariantID)
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 }

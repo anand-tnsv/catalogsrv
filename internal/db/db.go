@@ -58,7 +58,7 @@ type DB_ interface {
 	CommitWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
 
 	//Collections
-	UpsertCollection(ctx context.Context, wc *models.Collection, ref ...models.CollectionRef) (err apperrors.Error)
+	UpsertCollection(ctx context.Context, wc *models.Collection) (err apperrors.Error)
 	GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error)
 	GetCollectionObject(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error)
 	UpdateCollection(ctx context.Context, wc *models.Collection) apperrors.Error
