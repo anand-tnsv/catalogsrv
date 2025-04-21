@@ -319,7 +319,6 @@ func saveCollectionObject(ctx context.Context, m *schemamanager.SchemaMetadata, 
 	c := models.Collection{
 		Path:             pathWithName,
 		Hash:             obj.Hash,
-		Namespace:        namespace,
 		CollectionSchema: collectionSchema,
 		RepoID:           repoId,
 		VariantID:        m.IDS.VariantID,
@@ -378,12 +377,7 @@ func DeleteCollection(ctx context.Context, m *schemamanager.SchemaMetadata, opts
 		repoId = m.IDS.VariantID
 	}
 
-	namespace := types.DefaultNamespace
-	if !m.Namespace.IsNil() {
-		namespace = m.Namespace.String()
-	}
-
-	hash, err := db.DB(ctx).DeleteCollection(ctx, pathWithName, namespace, repoId, m.IDS.VariantID)
+	hash, err := db.DB(ctx).DeleteCollection(ctx, pathWithName, repoId, m.IDS.VariantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to delete collection")
 		if errors.Is(err, dberror.ErrNotFound) {
@@ -391,17 +385,15 @@ func DeleteCollection(ctx context.Context, m *schemamanager.SchemaMetadata, opts
 		}
 		return err
 	}
-	var _ = hash
-	// TODO - Handle object deletion
-	// If the collection is not deleted, but is only marked for deletion, then the returned hash will be empty.
-	// This is the case when the collection is deleted in a workspace.
-	// if hash != "" {
-	// 	err = db.DB(ctx).DeleteCatalogObject(ctx, hash)
-	// 	if err != nil {
-	// 		log.Ctx(ctx).Error().Err(err).Msg("failed to delete catalog object")
-	// 		return err
-	// 	}
-	// }
+
+	if hash != "" {
+		err = db.DB(ctx).DeleteCatalogObject(ctx, types.CatalogObjectTypeCatalogCollection, hash)
+		if !errors.Is(err, dberror.ErrNotFound) {
+			// we don't return an error since the object reference has already been removed and
+			// we cannot roll this back.
+			log.Ctx(ctx).Error().Err(err).Str("hash", string(hash)).Msg("failed to delete object from database")
+		}
+	}
 
 	return nil
 }
@@ -457,13 +449,8 @@ func loadCollectionObjectByPath(ctx context.Context, m *schemamanager.SchemaMeta
 		repoId = m.IDS.VariantID
 	}
 
-	namespace := types.DefaultNamespace
-	if !m.Namespace.IsNil() {
-		namespace = m.Namespace.String()
-	}
-
 	// get the collection from DB
-	obj, err := db.DB(ctx).GetCollectionObject(ctx, pathWithName, namespace, repoId, m.IDS.VariantID)
+	obj, err := db.DB(ctx).GetCollectionObject(ctx, pathWithName, repoId, m.IDS.VariantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to load object by path")
 		return nil, err

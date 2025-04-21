@@ -38,7 +38,6 @@ type Collection struct {
 	CollectionID     uuid.UUID      `db:"collection_id"`
 	Path             string         `db:"path"`
 	Hash             string         `db:"hash"`
-	Namespace        string         `db:"namespace"`
 	CollectionSchema string         `db:"collection_schema"`
 	RepoID           uuid.UUID      `db:"repo_id"`
 	VariantID        uuid.UUID      `db:"variant_id"`

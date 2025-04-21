@@ -490,7 +490,6 @@ func TestCreateCollection(t *testing.T) {
 		CollectionID:     uuid.New(),
 		Path:             "/config/db",
 		Hash:             "a3f1f81c9d26b37286f0828b8fecd851e35b0e7dfc51c58c9fd1a038d451de56",
-		Namespace:        types.DefaultNamespace, // use default
 		CollectionSchema: "/DbSchema",
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
@@ -506,10 +505,10 @@ func TestCreateCollection(t *testing.T) {
 	require.NoError(t, err)
 
 	//check containment of collection schema
-	b, err := DB(ctx).HasReferencesToCollectionSchema(ctx, wc.CollectionSchema, wc.Namespace, wc.RepoID, wc.VariantID)
+	b, err := DB(ctx).HasReferencesToCollectionSchema(ctx, wc.CollectionSchema, wc.RepoID, wc.VariantID)
 	require.NoError(t, err)
 	assert.True(t, b)
-	b, err = DB(ctx).HasReferencesToCollectionSchema(ctx, "/some/random/schema", wc.Namespace, wc.RepoID, wc.VariantID)
+	b, err = DB(ctx).HasReferencesToCollectionSchema(ctx, "/some/random/schema", wc.RepoID, wc.VariantID)
 	require.NoError(t, err)
 	assert.False(t, b)
 
@@ -529,7 +528,7 @@ func TestCreateCollection(t *testing.T) {
 	err = DB(ctx).UpsertCollection(ctx, &wc_keep)
 	assert.NoError(t, err)
 	// Delete the collection
-	_, err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.Namespace, wc_keep.RepoID, wc_keep.VariantID)
+	_, err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.RepoID, wc_keep.VariantID)
 	assert.NoError(t, err)
 }
 
@@ -574,7 +573,6 @@ func TestGetCollection(t *testing.T) {
 		CollectionID:     uuid.New(),
 		Path:             "/get/example",
 		Hash:             "abcd1234",
-		Namespace:        types.DefaultNamespace,
 		CollectionSchema: "/BasicSchema",
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
@@ -582,12 +580,12 @@ func TestGetCollection(t *testing.T) {
 	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
 
 	// Valid get
-	result, err := DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
+	result, err := DB(ctx).GetCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
 	require.NoError(t, err)
 	assert.Equal(t, wc.Path, result.Path)
 
 	// Not found
-	_, err = DB(ctx).GetCollection(ctx, "/missing/path", wc.Namespace, wc.RepoID, wc.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, "/missing/path", wc.RepoID, wc.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
@@ -632,7 +630,6 @@ func TestUpdateCollection(t *testing.T) {
 		CollectionID:     uuid.New(),
 		Path:             "/update/example",
 		Hash:             schemastore.HexEncodedSHA512([]byte("original_hash")),
-		Namespace:        types.DefaultNamespace,
 		CollectionSchema: "/UpdateSchema",
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
@@ -644,7 +641,7 @@ func TestUpdateCollection(t *testing.T) {
 	require.NoError(t, DB(ctx).UpdateCollection(ctx, &wc))
 
 	// Verify
-	got, err := DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
+	got, err := DB(ctx).GetCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
 	assert.NoError(t, err)
 	assert.Equal(t, wc.Hash, got.Hash)
 
@@ -695,7 +692,6 @@ func TestDeleteCollection(t *testing.T) {
 		CollectionID:     uuid.New(),
 		Path:             "/delete/example",
 		Hash:             "xyz123",
-		Namespace:        types.DefaultNamespace,
 		CollectionSchema: "/DeleteSchema",
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
@@ -703,14 +699,14 @@ func TestDeleteCollection(t *testing.T) {
 	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
 
 	// Delete
-	_, err := DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
+	_, err := DB(ctx).DeleteCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
 	assert.NoError(t, err)
 
 	// Confirm
-	_, err = DB(ctx).GetCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Delete again
-	_, err = DB(ctx).DeleteCollection(ctx, wc.Path, wc.Namespace, wc.RepoID, wc.VariantID)
+	_, err = DB(ctx).DeleteCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
 	assert.NoError(t, err) // should not error
 }

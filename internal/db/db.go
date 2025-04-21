@@ -59,11 +59,11 @@ type DB_ interface {
 
 	//Collections
 	UpsertCollection(ctx context.Context, wc *models.Collection) (err apperrors.Error)
-	GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error)
-	GetCollectionObject(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error)
+	GetCollection(ctx context.Context, path string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error)
+	GetCollectionObject(ctx context.Context, path string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error)
 	UpdateCollection(ctx context.Context, wc *models.Collection) apperrors.Error
-	DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (string, apperrors.Error)
-	HasReferencesToCollectionSchema(ctx context.Context, collectionSchema, namespace string, repoID, variantID uuid.UUID) (bool, apperrors.Error)
+	DeleteCollection(ctx context.Context, path string, repoID, variantID uuid.UUID) (string, apperrors.Error)
+	HasReferencesToCollectionSchema(ctx context.Context, collectionSchema string, repoID, variantID uuid.UUID) (bool, apperrors.Error)
 
 	// Namespace
 	CreateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error
@@ -75,7 +75,7 @@ type DB_ interface {
 	// Catalog Object
 	CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error
 	GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error)
-	DeleteCatalogObject(ctx context.Context, hash string) apperrors.Error
+	DeleteCatalogObject(ctx context.Context, t types.CatalogObjectType, hash string) apperrors.Error
 
 	// Schema Directory
 	CreateSchemaDirectory(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory) apperrors.Error

@@ -588,12 +588,8 @@ func deleteCollectionSchema(ctx context.Context, t types.CatalogObjectType, m *s
 	if !dir.IsNil() && dir.WorkspaceID != uuid.Nil {
 		repoId = dir.WorkspaceID
 	}
-	namespace := types.DefaultNamespace
-	if !m.Namespace.IsNil() {
-		namespace = m.Namespace.String()
-	}
 
-	exists, err := db.DB(ctx).HasReferencesToCollectionSchema(ctx, pathWithName, namespace, repoId, m.IDS.VariantID)
+	exists, err := db.DB(ctx).HasReferencesToCollectionSchema(ctx, pathWithName, repoId, m.IDS.VariantID)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to check if collection schema has references")
 		return ErrCatalogError
@@ -616,16 +612,14 @@ func deleteCollectionSchema(ctx context.Context, t types.CatalogObjectType, m *s
 	); err != nil {
 		return ErrCatalogError.Err(err).Msg("unable to delete collection schema from directory")
 	}
-	var _ = hash
-	// TODO - Handle hash deletion
 	// delete the object from the database
-	// if err := db.DB(ctx).DeleteCatalogObject(ctx, string(hash)); err != nil {
-	// 	if !errors.Is(err, dberror.ErrNotFound) {
-	// 		// we don't return an error since the object reference has already been removed and
-	// 		// we cannot roll this back.
-	// 		log.Ctx(ctx).Error().Err(err).Str("hash", string(hash)).Msg("failed to delete object from database")
-	// 	}
-	// }
+	if err := db.DB(ctx).DeleteCatalogObject(ctx, types.CatalogObjectTypeCollectionSchema, string(hash)); err != nil {
+		if !errors.Is(err, dberror.ErrNotFound) {
+			// we don't return an error since the object reference has already been removed and
+			// we cannot roll this back.
+			log.Ctx(ctx).Error().Err(err).Str("hash", string(hash)).Msg("failed to delete object from database")
+		}
+	}
 	return nil
 }
 
@@ -654,7 +648,7 @@ func deleteParameterSchema(ctx context.Context, t types.CatalogObjectType, m *sc
 		return ErrCatalogError.Err(err).Msg("unable to delete parameter schema from directory")
 	}
 	// delete the object from the database
-	if err := db.DB(ctx).DeleteCatalogObject(ctx, string(hash)); err != nil {
+	if err := db.DB(ctx).DeleteCatalogObject(ctx, types.CatalogObjectTypeParameterSchema, string(hash)); err != nil {
 		if !errors.Is(err, dberror.ErrNotFound) {
 			// we don't return an error since the object reference has already been removed and
 			// we cannot roll this back.

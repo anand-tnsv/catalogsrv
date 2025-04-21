@@ -10,6 +10,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/config"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -106,7 +107,7 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 	return &obj, nil
 }
 
-func (h *hatchCatalogDb) DeleteCatalogObject(ctx context.Context, hash string) apperrors.Error {
+func (h *hatchCatalogDb) DeleteCatalogObject(ctx context.Context, t types.CatalogObjectType, hash string) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -115,8 +116,38 @@ func (h *hatchCatalogDb) DeleteCatalogObject(ctx context.Context, hash string) a
 		return dberror.ErrInvalidInput.Msg("hash cannot be empty")
 	}
 
-	// Query to delete catalog object based on composite key (hash, tenant_id)
+	var table string
+	switch t {
+	case types.CatalogObjectTypeParameterSchema:
+		table = "parameters_directory"
+	case types.CatalogObjectTypeCollectionSchema:
+		table = "collections_directory"
+	case types.CatalogObjectTypeCatalogCollection:
+		table = "values_directory"
+	default:
+		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
+	}
+
+	// look for references in this table for this has
 	query := `
+		SELECT 1
+		FROM ` + table + `
+		WHERE jsonb_path_query_array(directory, '$.*.hash') @> to_jsonb($1::text)
+		AND tenant_id = $2
+		LIMIT 1;
+	`
+	var exists bool // we'll probably just hit the ErrNoRows case in case of false
+	dberr := h.conn().QueryRowContext(ctx, query, hash, tenantID).Scan(&exists)
+	if dberr != nil {
+		if dberr != sql.ErrNoRows {
+			return dberror.ErrDatabase.Err(dberr)
+		}
+	}
+	if exists {
+		// do nothing. There are other references to this object
+		return nil
+	}
+	query = `
 		DELETE FROM catalog_objects
 		WHERE hash = $1 AND tenant_id = $2
 	`

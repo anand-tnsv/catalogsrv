@@ -12,6 +12,9 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
+// The Collections interface functions are a shim on top of schema directory.  This would allow for a different implementation
+// in future, if necessary.
+
 func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
@@ -44,7 +47,7 @@ func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collect
 	return nil
 }
 
-func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error) {
+func (h *hatchCatalogDb) GetCollection(ctx context.Context, path string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -70,7 +73,7 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path, namespace stri
 	}, nil
 }
 
-func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error) {
+func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -117,7 +120,7 @@ func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collect
 	return nil
 }
 
-func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace string, repoID, variantID uuid.UUID) (string, apperrors.Error) {
+func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path string, repoID, variantID uuid.UUID) (string, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return "", dberror.ErrMissingTenantID
@@ -136,7 +139,7 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path, namespace s
 	return string(deletedHash), nil
 }
 
-func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema, namespace string, repoID, variantID uuid.UUID) (bool, apperrors.Error) {
+func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema string, repoID, variantID uuid.UUID) (bool, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return false, dberror.ErrMissingTenantID
