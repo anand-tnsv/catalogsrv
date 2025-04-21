@@ -132,6 +132,7 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 // GetVariant retrieves a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
 // Returns the variant if found, or an error if the variant is not found or there is a database error.
+
 func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {

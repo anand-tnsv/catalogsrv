@@ -25,6 +25,7 @@ type SchemaManager interface {
 	SetPath(path string)
 	SetCatalog(catalog string)
 	SetDescription(description string)
+	SetMetadata(m *SchemaMetadata)
 	ToJson(ctx context.Context) ([]byte, apperrors.Error)
 	Compare(other SchemaManager, excludeMetadata bool) bool
 }

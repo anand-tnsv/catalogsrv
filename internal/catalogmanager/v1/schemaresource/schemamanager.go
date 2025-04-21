@@ -160,6 +160,10 @@ func (rm *V1SchemaManager) SetDescription(description string) {
 	rm.resourceSchema.Metadata.Description = description
 }
 
+func (rm *V1SchemaManager) SetMetadata(m *schemamanager.SchemaMetadata) {
+	rm.resourceSchema.Metadata = *m
+}
+
 func (rm *V1SchemaManager) ParameterSchemaManager() schemamanager.ParameterSchemaManager {
 	return rm.parameterSchemaManager
 }

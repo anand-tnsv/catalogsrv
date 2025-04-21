@@ -19,7 +19,102 @@ import (
 // It automatically assigns a unique workspace ID if one is not provided.
 // Returns an error if the label already exists, the label format is invalid,
 // the catalog or variant ID is invalid, or there is a database error.
-func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.Workspace) (err apperrors.Error) {
+func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	workspace.TenantID = tenantID
+	var workspaceID any
+	if workspace.WorkspaceID != uuid.Nil {
+		workspaceID = workspace.WorkspaceID
+	} else {
+		workspaceID = nil
+	}
+	label := sql.NullString{String: workspace.Label, Valid: workspace.Label != ""}
+	query := `
+		SELECT workspace_id, label, description, info, base_version,
+		       parameters_directory, collections_directory, values_directory,
+		       variant_id, tenant_id, created_at, updated_at
+		FROM create_workspace($1, $2, $3, $4, $5, $6);
+	`
+
+	row := h.conn().QueryRowContext(ctx, query,
+		workspaceID,
+		workspace.VariantID,
+		string(tenantID),
+		label,
+		workspace.Description,
+		workspace.Info,
+	)
+
+	errDb := row.Scan(
+		&workspace.WorkspaceID,
+		&label,
+		&workspace.Description,
+		&workspace.Info,
+		&workspace.BaseVersion,
+		&workspace.ParametersDir,
+		&workspace.CollectionsDir,
+		&workspace.ValuesDir,
+		&workspace.VariantID,
+		&workspace.TenantID,
+		&workspace.CreatedAt,
+		&workspace.UpdatedAt,
+	)
+
+	if errDb != nil {
+		if errDb == sql.ErrNoRows {
+			log.Ctx(ctx).Info().
+				Str("label", workspace.Label).
+				Str("variant_id", workspace.VariantID.String()).
+				Msg("workspace not created")
+			return dberror.ErrNotFound
+		}
+
+		if pgErr, ok := errDb.(*pgconn.PgError); ok {
+			switch {
+			case pgErr.Code == "23505" && pgErr.ConstraintName == "workspaces_label_variant_id_tenant_id_key":
+				log.Ctx(ctx).Error().Str("label", workspace.Label).
+					Str("variant_id", workspace.VariantID.String()).
+					Msg("label already exists for the given variant")
+				return dberror.ErrAlreadyExists.Msg("label already exists for the given variant")
+
+			case pgErr.Code == "23505" && pgErr.ConstraintName == "workspaces_pkey":
+				log.Ctx(ctx).Error().Str("workspace_id", workspace.WorkspaceID.String()).
+					Msg("workspace already exists")
+				return dberror.ErrAlreadyExists.Msg("workspace already exists")
+
+			case pgErr.Code == "23514" && pgErr.ConstraintName == "workspaces_label_check":
+				log.Ctx(ctx).Error().Str("label", workspace.Label).
+					Msg("invalid label format")
+				return dberror.ErrInvalidInput.Msg("invalid label format")
+
+			case pgErr.ConstraintName == "workspaces_variant_id_tenant_id_fkey":
+				log.Ctx(ctx).Info().Str("variant_id", workspace.VariantID.String()).
+					Msg("variant not found")
+				return dberror.ErrInvalidCatalog
+
+			case pgErr.Code == "P0002":
+				log.Ctx(ctx).Info().Str("variant_id", workspace.VariantID.String()).Msg("variant not found")
+				return dberror.ErrInvalidVariant
+			}
+
+		}
+
+		log.Ctx(ctx).Error().Err(errDb).
+			Str("label", workspace.Label).
+			Str("variant_id", workspace.VariantID.String()).
+			Msg("failed to create workspace")
+		return dberror.ErrDatabase.Err(errDb)
+	}
+	if label.Valid {
+		workspace.Label = label.String
+	}
+	return nil
+}
+
+func (h *hatchCatalogDb) CreateWorkspaceWithoutStoredProcedure(ctx context.Context, workspace *models.Workspace) (err apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -74,7 +169,7 @@ func (h *hatchCatalogDb) CreateWorkspace(ctx context.Context, workspace *models.
 			}
 			if pgErr.ConstraintName == "workspaces_variant_id_tenant_id_fkey" {
 				log.Ctx(ctx).Info().Str("variant_id", workspace.VariantID.String()).Msg("variant not found")
-				return dberror.ErrInvalidCatalog
+				return dberror.ErrInvalidVariant
 			}
 		}
 		log.Ctx(ctx).Error().Err(errDb).Str("label", workspace.Label).Str("variant_id", workspace.VariantID.String()).Msg("failed to insert workspace")
@@ -359,4 +454,51 @@ func (h *hatchCatalogDb) GetCatalogForWorkspace(ctx context.Context, workspaceID
 		catalog.Info = pgtype.JSONB{}
 	}
 	return catalog, nil
+}
+
+func (h *hatchCatalogDb) CommitWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	workspace.TenantID = tenantID
+
+	query := `
+		SELECT workspace_id, variant_id
+		FROM commit_workspace($1, $2);
+	`
+
+	row := h.conn().QueryRowContext(ctx, query,
+		workspace.WorkspaceID,
+		string(tenantID),
+	)
+
+	err := row.Scan(
+		&workspace.WorkspaceID,
+		&workspace.VariantID,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Ctx(ctx).Info().
+				Str("workspace_id", workspace.WorkspaceID.String()).
+				Msg("workspace not found or not committed")
+			return dberror.ErrNotFound.Msg("workspace not found")
+		}
+		if pgErr, ok := err.(*pgconn.PgError); ok {
+			log.Ctx(ctx).Error().
+				Str("workspace_id", workspace.WorkspaceID.String()).
+				Str("tenant_id", string(tenantID)).
+				Str("code", pgErr.Code).
+				Str("message", pgErr.Message).
+				Msg("pg error during workspace commit")
+			return dberror.ErrDatabase.Err(pgErr)
+		}
+		log.Ctx(ctx).Error().
+			Err(err).
+			Str("workspace_id", workspace.WorkspaceID.String()).
+			Msg("failed to commit workspace")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	return nil
 }

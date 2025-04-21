@@ -55,6 +55,7 @@ type DB_ interface {
 	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) apperrors.Error
 	UpdateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
 	GetCatalogForWorkspace(ctx context.Context, workspaceID uuid.UUID) (models.Catalog, apperrors.Error)
+	CommitWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
 
 	//Collections
 	UpsertCollection(ctx context.Context, wc *models.Collection, ref ...models.CollectionRef) (err apperrors.Error)

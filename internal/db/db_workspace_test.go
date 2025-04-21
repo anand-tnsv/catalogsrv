@@ -119,7 +119,7 @@ func TestCreateWorkspace(t *testing.T) {
 	}
 	err = DB(ctx).CreateWorkspace(ctx, &invalidVariantIDWorkspace)
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, dberror.ErrInvalidCatalog)
+	assert.ErrorIs(t, err, dberror.ErrInvalidVariant)
 
 	// Test case: Create a duplicate workspace (should fail due to unique constraint when label is non-empty)
 	duplicateWorkspace := models.Workspace{
@@ -548,6 +548,7 @@ func TestCreateCollection(t *testing.T) {
 	_, err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.Namespace, wc_keep.RepoID, wc_keep.VariantID)
 	assert.NoError(t, err)
 	// create the collection with variant name instead of id
+	wc_keep.CollectionID = uuid.Nil
 	wc_keep.VariantID = uuid.Nil
 	err = DB(ctx).UpsertCollection(ctx, &wc_keep, ref)
 	assert.NoError(t, err)

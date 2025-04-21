@@ -60,7 +60,15 @@ func NewSchema(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMeta
 		return nil, err
 	}
 
-	return v1Schema.NewV1SchemaManager(ctx, []byte(rsrcJson), schemamanager.WithValidation(), schemamanager.WithDefaultValues())
+	var sm schemamanager.SchemaManager
+	var apperr apperrors.Error
+	if sm, apperr = v1Schema.NewV1SchemaManager(ctx, rsrcJson, schemamanager.WithValidation(), schemamanager.WithDefaultValues()); apperr != nil {
+		return nil, apperr
+	} else {
+		sm.SetMetadata(m)
+	}
+
+	return sm, apperr
 }
 
 type storeOptions struct {
@@ -81,6 +89,7 @@ type Directories struct {
 	CollectionsDir uuid.UUID
 	ValuesDir      uuid.UUID
 	WorkspaceID    uuid.UUID
+	VariantID      uuid.UUID
 }
 
 func (d Directories) IsNil() bool {
@@ -199,10 +208,15 @@ func SaveSchema(ctx context.Context, om schemamanager.SchemaManager, opts ...Obj
 		if err != nil {
 			return err
 		}
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
+			return err
+		}
 	} else {
 		return ErrInvalidVersionOrWorkspace
 	}
-	// TODO: handle version number
 
 	switch t {
 	case types.CatalogObjectTypeParameterSchema:
@@ -683,6 +697,13 @@ func LoadSchemaByPath(ctx context.Context, t types.CatalogObjectType, m *schemam
 			return nil, err
 		}
 		dir = dirs.DirForType(t)
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dirs, err := getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
+			return nil, err
+		}
+		dir = dirs.DirForType(t)
 	} else {
 		return nil, ErrInvalidVersionOrWorkspace
 	}
@@ -827,7 +848,10 @@ func getClosestParentSchemaFinder(ctx context.Context, m schemamanager.SchemaMet
 		if apperr != nil {
 			return nil
 		}
-		if o.Dir.IsNil() {
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
 			return nil
 		}
 	} else {
@@ -851,7 +875,7 @@ func getClosestParentSchemaFinder(ctx context.Context, m schemamanager.SchemaMet
 	}
 }
 
-func getSchemaLoaderByPath(ctx context.Context, opts ...ObjectStoreOption) schemamanager.SchemaLoaderByPath {
+func getSchemaLoaderByPath(ctx context.Context, m schemamanager.SchemaMetadata, opts ...ObjectStoreOption) schemamanager.SchemaLoaderByPath {
 	o := &storeOptions{}
 	for _, opt := range opts {
 		opt(o)
@@ -866,6 +890,12 @@ func getSchemaLoaderByPath(ctx context.Context, opts ...ObjectStoreOption) schem
 		if err != nil {
 			return nil
 		}
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
+			return nil
+		}
 	} else {
 		return nil
 	}
@@ -873,8 +903,8 @@ func getSchemaLoaderByPath(ctx context.Context, opts ...ObjectStoreOption) schem
 	// We do this so load workspace never gets called again
 	opts = append(opts, WithDirectories(dir))
 
-	return func(ctx context.Context, t types.CatalogObjectType, m *schemamanager.SchemaMetadata) (schemamanager.SchemaManager, apperrors.Error) {
-		return LoadSchemaByPath(ctx, t, m, opts...)
+	return func(ctx context.Context, t types.CatalogObjectType, m_passed *schemamanager.SchemaMetadata) (schemamanager.SchemaManager, apperrors.Error) {
+		return LoadSchemaByPath(ctx, t, m_passed, opts...)
 	}
 }
 
@@ -886,7 +916,7 @@ func getSchemaLoaderByHash() schemamanager.SchemaLoaderByHash {
 
 func getSchemaLoaders(ctx context.Context, m schemamanager.SchemaMetadata, opts ...ObjectStoreOption) schemamanager.SchemaLoaders {
 	return schemamanager.SchemaLoaders{
-		ByPath:        getSchemaLoaderByPath(ctx, opts...),
+		ByPath:        getSchemaLoaderByPath(ctx, m, opts...),
 		ByHash:        getSchemaLoaderByHash(),
 		ClosestParent: getClosestParentSchemaFinder(ctx, m, opts...),
 		SelfMetadata: func() schemamanager.SchemaMetadata {
@@ -923,11 +953,29 @@ func getDirectoriesForWorkspace(ctx context.Context, workspaceId uuid.UUID) (Dir
 		return dir, ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
 	}
 
-	if dir.ValuesDir = wm.ValuesDir(); dir.ValuesDir == uuid.Nil {
-		return dir, ErrInvalidWorkspace.Msg("workspace does not have a values directory")
-	}
+	// if dir.ValuesDir = wm.ValuesDir(); dir.ValuesDir == uuid.Nil {
+	// 	return dir, ErrInvalidWorkspace.Msg("workspace does not have a values directory")
+	// }
 
 	dir.WorkspaceID = workspaceId
+
+	return dir, nil
+}
+
+func getDirectoriesForVariant(ctx context.Context, variantId uuid.UUID) (Directories, apperrors.Error) {
+	var dir Directories
+
+	v, err := db.DB(ctx).GetVersion(ctx, 1, variantId)
+	if err != nil {
+		return dir, ErrCatalogError.Err(err)
+	}
+	if dir.CollectionsDir = v.CollectionsDir; dir.CollectionsDir == uuid.Nil {
+		return dir, ErrInvalidWorkspace.Msg("variant does not have a collections directory")
+	}
+	if dir.ParametersDir = v.ParametersDir; dir.ParametersDir == uuid.Nil {
+		return dir, ErrInvalidWorkspace.Msg("variant does not have a parameters directory")
+	}
+	dir.VariantID = variantId
 
 	return dir, nil
 }
@@ -1033,12 +1081,18 @@ func (or *objectResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
 }
 
 func (or *objectResource) Update(ctx context.Context, rsrcJson []byte) apperrors.Error {
-	if or.workspaceID == uuid.Nil {
+	if or.workspaceID == uuid.Nil && or.variantID == uuid.Nil {
 		return ErrInvalidWorkspace
 	}
-	dir, err := getDirectoriesForWorkspace(ctx, or.workspaceID)
+	var dir Directories
+	var err apperrors.Error
+	if or.workspaceID != uuid.Nil {
+		dir, err = getDirectoriesForWorkspace(ctx, or.workspaceID)
+	} else {
+		dir, err = getDirectoriesForVariant(ctx, or.variantID)
+	}
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Str("workspace_id", or.workspaceID.String()).Msg("failed to get directories for workspace")
+		log.Ctx(ctx).Error().Err(err).Str("workspace_id", or.workspaceID.String()).Str("variant_id", or.variantID.String()).Msg("failed to get directories")
 		return ErrInvalidWorkspace
 	}
 
@@ -1067,12 +1121,18 @@ func (or *objectResource) Update(ctx context.Context, rsrcJson []byte) apperrors
 }
 
 func (or *objectResource) Delete(ctx context.Context) apperrors.Error {
-	if or.workspaceID == uuid.Nil {
+	if or.workspaceID == uuid.Nil && or.variantID == uuid.Nil {
 		return ErrInvalidWorkspace
 	}
-	dir, err := getDirectoriesForWorkspace(ctx, or.workspaceID)
+	var dir Directories
+	var err apperrors.Error
+	if or.workspaceID != uuid.Nil {
+		dir, err = getDirectoriesForWorkspace(ctx, or.workspaceID)
+	} else {
+		dir, err = getDirectoriesForVariant(ctx, or.variantID)
+	}
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Str("workspace_id", or.workspaceID.String()).Msg("failed to get directories for workspace")
+		log.Ctx(ctx).Error().Err(err).Str("workspace_id", or.workspaceID.String()).Str("variant_id", or.variantID.String()).Msg("failed to get directories")
 		return ErrInvalidWorkspace
 	}
 	m := &schemamanager.SchemaMetadata{
@@ -1120,7 +1180,6 @@ func NewSchemaResource(ctx context.Context, rsrcJson []byte, name ResourceName) 
 			return nil, validationerrors.ErrInvalidNameFormat
 		}
 	}
-	// TODO: handle version number
 	name.WorkspaceID = uuid.Nil
 	if name.Workspace != "" {
 		id, err := uuid.Parse(name.Workspace)

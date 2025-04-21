@@ -241,6 +241,7 @@ func TestCollection(t *testing.T) {
 
 	// create a workspace
 	ws := &models.Workspace{
+		Label:       "some-label",
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		BaseVersion: 1,
 		VariantID:   varId,
@@ -572,7 +573,7 @@ func TestCollectionWithNamespaces(t *testing.T) {
 		VariantID:   varId,
 	}
 	err = db.DB(ctx).CreateWorkspace(ctx, ws)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// create the parameter schema
 	jsonData, err := yaml.YAMLToJSON([]byte(parameterYaml))
