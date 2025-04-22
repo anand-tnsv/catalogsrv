@@ -70,6 +70,24 @@ var resourceObjectHandlers = []httpx.RoleAuthorizedHandlerParam{
 		Op:      hatchrbac.Delete,
 	},
 	{
+		Method:  http.MethodGet,
+		Path:    "/{catalogName}/variants/{variantName}/namespaces/{namespaceName}",
+		Handler: getObject,
+		Op:      hatchrbac.Read,
+	},
+	{
+		Method:  http.MethodPut,
+		Path:    "/{catalogName}/variants/{variantName}/namespaces/{namespaceName}",
+		Handler: updateObject,
+		Op:      hatchrbac.Update,
+	},
+	{
+		Method:  http.MethodDelete,
+		Path:    "/{catalogName}/variants/{variantName}/namespaces/{namespaceName}",
+		Handler: deleteObject,
+		Op:      hatchrbac.Delete,
+	},
+	{
 		Method:  http.MethodPost,
 		Path:    "/{catalogName}/variants/{variantName}/workspaces/{workspaceRef}/create",
 		Handler: createObject,
@@ -96,8 +114,17 @@ var resourceObjectHandlers = []httpx.RoleAuthorizedHandlerParam{
 }
 
 func Router(r chi.Router) {
+	r.Use(LoadCatalogContext)
 	//TODO: Implement authentication
 	for _, handler := range resourceObjectHandlers {
 		r.Method(handler.Method, handler.Path, httpx.WrapHttpRsp(handler.Handler))
 	}
+}
+
+func LoadCatalogContext(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//ctx := r.Context()
+
+		next.ServeHTTP(w, r)
+	})
 }

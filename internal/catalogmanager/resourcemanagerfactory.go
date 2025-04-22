@@ -2,16 +2,13 @@ package catalogmanager
 
 import (
 	"context"
-	"encoding/json"
-	"reflect"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/mugiliam/common/apperrors"
-	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
+	"github.com/tidwall/gjson"
 )
 
 type ResourceName struct {
@@ -20,69 +17,30 @@ type ResourceName struct {
 	WorkspaceID    uuid.UUID
 	WorkspaceLabel string
 	Workspace      string
+	Namespace      string
 	ObjectName     string
 	ObjectType     types.CatalogObjectType
 	ObjectPath     string
 }
 
-// Header of all resource requests
-type resourceRequest struct {
-	Version string `json:"version" validate:"requireVersionV1"`
-	Kind    string `json:"kind" validate:"required,kindValidator"`
-}
-
-func (rr *resourceRequest) Validate() schemaerr.ValidationErrors {
-	var ves schemaerr.ValidationErrors
-	err := schemavalidator.V().Struct(rr)
-	if err == nil {
-		return nil
-	}
-	ve, ok := err.(validator.ValidationErrors)
-	if !ok {
-		return append(ves, schemaerr.ErrInvalidSchema)
-	}
-
-	value := reflect.ValueOf(rr).Elem()
-	typeOfCS := value.Type()
-
-	for _, e := range ve {
-		jsonFieldName := schemavalidator.GetJSONFieldPath(value, typeOfCS, e.StructField())
-
-		switch e.Tag() {
-		case "required":
-			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
-		case "nameFormatValidator":
-			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
-		case "kindValidator":
-			val, _ := e.Value().(string)
-			ves = append(ves, schemaerr.ErrUnsupportedKind(jsonFieldName, val))
-		case "requireVersionV1":
-			ves = append(ves, schemaerr.ErrInvalidVersion(jsonFieldName))
-		default:
-			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
-		}
-	}
-
-	if ves == nil && rr.Kind != types.CatalogKind {
-		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
-	}
-
-	return ves
-}
-
 func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
-	rr := &resourceRequest{}
-	if err := json.Unmarshal(rsrcJson, rr); err != nil {
-		return "", ErrInvalidSchema.Err(err)
+	if !gjson.Valid(string(rsrcJson)) {
+		return "", ErrInvalidSchema.Msg("invalid message format")
 	}
-
-	ves := rr.Validate()
-	if ves != nil {
-		return "", ErrInvalidSchema.Err(ves)
+	result := gjson.GetBytes(rsrcJson, "kind")
+	if !result.Exists() {
+		return "", ErrInvalidSchema.Msg("missing kind")
 	}
-
-	return rr.Kind, nil
+	kind = result.String()
+	result = gjson.GetBytes(rsrcJson, "version")
+	if !result.Exists() {
+		return "", ErrInvalidSchema.Msg("missing version")
+	}
+	version := result.String()
+	if schemavalidator.ValidateSchemaKind(kind) && version == types.VersionV1 {
+		return kind, nil
+	}
+	return "", ErrInvalidSchema.Msg("invalid kind or version")
 }
 
 type ResourceManagerFactory func(context.Context, []byte, ResourceName) (schemamanager.ResourceManager, apperrors.Error)
@@ -90,6 +48,7 @@ type ResourceManagerFactory func(context.Context, []byte, ResourceName) (schemam
 var resourceFactories = map[string]ResourceManagerFactory{
 	types.CatalogKind:          NewCatalogResource,
 	types.VariantKind:          NewVariantResource,
+	types.NamespaceKind:        NewNamespaceResource,
 	types.WorkspaceKind:        NewWorkspaceResource,
 	types.CollectionSchemaKind: NewSchemaResource,
 	types.ParameterSchemaKind:  NewSchemaResource,

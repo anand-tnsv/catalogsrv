@@ -49,8 +49,8 @@ func (s *HatchCatalogServer) mountResourceHandlers(r chi.Router) {
 		middleware.LoadScopedDB, // Load the scoped db connection
 		middleware.LoadContext,  // Load the context variables
 	)
-	r.Get("/version", s.getVersion)
 	apis.Router(r)
+	r.Get("/version", s.getVersion)
 }
 
 func (s *HatchCatalogServer) getVersion(w http.ResponseWriter, r *http.Request) {

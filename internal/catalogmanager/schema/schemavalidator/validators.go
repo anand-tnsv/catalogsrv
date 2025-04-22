@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"slices"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
@@ -13,6 +15,7 @@ import (
 var validKinds = []string{
 	types.CatalogKind,
 	types.VariantKind,
+	types.NamespaceKind,
 	types.WorkspaceKind,
 	types.ParameterSchemaKind,
 	types.CollectionSchemaKind,
@@ -135,6 +138,10 @@ func requireVersionV1(fl validator.FieldLevel) bool {
 func ValidateSchemaName(name string) bool {
 	re := regexp.MustCompile(resourceNameRegex)
 	return re.MatchString(name)
+}
+
+func ValidateSchemaKind(kind string) bool {
+	return slices.Contains(validKinds, kind)
 }
 
 func init() {

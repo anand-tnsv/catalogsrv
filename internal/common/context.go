@@ -4,6 +4,7 @@ package common
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
@@ -41,4 +42,106 @@ func ProjectIdFromContext(ctx context.Context) types.ProjectId {
 		return projectId
 	}
 	return ""
+}
+
+type ctxCatalogContextKeyType string
+
+const ctxCatalogContextKey ctxCatalogContextKeyType = "HatchCatalogContext"
+
+type CatalogContext struct {
+	CatalogId      uuid.UUID
+	VariantId      uuid.UUID
+	WorkspaceId    uuid.UUID
+	WorkspaceLabel string
+	Namespace      string
+	Catalog        string
+	Variant        string
+}
+
+// SetCatalogContext sets the catalog context in the provided context.
+func SetCatalogContext(ctx context.Context, catalogContext *CatalogContext) context.Context {
+	return context.WithValue(ctx, ctxCatalogContextKey, &catalogContext)
+}
+
+// CatalogContextFromContext retrieves the catalog context from the provided context.
+func CatalogContextFromContext(ctx context.Context) *CatalogContext {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext
+	}
+	return nil
+}
+
+// SetCatalogIdInContext sets the catalog ID in the provided context.
+func SetCatalogIdInContext(ctx context.Context, catalogId uuid.UUID) context.Context {
+	currContext := CatalogContextFromContext(ctx)
+	currContext.CatalogId = uuid.UUID(catalogId)
+	return SetCatalogContext(ctx, currContext)
+}
+
+// SetVariantIdInContext sets the variant ID in the provided context.
+func SetVariantIdInContext(ctx context.Context, variantId uuid.UUID) context.Context {
+	currContext := CatalogContextFromContext(ctx)
+	currContext.VariantId = uuid.UUID(variantId)
+	return SetCatalogContext(ctx, currContext)
+}
+
+// SetWorkspaceIdInContext sets the workspace ID in the provided context.
+func SetWorkspaceIdInContext(ctx context.Context, workspaceId uuid.UUID) context.Context {
+	currContext := CatalogContextFromContext(ctx)
+	currContext.WorkspaceId = uuid.UUID(workspaceId)
+	return SetCatalogContext(ctx, currContext)
+}
+
+// SetWorkspaceLabelInContext sets the workspace label in the provided context.
+func SetWorkspaceLabelInContext(ctx context.Context, workspaceLabel string) context.Context {
+	currContext := CatalogContextFromContext(ctx)
+	currContext.WorkspaceLabel = workspaceLabel
+	return SetCatalogContext(ctx, currContext)
+}
+
+// SetNamespaceInContext sets the namespace in the provided context.
+func SetNamespaceInContext(ctx context.Context, namespace string) context.Context {
+	currContext := CatalogContextFromContext(ctx)
+	currContext.Namespace = namespace
+	return SetCatalogContext(ctx, currContext)
+}
+
+// SetCatalogInContext sets the catalog in the provided context.
+func SetCatalogInContext(ctx context.Context, catalog string) context.Context {
+	currContext := CatalogContextFromContext(ctx)
+	currContext.Catalog = catalog
+	return SetCatalogContext(ctx, currContext)
+}
+
+// SetVariantInContext sets the variant in the provided context.
+func SetVariantInContext(ctx context.Context, variant string) context.Context {
+	currContext := CatalogContextFromContext(ctx)
+	currContext.Variant = variant
+	return SetCatalogContext(ctx, currContext)
+}
+
+type TestContext struct {
+	TenantId  types.TenantId
+	ProjectId types.ProjectId
+	CatalogContext
+}
+
+type ctxTestContextKeyType string
+
+const ctxTestContextKey ctxTestContextKeyType = "HatchTestContext"
+
+// SetTestContext sets the test context in the provided context.
+func SetTestContext(ctx context.Context, testContext *TestContext) context.Context {
+	ctx = SetTenantIdInContext(ctx, testContext.TenantId)
+	ctx = SetProjectIdInContext(ctx, testContext.ProjectId)
+	ctx = context.WithValue(ctx, ctxTestContextKey, testContext)
+	return ctx
+}
+
+// TestContextFromContext retrieves the test context from the provided context.
+func TestContextFromContext(ctx context.Context) *TestContext {
+	if testContext, ok := ctx.Value(ctxTestContextKey).(*TestContext); ok {
+		return testContext
+	}
+	return nil
 }

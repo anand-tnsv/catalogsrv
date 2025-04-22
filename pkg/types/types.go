@@ -22,6 +22,7 @@ func (u CatalogId) IsNil() bool {
 const (
 	CatalogKind          = "Catalog"
 	VariantKind          = "Variant"
+	NamespaceKind        = "Namespace"
 	WorkspaceKind        = "Workspace"
 	ParameterSchemaKind  = "ParameterSchema"
 	CollectionSchemaKind = "CollectionSchema"
@@ -90,3 +91,5 @@ func CatalogObjectTypeFromKind(k string) CatalogObjectType {
 type Nullable interface {
 	IsNil() bool
 }
+
+var TestContextKey = struct{}{}

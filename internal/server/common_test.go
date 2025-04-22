@@ -11,11 +11,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/stretchr/testify/assert"
 )
 
-func executeTestRequest(t *testing.T, req *http.Request, apiKey *string) *httptest.ResponseRecorder {
+func executeTestRequest(t *testing.T, req *http.Request, apiKey *string, testContext ...common.TestContext) *httptest.ResponseRecorder {
 	s, err := CreateNewServer()
 	assert.NoError(t, err, "create new server")
 
@@ -28,6 +29,11 @@ func executeTestRequest(t *testing.T, req *http.Request, apiKey *string) *httpte
 	s.MountHandlers()
 
 	rr := httptest.NewRecorder()
+	if len(testContext) > 0 {
+		ctx := req.Context()
+		ctx = common.SetTestContext(ctx, &testContext[0])
+		req = req.WithContext(ctx)
+	}
 	s.Router.ServeHTTP(rr, req)
 
 	return rr

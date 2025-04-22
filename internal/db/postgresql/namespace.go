@@ -95,14 +95,30 @@ func (mm *metadataManager) GetNamespace(ctx context.Context, name string, varian
 	}
 
 	query := `
-		SELECT name, variant_id, tenant_id, description, info
-		FROM namespaces
-		WHERE name = $1 AND variant_id = $2 AND tenant_id = $3
+		SELECT 
+			n.name, 
+			n.variant_id, 
+			n.tenant_id, 
+			n.description, 
+			n.info,
+			c.catalog_id,
+			c.name AS catalog,
+			v.name AS variant
+		FROM 
+			namespaces n
+		JOIN 
+			variants v ON n.variant_id = v.variant_id AND n.tenant_id = v.tenant_id
+		JOIN 
+			catalogs c ON v.catalog_id = c.catalog_id AND v.tenant_id = c.tenant_id
+		WHERE 
+			n.name = $1 AND 
+			n.variant_id = $2 AND 
+			n.tenant_id = $3;
 	`
 
 	var ns models.Namespace
 	err := mm.conn().QueryRowContext(ctx, query, name, variantID, tenantID).
-		Scan(&ns.Name, &ns.VariantID, &ns.TenantID, &ns.Description, &ns.Info)
+		Scan(&ns.Name, &ns.VariantID, &ns.TenantID, &ns.Description, &ns.Info, &ns.CatalogID, &ns.Catalog, &ns.Variant)
 
 	if err != nil {
 		if err == sql.ErrNoRows {

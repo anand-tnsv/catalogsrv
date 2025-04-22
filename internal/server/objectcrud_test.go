@@ -360,6 +360,103 @@ func TestVariantCrud(t *testing.T) {
 	}
 }
 
+func TestNamespaceCrud(t *testing.T) {
+	ctx := newDb()
+	t.Cleanup(func() {
+		db.DB(ctx).Close(ctx)
+	})
+
+	tenantID := types.TenantId("TABCDE")
+	projectID := types.ProjectId("PABCDE")
+
+	// Set the tenant ID and project ID in the context
+	ctx = common.SetTenantIdInContext(ctx, tenantID)
+	ctx = common.SetProjectIdInContext(ctx, projectID)
+
+	// Create the tenant for testing
+	err := db.DB(ctx).CreateTenant(ctx, tenantID)
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		_ = db.DB(ctx).DeleteTenant(ctx, tenantID)
+	})
+
+	// Create the project for testing
+	err = db.DB(ctx).CreateProject(ctx, projectID)
+	assert.NoError(t, err)
+	defer db.DB(ctx).DeleteProject(ctx, projectID)
+
+	// Create a catalog
+	// Create a New Request
+	httpReq, _ := http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req := `
+		{
+			"version": "v1",
+			"kind": "Catalog",
+			"metadata": {
+				"name": "valid-catalog",
+				"description": "This is a valid catalog"
+			}
+		} `
+	setRequestBodyAndHeader(t, httpReq, req)
+	// Execute Request
+	response := executeTestRequest(t, httpReq, nil)
+	// Check the response code
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+
+	// Create a variant
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req = `
+		{
+			"version": "v1",
+			"kind": "Variant",
+			"metadata": {
+				"name": "valid-variant",
+				"catalog": "valid-catalog",
+				"description": "This is a valid variant"
+			}
+		}`
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Check Location in header
+	assert.Equal(t, "valid-catalog/variants/valid-variant", response.Header().Get("Location"))
+
+	// Create a namespace
+	httpReq, _ = http.NewRequest("POST", "/tenant/TABCDE/project/PABCDE/catalogs/create", nil)
+	req = `
+		{
+			"version": "v1",
+			"kind": "Namespace",
+			"metadata": {
+				"name": "valid-namespace",
+				"catalog": "valid-catalog",
+				"variant": "valid-variant",
+				"description": "This is a valid namespace"
+			}
+		}`
+	setRequestBodyAndHeader(t, httpReq, req)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusCreated, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+	// Check Location in header
+	assert.Equal(t, "valid-catalog/variants/valid-variant/namespaces/valid-namespace", response.Header().Get("Location"))
+	// Get the namespace
+	httpReq, _ = http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/valid-catalog/variants/valid-variant/namespaces/valid-namespace", nil)
+	response = executeTestRequest(t, httpReq, nil)
+	if !assert.Equal(t, http.StatusOK, response.Code) {
+		t.Logf("Response: %v", response.Body.String())
+		t.FailNow()
+	}
+}
+
 func TestWorkspaceCrud(t *testing.T) {
 	ctx := newDb()
 	t.Cleanup(func() {

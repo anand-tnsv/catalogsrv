@@ -30,4 +30,7 @@ type Namespace struct {
 	TenantID    types.TenantId `db:"tenant_id"`
 	Description string         `db:"description"`
 	Info        []byte         `db:"info"`
+	CatalogID   uuid.UUID      `db:"-"`
+	Catalog     string         `db:"-"`
+	Variant     string         `db:"-"`
 }
