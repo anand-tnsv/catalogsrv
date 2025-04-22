@@ -15,23 +15,18 @@ import (
 // The Collections interface functions are a shim on top of schema directory.  This would allow for a different implementation
 // in future, if necessary.
 
-func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collection) apperrors.Error {
+func (om *objectManager) UpsertCollection(ctx context.Context, c *models.Collection, dir uuid.UUID) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
 	}
 	c.TenantID = tenantID
 
-	dir, err := h.getValuesDirectory(ctx, c.RepoID, c.VariantID)
-	if err != nil {
-		return err
-	}
-
 	if !isValidPath(c.CollectionSchema) {
 		return dberror.ErrInvalidInput.Msg("invalid collection schema")
 	}
 
-	err = h.AddOrUpdateObjectByPath(ctx,
+	err := om.AddOrUpdateObjectByPath(ctx,
 		types.CatalogObjectTypeCatalogCollection,
 		dir,
 		c.Path,
@@ -47,18 +42,13 @@ func (h *hatchCatalogDb) UpsertCollection(ctx context.Context, c *models.Collect
 	return nil
 }
 
-func (h *hatchCatalogDb) GetCollection(ctx context.Context, path string, repoID, variantID uuid.UUID) (*models.Collection, apperrors.Error) {
+func (om *objectManager) GetCollection(ctx context.Context, path string, dir uuid.UUID) (*models.Collection, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
 	}
 
-	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
-	if err != nil {
-		return nil, err
-	}
-
-	objRef, err := h.GetObjectRefByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
+	objRef, err := om.GetObjectRefByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
 	if err != nil {
 		return nil, err
 	}
@@ -67,27 +57,19 @@ func (h *hatchCatalogDb) GetCollection(ctx context.Context, path string, repoID,
 		Path:             path,
 		Hash:             objRef.Hash,
 		CollectionSchema: objRef.BaseSchema,
-		RepoID:           repoID,
-		VariantID:        variantID,
-		TenantID:         tenantID,
 	}, nil
 }
 
-func (h *hatchCatalogDb) GetCollectionObject(ctx context.Context, path string, repoID, variantID uuid.UUID) (*models.CatalogObject, apperrors.Error) {
+func (om *objectManager) GetCollectionObject(ctx context.Context, path string, dir uuid.UUID) (*models.CatalogObject, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
 	}
 
-	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
-	if err != nil {
-		return nil, err
-	}
-
-	return h.LoadObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
+	return om.LoadObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
 }
 
-func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collection) apperrors.Error {
+func (om *objectManager) UpdateCollection(ctx context.Context, c *models.Collection, dir uuid.UUID) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -97,18 +79,13 @@ func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collect
 		return dberror.ErrInvalidInput.Msg("invalid collection schema")
 	}
 
-	dir, err := h.getValuesDirectory(ctx, c.RepoID, c.VariantID)
-	if err != nil {
-		return err
-	}
-
-	objRef, err := h.GetObjectRefByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, c.Path)
+	objRef, err := om.GetObjectRefByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, c.Path)
 	if err != nil {
 		return err
 	}
 	objRef.Hash = c.Hash
 	objRef.BaseSchema = c.CollectionSchema
-	err = h.AddOrUpdateObjectByPath(ctx,
+	err = om.AddOrUpdateObjectByPath(ctx,
 		types.CatalogObjectTypeCatalogCollection,
 		dir,
 		c.Path,
@@ -120,18 +97,13 @@ func (h *hatchCatalogDb) UpdateCollection(ctx context.Context, c *models.Collect
 	return nil
 }
 
-func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path string, repoID, variantID uuid.UUID) (string, apperrors.Error) {
+func (om *objectManager) DeleteCollection(ctx context.Context, path string, dir uuid.UUID) (string, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return "", dberror.ErrMissingTenantID
 	}
 
-	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
-	if err != nil {
-		return "", err
-	}
-
-	deletedHash, err := h.DeleteObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
+	deletedHash, err := om.DeleteObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir, path)
 	if err != nil {
 		return "", err
 	}
@@ -139,15 +111,10 @@ func (h *hatchCatalogDb) DeleteCollection(ctx context.Context, path string, repo
 	return string(deletedHash), nil
 }
 
-func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema string, repoID, variantID uuid.UUID) (bool, apperrors.Error) {
+func (om *objectManager) HasReferencesToCollectionSchema(ctx context.Context, collectionSchema string, dir uuid.UUID) (bool, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return false, dberror.ErrMissingTenantID
-	}
-
-	dir, err := h.getValuesDirectory(ctx, repoID, variantID)
-	if err != nil {
-		return false, err
 	}
 
 	query := `
@@ -159,7 +126,7 @@ func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, co
 		LIMIT 1;
 	`
 	var exists bool // we'll probably just hit the ErrNoRows case in case of false
-	dberr := h.conn().QueryRowContext(ctx, query, collectionSchema, dir, tenantID).Scan(&exists)
+	dberr := om.conn().QueryRowContext(ctx, query, collectionSchema, dir, tenantID).Scan(&exists)
 	if dberr != nil {
 		if dberr == sql.ErrNoRows {
 			return false, nil
@@ -169,16 +136,17 @@ func (h *hatchCatalogDb) HasReferencesToCollectionSchema(ctx context.Context, co
 	return exists, nil
 }
 
-func (h *hatchCatalogDb) getValuesDirectory(ctx context.Context, repoId, variantId uuid.UUID) (uuid.UUID, apperrors.Error) {
+/*
+func (om *objectManager) getValuesDirectory(ctx context.Context, repoId, variantId uuid.UUID) (uuid.UUID, apperrors.Error) {
 	var dir uuid.UUID
 	if repoId != variantId {
-		w, err := h.GetWorkspace(ctx, repoId)
+		w, err := om.m.GetWorkspace(ctx, repoId)
 		if err != nil {
 			return uuid.Nil, err
 		}
 		dir = w.ValuesDir
 	} else {
-		v, err := h.GetVersion(ctx, 1, variantId)
+		v, err := om.m.GetVersion(ctx, 1, variantId)
 		if err != nil {
 			return uuid.Nil, dberror.ErrDatabase.Err(err)
 		}
@@ -186,3 +154,4 @@ func (h *hatchCatalogDb) getValuesDirectory(ctx context.Context, repoId, variant
 	}
 	return dir, nil
 }
+*/

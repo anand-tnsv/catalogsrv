@@ -7,29 +7,16 @@ import (
 
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
-	"github.com/mugiliam/hatchcatalogsrv/internal/db/dbmanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 
 	"github.com/rs/zerolog/log"
 )
 
-type tenantProject struct {
-	c dbmanager.ScopedConn
-}
-
-func (tp *tenantProject) conn() *sql.Conn {
-	return tp.c.Conn()
-}
-
-func NewTenantProjectManager(c dbmanager.ScopedConn) *tenantProject {
-	return &tenantProject{c: c}
-}
-
 // CreateProjectAndTenant creates a new project and tenant in the database.
-func (tp *tenantProject) CreateProjectAndTenant(ctx context.Context, projectID types.ProjectId, tenantID types.TenantId) error {
+func (mm *metadataManager) CreateProjectAndTenant(ctx context.Context, projectID types.ProjectId, tenantID types.TenantId) error {
 	// Create the tenant
-	err := tp.CreateTenant(ctx, tenantID)
+	err := mm.CreateTenant(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, dberror.ErrAlreadyExists) {
 			return nil
@@ -37,7 +24,7 @@ func (tp *tenantProject) CreateProjectAndTenant(ctx context.Context, projectID t
 		return err
 	}
 	// Create the project
-	err = tp.CreateProject(ctx, projectID)
+	err = mm.CreateProject(ctx, projectID)
 	if err != nil {
 		if errors.Is(err, dberror.ErrAlreadyExists) {
 			return nil
@@ -49,7 +36,7 @@ func (tp *tenantProject) CreateProjectAndTenant(ctx context.Context, projectID t
 
 // CreateTenant inserts a new tenant into the database.
 // If the tenant already exists, it does nothing.
-func (tp *tenantProject) CreateTenant(ctx context.Context, tenantID types.TenantId) error {
+func (mm *metadataManager) CreateTenant(ctx context.Context, tenantID types.TenantId) error {
 	query := `
 		INSERT INTO tenants (tenant_id)
 		VALUES ($1)
@@ -57,8 +44,8 @@ func (tp *tenantProject) CreateTenant(ctx context.Context, tenantID types.Tenant
 		RETURNING tenant_id;
 	`
 
-	// Execute the query directly using tp.conn().QueryRowContext
-	row := tp.conn().QueryRowContext(ctx, query, string(tenantID))
+	// Execute the query directly using mm.conn().QueryRowContext
+	row := mm.conn().QueryRowContext(ctx, query, string(tenantID))
 	var insertedTenantID string
 	err := row.Scan(&insertedTenantID)
 	if err != nil {
@@ -74,15 +61,15 @@ func (tp *tenantProject) CreateTenant(ctx context.Context, tenantID types.Tenant
 }
 
 // GetTenant retrieves a tenant from the database.
-func (tp *tenantProject) GetTenant(ctx context.Context, tenantID types.TenantId) (*models.Tenant, error) {
+func (mm *metadataManager) GetTenant(ctx context.Context, tenantID types.TenantId) (*models.Tenant, error) {
 	query := `
 		SELECT tenant_id
 		FROM tenants
 		WHERE tenant_id = $1;
 	`
 
-	// Execute the query directly using tp.conn().QueryRowContext
-	row := tp.conn().QueryRowContext(ctx, query, string(tenantID))
+	// Execute the query directly using mm.conn().QueryRowContext
+	row := mm.conn().QueryRowContext(ctx, query, string(tenantID))
 
 	var tenant models.Tenant
 	err := row.Scan(&tenant.TenantID)
@@ -99,12 +86,12 @@ func (tp *tenantProject) GetTenant(ctx context.Context, tenantID types.TenantId)
 }
 
 // DeleteTenant deletes a tenant from the database.
-func (tp *tenantProject) DeleteTenant(ctx context.Context, tenantID types.TenantId) error {
+func (mm *metadataManager) DeleteTenant(ctx context.Context, tenantID types.TenantId) error {
 	query := `
 		DELETE FROM tenants
 		WHERE tenant_id = $1;
 	`
-	_, err := tp.conn().ExecContext(ctx, query, string(tenantID))
+	_, err := mm.conn().ExecContext(ctx, query, string(tenantID))
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("tenant_id", string(tenantID)).Msg("failed to delete tenant")
 		return dberror.ErrDatabase.Err(err)
@@ -113,7 +100,7 @@ func (tp *tenantProject) DeleteTenant(ctx context.Context, tenantID types.Tenant
 }
 
 // CreateProject inserts a new project into the database.
-func (tp *tenantProject) CreateProject(ctx context.Context, projectID types.ProjectId) error {
+func (mm *metadataManager) CreateProject(ctx context.Context, projectID types.ProjectId) error {
 	tenantID := common.TenantIdFromContext(ctx)
 
 	// Validate tenantID to ensure it is not empty
@@ -129,8 +116,8 @@ func (tp *tenantProject) CreateProject(ctx context.Context, projectID types.Proj
 		RETURNING project_id;
 	`
 
-	// Execute the query directly using tp.conn().QueryRowContext
-	row := tp.conn().QueryRowContext(ctx, query, string(projectID), string(tenantID))
+	// Execute the query directly using mm.conn().QueryRowContext
+	row := mm.conn().QueryRowContext(ctx, query, string(projectID), string(tenantID))
 	var insertedProjectID string
 	err := row.Scan(&insertedProjectID)
 	if err != nil {
@@ -146,7 +133,7 @@ func (tp *tenantProject) CreateProject(ctx context.Context, projectID types.Proj
 }
 
 // GetProject retrieves a project from the database.
-func (tp *tenantProject) GetProject(ctx context.Context, projectID types.ProjectId) (*models.Project, error) {
+func (mm *metadataManager) GetProject(ctx context.Context, projectID types.ProjectId) (*models.Project, error) {
 	tenantID := common.TenantIdFromContext(ctx)
 
 	// Validate tenantID to ensure it is not empty
@@ -162,7 +149,7 @@ func (tp *tenantProject) GetProject(ctx context.Context, projectID types.Project
 	`
 
 	// Query the project data
-	row := tp.conn().QueryRowContext(ctx, query, string(projectID), string(tenantID))
+	row := mm.conn().QueryRowContext(ctx, query, string(projectID), string(tenantID))
 
 	var project models.Project
 	err := row.Scan(&project.ProjectID, &project.TenantID)
@@ -183,7 +170,7 @@ func (tp *tenantProject) GetProject(ctx context.Context, projectID types.Project
 }
 
 // DeleteProject deletes a project from the database. If the project does not exist, it does nothing.
-func (tp *tenantProject) DeleteProject(ctx context.Context, projectID types.ProjectId) error {
+func (mm *metadataManager) DeleteProject(ctx context.Context, projectID types.ProjectId) error {
 	tenantID := common.TenantIdFromContext(ctx)
 
 	// Validate tenantID to ensure it is not empty
@@ -196,7 +183,7 @@ func (tp *tenantProject) DeleteProject(ctx context.Context, projectID types.Proj
 		DELETE FROM projects
 		WHERE project_id = $1 AND tenant_id = $2;
 	`
-	_, err := tp.conn().ExecContext(ctx, query, string(projectID), string(tenantID))
+	_, err := mm.conn().ExecContext(ctx, query, string(projectID), string(tenantID))
 	if err != nil {
 		log.Ctx(ctx).Error().
 			Err(err).

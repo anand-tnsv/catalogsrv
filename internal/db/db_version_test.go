@@ -16,6 +16,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreateVersion(t *testing.T) {
@@ -51,7 +52,7 @@ func TestCreateVersion(t *testing.T) {
 		Info:        info,
 	}
 	err = DB(ctx).CreateCatalog(ctx, &catalog)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer DB(ctx).DeleteCatalog(ctx, catalog.CatalogID, "")
 
 	// Create a variant for testing
@@ -73,7 +74,7 @@ func TestCreateVersion(t *testing.T) {
 		VariantID:   variant.VariantID,
 	}
 	err = DB(ctx).CreateVersion(ctx, &version)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer DB(ctx).DeleteVersion(ctx, version.VersionNum, variant.VariantID)
 
 	// Verify that the version was created successfully

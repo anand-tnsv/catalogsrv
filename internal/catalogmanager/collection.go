@@ -324,7 +324,7 @@ func saveCollectionObject(ctx context.Context, m *schemamanager.SchemaMetadata, 
 		VariantID:        m.IDS.VariantID,
 	}
 
-	if err := db.DB(ctx).UpsertCollection(ctx, &c); err != nil {
+	if err := db.DB(ctx).UpsertCollection(ctx, &c, dir.ValuesDir); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to create collection in database")
 		// If the collection creation fails, we should also delete the catalog object
 		if _, delErr := db.DB(ctx).DeleteObjectByPath(ctx, types.CatalogObjectTypeCatalogCollection, dir.ValuesDir, pathWithName); delErr != nil {
@@ -366,18 +366,26 @@ func DeleteCollection(ctx context.Context, m *schemamanager.SchemaMetadata, opts
 	pathWithName := path.Clean(rsrcPath + "/" + m.Name)
 
 	// get the directory
-	var repoId uuid.UUID = uuid.Nil
+	var dir Directories
 	if !options.Dir.IsNil() {
-		if options.Dir.WorkspaceID != uuid.Nil {
-			repoId = options.Dir.WorkspaceID
-		}
+		dir = options.Dir
 	} else if options.WorkspaceID != uuid.Nil {
-		repoId = options.WorkspaceID
+		var err apperrors.Error
+		dir, err = getDirectoriesForWorkspace(ctx, options.WorkspaceID)
+		if err != nil {
+			return err
+		}
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
+			return err
+		}
 	} else {
-		repoId = m.IDS.VariantID
+		return ErrInvalidVersionOrWorkspace
 	}
 
-	hash, err := db.DB(ctx).DeleteCollection(ctx, pathWithName, repoId, m.IDS.VariantID)
+	hash, err := db.DB(ctx).DeleteCollection(ctx, pathWithName, dir.ValuesDir)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to delete collection")
 		if errors.Is(err, dberror.ErrNotFound) {
@@ -438,19 +446,27 @@ func loadCollectionObjectByPath(ctx context.Context, m *schemamanager.SchemaMeta
 	pathWithName := path.Clean(rsrcPath + "/" + m.Name)
 
 	// get the directory
-	var repoId uuid.UUID = uuid.Nil
+	var dir Directories
 	if !options.Dir.IsNil() {
-		if options.Dir.WorkspaceID != uuid.Nil {
-			repoId = options.Dir.WorkspaceID
-		}
+		dir = options.Dir
 	} else if options.WorkspaceID != uuid.Nil {
-		repoId = options.WorkspaceID
+		var err apperrors.Error
+		dir, err = getDirectoriesForWorkspace(ctx, options.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+	} else if m.IDS.VariantID != uuid.Nil {
+		var err apperrors.Error
+		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		repoId = m.IDS.VariantID
+		return nil, ErrInvalidVersionOrWorkspace
 	}
 
 	// get the collection from DB
-	obj, err := db.DB(ctx).GetCollectionObject(ctx, pathWithName, repoId, m.IDS.VariantID)
+	obj, err := db.DB(ctx).GetCollectionObject(ctx, pathWithName, dir.ValuesDir)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to load object by path")
 		return nil, err

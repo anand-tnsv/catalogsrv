@@ -179,43 +179,45 @@ func TestCommitWorkspace(t *testing.T) {
 		RepoID:           workspace.WorkspaceID,
 		CollectionSchema: "/col/a/b",
 	}
-	err = DB(ctx).UpsertCollection(ctx, &collection)
+	err = DB(ctx).UpsertCollection(ctx, &collection, workspace.ValuesDir)
 	assert.NoError(t, err)
 	collection2 := collection
 	collection2.CollectionID = uuid.Nil
 	collection2.Path = "/col/a/b/c"
 	collection2.CollectionSchema = "/col/a/b/c"
-	err = DB(ctx).UpsertCollection(ctx, &collection2)
+	err = DB(ctx).UpsertCollection(ctx, &collection2, workspace.ValuesDir)
 	assert.NoError(t, err)
 	// commit the workspace
 	err = DB(ctx).CommitWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the collection
-	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", variant.VariantID, variant.VariantID)
+	version, err = DB(ctx).GetVersion(ctx, 1, variant.VariantID)
 	assert.NoError(t, err)
-	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", collection.VariantID, variant.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", version.ValuesDir)
+	assert.NoError(t, err)
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", version.ValuesDir)
 	assert.NoError(t, err)
 
 	// create another workspace
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the collection
-	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", workspace.WorkspaceID, variant.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", workspace.ValuesDir)
 	assert.NoError(t, err)
-	collection3, err := DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.WorkspaceID, variant.VariantID)
+	collection3, err := DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.ValuesDir)
 	assert.NoError(t, err)
 
 	// modify the collection
 	collection3.Hash = "hash2"
 	collection3.RepoID = workspace.WorkspaceID
-	err = DB(ctx).UpsertCollection(ctx, collection3)
+	err = DB(ctx).UpsertCollection(ctx, collection3, workspace.ValuesDir)
 	require.NoError(t, err)
 	// get the collection
-	c, err := DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.WorkspaceID, variant.VariantID)
+	c, err := DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, collection3.Hash, strings.Trim(c.Hash, " "))
 	// get the collection from the variant
-	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", variant.VariantID, variant.VariantID)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", version.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, collection2.Hash, strings.Trim(c.Hash, " "))
 
@@ -223,17 +225,19 @@ func TestCommitWorkspace(t *testing.T) {
 	err = DB(ctx).CommitWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the collection
-	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", variant.VariantID, variant.VariantID)
+	version, err = DB(ctx).GetVersion(ctx, 1, variant.VariantID)
+	assert.NoError(t, err)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", version.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, collection3.Hash, strings.Trim(c.Hash, " "))
 
 	// modify the collection directly in the variant
-	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", variant.VariantID, variant.VariantID)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", version.ValuesDir)
 	assert.NoError(t, err)
 	c.Hash = "hash3"
-	err = DB(ctx).UpsertCollection(ctx, c)
+	err = DB(ctx).UpsertCollection(ctx, c, version.ValuesDir)
 	assert.NoError(t, err)
-	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", variant.VariantID, variant.VariantID)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", version.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, "hash3", strings.Trim(c.Hash, " "))
 	collection3 = c
@@ -242,20 +246,20 @@ func TestCommitWorkspace(t *testing.T) {
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the collection
-	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.WorkspaceID, variant.VariantID)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, collection3.Hash, c.Hash)
 
 	// delete this collection
-	hash, err := DB(ctx).DeleteCollection(ctx, "/col/a/b/c", workspace.WorkspaceID, variant.VariantID)
+	hash, err := DB(ctx).DeleteCollection(ctx, "/col/a/b/c", workspace.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, collection3.Hash, hash)
 	// get this collection
-	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.WorkspaceID, variant.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", workspace.ValuesDir)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 	// get the collection from the variant
-	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", variant.VariantID, variant.VariantID)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", version.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, collection3.Hash, c.Hash)
 
@@ -263,7 +267,7 @@ func TestCommitWorkspace(t *testing.T) {
 	err = DB(ctx).CommitWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the collection
-	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", variant.VariantID, variant.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b/c", version.ValuesDir)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
@@ -271,7 +275,7 @@ func TestCommitWorkspace(t *testing.T) {
 	err = DB(ctx).CreateWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the collection
-	c, err = DB(ctx).GetCollection(ctx, "/col/a/b", workspace.WorkspaceID, variant.VariantID)
+	c, err = DB(ctx).GetCollection(ctx, "/col/a/b", workspace.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, c.CollectionID, uuid.Nil)
 	// let's save a collection object with this hash
@@ -285,7 +289,7 @@ func TestCommitWorkspace(t *testing.T) {
 	err = DB(ctx).CreateCatalogObject(ctx, &obj)
 	assert.NoError(t, err)
 	// save collection in workspace
-	err = DB(ctx).UpsertCollection(ctx, c)
+	err = DB(ctx).UpsertCollection(ctx, c, workspace.ValuesDir)
 	assert.NoError(t, err)
 	// delete this catalog object
 	err = DB(ctx).DeleteCatalogObject(ctx, types.CatalogObjectTypeCatalogCollection, c.Hash)
@@ -295,7 +299,9 @@ func TestCommitWorkspace(t *testing.T) {
 	assert.NoError(t, err)
 
 	// delete the collection from the variant
-	hash, err = DB(ctx).DeleteCollection(ctx, "/col/a/b", variant.VariantID, variant.VariantID)
+	version, err = DB(ctx).GetVersion(ctx, 1, variant.VariantID)
+	assert.NoError(t, err)
+	hash, err = DB(ctx).DeleteCollection(ctx, "/col/a/b", version.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, c.Hash, hash)
 
@@ -307,7 +313,7 @@ func TestCommitWorkspace(t *testing.T) {
 	assert.NoError(t, err)
 
 	// delete the collection from the workspace
-	hash, err = DB(ctx).DeleteCollection(ctx, "/col/a/b", workspace.WorkspaceID, variant.VariantID)
+	hash, err = DB(ctx).DeleteCollection(ctx, "/col/a/b", workspace.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, c.Hash, hash)
 
@@ -323,7 +329,7 @@ func TestCommitWorkspace(t *testing.T) {
 	err = DB(ctx).CommitWorkspace(ctx, &workspace)
 	assert.NoError(t, err)
 	// get the collection
-	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", variant.VariantID, variant.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, "/col/a/b", version.ValuesDir)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 

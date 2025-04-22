@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error {
+func (om *objectManager) CreateCatalogObject(ctx context.Context, obj *models.CatalogObject) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -48,7 +48,7 @@ func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.Ca
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (hash, tenant_id) DO NOTHING;
 	`
-	result, err := h.conn().ExecContext(ctx, query, obj.Hash, obj.Type, obj.Version, tenantID, dataZ)
+	result, err := om.conn().ExecContext(ctx, query, obj.Hash, obj.Type, obj.Version, tenantID, dataZ)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -67,7 +67,7 @@ func (h *hatchCatalogDb) CreateCatalogObject(ctx context.Context, obj *models.Ca
 	return nil
 }
 
-func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error) {
+func (om *objectManager) GetCatalogObject(ctx context.Context, hash string) (*models.CatalogObject, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -82,7 +82,7 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 		FROM catalog_objects
 		WHERE hash = $1 AND tenant_id = $2
 	`
-	row := h.conn().QueryRowContext(ctx, query, hash, tenantID)
+	row := om.conn().QueryRowContext(ctx, query, hash, tenantID)
 
 	var obj models.CatalogObject
 
@@ -107,7 +107,7 @@ func (h *hatchCatalogDb) GetCatalogObject(ctx context.Context, hash string) (*mo
 	return &obj, nil
 }
 
-func (h *hatchCatalogDb) DeleteCatalogObject(ctx context.Context, t types.CatalogObjectType, hash string) apperrors.Error {
+func (om *objectManager) DeleteCatalogObject(ctx context.Context, t types.CatalogObjectType, hash string) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -137,7 +137,7 @@ func (h *hatchCatalogDb) DeleteCatalogObject(ctx context.Context, t types.Catalo
 		LIMIT 1;
 	`
 	var exists bool // we'll probably just hit the ErrNoRows case in case of false
-	dberr := h.conn().QueryRowContext(ctx, query, hash, tenantID).Scan(&exists)
+	dberr := om.conn().QueryRowContext(ctx, query, hash, tenantID).Scan(&exists)
 	if dberr != nil {
 		if dberr != sql.ErrNoRows {
 			return dberror.ErrDatabase.Err(dberr)
@@ -151,7 +151,7 @@ func (h *hatchCatalogDb) DeleteCatalogObject(ctx context.Context, t types.Catalo
 		DELETE FROM catalog_objects
 		WHERE hash = $1 AND tenant_id = $2
 	`
-	result, err := h.conn().ExecContext(ctx, query, hash, tenantID)
+	result, err := om.conn().ExecContext(ctx, query, hash, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}

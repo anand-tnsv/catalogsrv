@@ -19,7 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory) apperrors.Error {
+func (om *objectManager) CreateSchemaDirectory(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -39,7 +39,7 @@ func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.Cata
 
 	dir.TenantID = tenantID
 
-	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{})
+	tx, err := om.conn().BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to start transaction")
 		return dberror.ErrDatabase.Err(err)
@@ -50,7 +50,7 @@ func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.Cata
 		}
 	}()
 
-	errDb := h.createSchemaDirectoryWithTransaction(ctx, t, dir, tx)
+	errDb := om.createSchemaDirectoryWithTransaction(ctx, t, dir, tx)
 	if errDb != nil {
 		tx.Rollback()
 		return errDb
@@ -62,7 +62,7 @@ func (h *hatchCatalogDb) CreateSchemaDirectory(ctx context.Context, t types.Cata
 	return nil
 }
 
-func (h *hatchCatalogDb) SetDirectory(ctx context.Context, t types.CatalogObjectType, id uuid.UUID, dir []byte) apperrors.Error {
+func (om *objectManager) SetDirectory(ctx context.Context, t types.CatalogObjectType, id uuid.UUID, dir []byte) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -77,7 +77,7 @@ func (h *hatchCatalogDb) SetDirectory(ctx context.Context, t types.CatalogObject
 		SET directory = $1
 		WHERE directory_id = $2 AND tenant_id = $3;`
 
-	_, err := h.conn().ExecContext(ctx, query, dir, id, tenantID)
+	_, err := om.conn().ExecContext(ctx, query, dir, id, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -85,7 +85,7 @@ func (h *hatchCatalogDb) SetDirectory(ctx context.Context, t types.CatalogObject
 	return nil
 }
 
-func (h *hatchCatalogDb) GetDirectory(ctx context.Context, t types.CatalogObjectType, id uuid.UUID) ([]byte, apperrors.Error) {
+func (om *objectManager) GetDirectory(ctx context.Context, t types.CatalogObjectType, id uuid.UUID) ([]byte, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -101,7 +101,7 @@ func (h *hatchCatalogDb) GetDirectory(ctx context.Context, t types.CatalogObject
 		WHERE directory_id = $1 AND tenant_id = $2;`
 
 	var dir []byte
-	err := h.conn().QueryRowContext(ctx, query, id, tenantID).Scan(&dir)
+	err := om.conn().QueryRowContext(ctx, query, id, tenantID).Scan(&dir)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("directory not found")
@@ -111,7 +111,7 @@ func (h *hatchCatalogDb) GetDirectory(ctx context.Context, t types.CatalogObject
 	return dir, nil
 }
 
-func (h *hatchCatalogDb) createSchemaDirectoryWithTransaction(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory, tx *sql.Tx) apperrors.Error {
+func (om *objectManager) createSchemaDirectoryWithTransaction(ctx context.Context, t types.CatalogObjectType, dir *models.SchemaDirectory, tx *sql.Tx) apperrors.Error {
 	tableName := getSchemaDirectoryTableName(t)
 	if tableName == "" {
 		return dberror.ErrInvalidInput.Msg("invalid catalog object type")
@@ -151,7 +151,7 @@ func (h *hatchCatalogDb) createSchemaDirectoryWithTransaction(ctx context.Contex
 	return nil
 }
 
-func (h *hatchCatalogDb) GetSchemaDirectory(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID) (*models.SchemaDirectory, apperrors.Error) {
+func (om *objectManager) GetSchemaDirectory(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID) (*models.SchemaDirectory, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -166,7 +166,7 @@ func (h *hatchCatalogDb) GetSchemaDirectory(ctx context.Context, t types.Catalog
 		WHERE directory_id = $1 AND tenant_id = $2;`
 
 	dir := &models.SchemaDirectory{}
-	err := h.conn().QueryRowContext(ctx, query, directoryID, tenantID).Scan(&dir.DirectoryID, &dir.VariantID, &dir.TenantID, &dir.Directory)
+	err := om.conn().QueryRowContext(ctx, query, directoryID, tenantID).Scan(&dir.DirectoryID, &dir.VariantID, &dir.TenantID, &dir.Directory)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("schema directory not found")
@@ -176,7 +176,7 @@ func (h *hatchCatalogDb) GetSchemaDirectory(ctx context.Context, t types.Catalog
 	return dir, nil
 }
 
-func (h *hatchCatalogDb) GetObjectRefByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.ObjectRef, apperrors.Error) {
+func (om *objectManager) GetObjectRefByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.ObjectRef, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -192,7 +192,7 @@ func (h *hatchCatalogDb) GetObjectRefByPath(ctx context.Context, t types.Catalog
 		WHERE directory_id = $2 AND tenant_id = $3;`
 
 	var objectData []byte
-	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&objectData)
+	err := om.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&objectData)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("object not found in directory")
@@ -212,7 +212,7 @@ func (h *hatchCatalogDb) GetObjectRefByPath(ctx context.Context, t types.Catalog
 	return &obj, nil
 }
 
-func (h *hatchCatalogDb) LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.CatalogObject, apperrors.Error) {
+func (om *objectManager) LoadObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (*models.CatalogObject, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -248,7 +248,7 @@ func (h *hatchCatalogDb) LoadObjectByPath(ctx context.Context, t types.CatalogOb
 	var hash, version string
 	var objType types.CatalogObjectType
 	var data []byte
-	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&hash, &objType, &version, &tenantID, &data)
+	err := om.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&hash, &objType, &version, &tenantID, &data)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("object not found in directory or catalog")
@@ -276,7 +276,7 @@ func (h *hatchCatalogDb) LoadObjectByPath(ctx context.Context, t types.CatalogOb
 	return catalogObj, nil
 }
 
-func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, obj models.ObjectRef) apperrors.Error {
+func (om *objectManager) AddOrUpdateObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, obj models.ObjectRef) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -301,7 +301,7 @@ func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.Ca
 		SET directory = jsonb_set(directory, ARRAY[$1], $2::jsonb)
 		WHERE directory_id = $3 AND tenant_id = $4;`
 
-	result, err := h.conn().ExecContext(ctx, query, path, data, directoryID, tenantID)
+	result, err := om.conn().ExecContext(ctx, query, path, data, directoryID, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -317,7 +317,7 @@ func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.Ca
 	}
 
 	// get object to verify update
-	if o, err := h.GetObjectRefByPath(ctx, t, directoryID, path); err != nil {
+	if o, err := om.GetObjectRefByPath(ctx, t, directoryID, path); err != nil {
 		return err
 	} else if o.Hash != obj.Hash {
 		return dberror.ErrDatabase.Msg("object hash mismatch after update")
@@ -326,7 +326,7 @@ func (h *hatchCatalogDb) AddOrUpdateObjectByPath(ctx context.Context, t types.Ca
 	return nil
 }
 
-func (h *hatchCatalogDb) AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references models.References) apperrors.Error {
+func (om *objectManager) AddReferencesToObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, references models.References) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -376,7 +376,7 @@ func (h *hatchCatalogDb) AddReferencesToObject(ctx context.Context, t types.Cata
 		WHERE directory_id = $3 AND tenant_id = $4;`
 
 	// Execute the query
-	result, err := h.conn().ExecContext(ctx, query, path, referenceData, directoryID, tenantID)
+	result, err := om.conn().ExecContext(ctx, query, path, referenceData, directoryID, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -393,7 +393,7 @@ func (h *hatchCatalogDb) AddReferencesToObject(ctx context.Context, t types.Cata
 	return nil
 }
 
-func (h *hatchCatalogDb) GetAllReferences(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (models.References, apperrors.Error) {
+func (om *objectManager) GetAllReferences(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (models.References, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -410,7 +410,7 @@ func (h *hatchCatalogDb) GetAllReferences(ctx context.Context, t types.CatalogOb
 		WHERE directory_id = $2 AND tenant_id = $3;`
 
 	var jsonbData []byte
-	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&jsonbData)
+	err := om.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&jsonbData)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, dberror.ErrNotFound.Msg("object not found")
@@ -427,7 +427,7 @@ func (h *hatchCatalogDb) GetAllReferences(ctx context.Context, t types.CatalogOb
 	return references, nil
 }
 
-func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, refName string) apperrors.Error {
+func (om *objectManager) DeleteReferenceFromObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, refName string) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -463,7 +463,7 @@ func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.
 		WHERE directory_id = $3 AND tenant_id = $4;`
 
 	// Execute the query
-	result, err := h.conn().ExecContext(ctx, query, path, refName, directoryID, tenantID)
+	result, err := om.conn().ExecContext(ctx, query, path, refName, directoryID, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -480,7 +480,7 @@ func (h *hatchCatalogDb) DeleteReferenceFromObject(ctx context.Context, t types.
 	return nil
 }
 
-func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (types.Hash, apperrors.Error) {
+func (om *objectManager) DeleteObjectByPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (types.Hash, apperrors.Error) {
 	var hash types.Hash = ""
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
@@ -505,7 +505,7 @@ func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.Catalog
 
 	`
 	var result sql.NullString
-	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&result)
+	err := om.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&result)
 	if err == sql.ErrNoRows {
 		return hash, nil // Key did not exist, so nothing was removed
 	} else if err != nil {
@@ -518,7 +518,7 @@ func (h *hatchCatalogDb) DeleteObjectByPath(ctx context.Context, t types.Catalog
 	return hash, nil
 }
 
-func (h *hatchCatalogDb) UpdateObjectHashForPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, hash string) apperrors.Error {
+func (om *objectManager) UpdateObjectHashForPath(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string, hash string) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -537,7 +537,7 @@ func (h *hatchCatalogDb) UpdateObjectHashForPath(ctx context.Context, t types.Ca
 		)
 		WHERE directory_id = $3 AND tenant_id = $4;`
 
-	result, err := h.conn().ExecContext(ctx, query, path, hash, directoryID, tenantID)
+	result, err := om.conn().ExecContext(ctx, query, path, hash, directoryID, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -554,7 +554,7 @@ func (h *hatchCatalogDb) UpdateObjectHashForPath(ctx context.Context, t types.Ca
 	return nil
 }
 
-func (h *hatchCatalogDb) DeleteTree(ctx context.Context, directoryIds models.DirectoryIDs, path string) ([]string, apperrors.Error) {
+func (om *objectManager) DeleteTree(ctx context.Context, directoryIds models.DirectoryIDs, path string) ([]string, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -572,7 +572,7 @@ func (h *hatchCatalogDb) DeleteTree(ctx context.Context, directoryIds models.Dir
 		return nil, dberror.ErrInvalidInput.Msg("invalid directory ids")
 	}
 
-	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{
+	tx, err := om.conn().BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelSerializable,
 	})
 	if err != nil {
@@ -703,7 +703,7 @@ func (o *directoryObjDeleteOptions) ApplyOptions(opts ...models.DirectoryObjectD
 	}
 }
 
-func (h *hatchCatalogDb) DeleteObjectWithReferences(ctx context.Context,
+func (om *objectManager) DeleteObjectWithReferences(ctx context.Context,
 	t types.CatalogObjectType,
 	dirIDs models.DirectoryIDs,
 	delPath string,
@@ -759,7 +759,7 @@ func (h *hatchCatalogDb) DeleteObjectWithReferences(ctx context.Context,
 		return "", dberror.ErrInvalidInput.Msg("invalid catalog object type")
 	}
 
-	tx, err := h.conn().BeginTx(ctx, &sql.TxOptions{
+	tx, err := om.conn().BeginTx(ctx, &sql.TxOptions{
 		Isolation: sql.LevelSerializable,
 	})
 	if err != nil {
@@ -902,36 +902,36 @@ func (h *hatchCatalogDb) DeleteObjectWithReferences(ctx context.Context,
 }
 
 // FindClosestObject searches for an object in a JSONB directory that is associated with the specified targetName
-// and located at the closest matching path to the provided startPath. It traverses outward from the startPath
-// to the nearest parent paths until it finds a match.
+// and located at the closest matching path to the provided startPatom. It traverses outward from the startPath
+// to the nearest parent paths until it finds a matcom.
 //
 // Parameters:
 // - ctx: The context for handling deadlines, cancellation signals, and other request-scoped values.
 // - t: The type of catalog object, used to identify the correct table within the schema.
 // - directoryID: The unique identifier of the directory in which to search for the targetName.
 // - targetName: The specific key name to search for within paths in the JSONB directory.
-// - startPath: The initial path from which the search begins, traversing outward to locate the closest match.
+// - startPath: The initial path from which the search begins, traversing outward to locate the closest matcom.
 //
 // Returns:
 // - string: The path in the directory that is closest to startPath and contains targetName as the last path segment.
-// - map[string]any: The object associated with the closest matching path.
+// - map[string]any: The object associated with the closest matching patom.
 // - apperrors.Error: Error, if any occurs during execution.
 //
 // How It Works:
 // 1. Constructs a LIKE pattern using targetName to match paths that end with "/<targetName>" in the JSONB directory.
 // 2. Queries the directory for all paths ending in the specified targetName and orders them by path length in descending order.
-// 3. For each matching path, it checks if the path is either equal to or a parent path of the startPath.
+// 3. For each matching path, it checks if the path is either equal to or a parent path of the startPatom.
 // 4. Returns the first match (closest path) and its associated object, if found.
 //
 // Example:
 // Assume the directory JSON contains paths like "/a/b/c/d" and "/a/d":
 //
-//     path, object, err := h.FindClosestObject(ctx, catalogType, directoryID, "d", "/a/b/c")
+//     path, object, err := om.FindClosestObject(ctx, catalogType, directoryID, "d", "/a/b/c")
 //     This returns path="/a/b/c/d" and the object associated with "/a/b/c/d"
 //
 // If no path with the specified targetName is found within or above startPath, the function returns an empty string and nil for the object.
 
-func (h *hatchCatalogDb) FindClosestObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, targetName, startPath string) (string, *models.ObjectRef, apperrors.Error) {
+func (om *objectManager) FindClosestObject(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, targetName, startPath string) (string, *models.ObjectRef, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return "", nil, dberror.ErrMissingTenantID
@@ -953,7 +953,7 @@ WHERE directory_id = $1 AND tenant_id = $2
 ORDER BY LENGTH(key) DESC;
 `
 
-	rows, err := h.conn().QueryContext(ctx, query, directoryID, tenantID, likePattern)
+	rows, err := om.conn().QueryContext(ctx, query, directoryID, tenantID, likePattern)
 	if err != nil {
 		return "", nil, dberror.ErrDatabase.Err(err)
 	}
@@ -993,7 +993,7 @@ ORDER BY LENGTH(key) DESC;
 	return closestPath, &closestObject, nil
 }
 
-// isParentPath checks if path is a parent of startPath.
+// isParentPath checks if path is a parent of startPatom.
 func isParentPath(path, startPath, targetName string) bool {
 	parentPath := strings.TrimSuffix(path, "/"+targetName)
 	b := strings.HasPrefix(startPath, parentPath)
@@ -1004,7 +1004,7 @@ func isParentPath(path, startPath, targetName string) bool {
 	return false
 }
 
-func (h *hatchCatalogDb) PathExists(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error) {
+func (om *objectManager) PathExists(ctx context.Context, t types.CatalogObjectType, directoryID uuid.UUID, path string) (bool, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return false, dberror.ErrMissingTenantID
@@ -1020,7 +1020,7 @@ func (h *hatchCatalogDb) PathExists(ctx context.Context, t types.CatalogObjectTy
 		WHERE directory_id = $2 AND tenant_id = $3;`
 
 	var exists bool
-	err := h.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&exists)
+	err := om.conn().QueryRowContext(ctx, query, path, directoryID, tenantID).Scan(&exists)
 	if err != nil {
 		return false, dberror.ErrDatabase.Err(err)
 	}

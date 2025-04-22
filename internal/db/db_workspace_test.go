@@ -494,41 +494,41 @@ func TestCreateCollection(t *testing.T) {
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	err := DB(ctx).UpsertCollection(ctx, &wc)
+	err := DB(ctx).UpsertCollection(ctx, &wc, workspace.ValuesDir)
 	require.NoError(t, err)
 
 	// keep this wc
 	wc_keep := wc
 
 	// Test case: Duplicate collection (same path, namespace, etc.)
-	err = DB(ctx).UpsertCollection(ctx, &wc)
+	err = DB(ctx).UpsertCollection(ctx, &wc, workspace.ValuesDir)
 	require.NoError(t, err)
 
 	//check containment of collection schema
-	b, err := DB(ctx).HasReferencesToCollectionSchema(ctx, wc.CollectionSchema, wc.RepoID, wc.VariantID)
+	b, err := DB(ctx).HasReferencesToCollectionSchema(ctx, wc.CollectionSchema, workspace.ValuesDir)
 	require.NoError(t, err)
 	assert.True(t, b)
-	b, err = DB(ctx).HasReferencesToCollectionSchema(ctx, "/some/random/schema", wc.RepoID, wc.VariantID)
+	b, err = DB(ctx).HasReferencesToCollectionSchema(ctx, "/some/random/schema", workspace.ValuesDir)
 	require.NoError(t, err)
 	assert.False(t, b)
 
 	// Test case: Invalid path format
 	wc.Path = "invalid path"
 	wc.CollectionID = uuid.New()
-	err = DB(ctx).UpsertCollection(ctx, &wc)
+	err = DB(ctx).UpsertCollection(ctx, &wc, workspace.ValuesDir)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrInvalidInput)
 
 	// Test case: Missing tenant ID
 	ctxWithoutTenant := common.SetTenantIdInContext(ctx, "")
-	err = DB(ctx).UpsertCollection(ctxWithoutTenant, &wc)
+	err = DB(ctx).UpsertCollection(ctxWithoutTenant, &wc, workspace.ValuesDir)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, dberror.ErrMissingTenantID)
 
-	err = DB(ctx).UpsertCollection(ctx, &wc_keep)
+	err = DB(ctx).UpsertCollection(ctx, &wc_keep, workspace.ValuesDir)
 	assert.NoError(t, err)
 	// Delete the collection
-	_, err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, wc_keep.RepoID, wc_keep.VariantID)
+	_, err = DB(ctx).DeleteCollection(ctx, wc_keep.Path, workspace.ValuesDir)
 	assert.NoError(t, err)
 }
 
@@ -577,15 +577,15 @@ func TestGetCollection(t *testing.T) {
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc, workspace.ValuesDir))
 
 	// Valid get
-	result, err := DB(ctx).GetCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
+	result, err := DB(ctx).GetCollection(ctx, wc.Path, workspace.ValuesDir)
 	require.NoError(t, err)
 	assert.Equal(t, wc.Path, result.Path)
 
 	// Not found
-	_, err = DB(ctx).GetCollection(ctx, "/missing/path", wc.RepoID, wc.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, "/missing/path", workspace.ValuesDir)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
@@ -634,20 +634,20 @@ func TestUpdateCollection(t *testing.T) {
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc, workspace.ValuesDir))
 
 	// Update
 	wc.Hash = schemastore.HexEncodedSHA512([]byte("updated_hash"))
-	require.NoError(t, DB(ctx).UpdateCollection(ctx, &wc))
+	require.NoError(t, DB(ctx).UpdateCollection(ctx, &wc, workspace.ValuesDir))
 
 	// Verify
-	got, err := DB(ctx).GetCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
+	got, err := DB(ctx).GetCollection(ctx, wc.Path, workspace.ValuesDir)
 	assert.NoError(t, err)
 	assert.Equal(t, wc.Hash, got.Hash)
 
 	// Not found
 	wc.Path = "/not/found"
-	err = DB(ctx).UpdateCollection(ctx, &wc)
+	err = DB(ctx).UpdateCollection(ctx, &wc, workspace.ValuesDir)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 }
 
@@ -696,17 +696,17 @@ func TestDeleteCollection(t *testing.T) {
 		RepoID:           workspace.WorkspaceID,
 		VariantID:        variant.VariantID,
 	}
-	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc))
+	assert.NoError(t, DB(ctx).UpsertCollection(ctx, &wc, workspace.ValuesDir))
 
 	// Delete
-	_, err := DB(ctx).DeleteCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
+	_, err := DB(ctx).DeleteCollection(ctx, wc.Path, workspace.ValuesDir)
 	assert.NoError(t, err)
 
 	// Confirm
-	_, err = DB(ctx).GetCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
+	_, err = DB(ctx).GetCollection(ctx, wc.Path, workspace.ValuesDir)
 	assert.ErrorIs(t, err, dberror.ErrNotFound)
 
 	// Delete again
-	_, err = DB(ctx).DeleteCollection(ctx, wc.Path, wc.RepoID, wc.VariantID)
+	_, err = DB(ctx).DeleteCollection(ctx, wc.Path, workspace.ValuesDir)
 	assert.NoError(t, err) // should not error
 }

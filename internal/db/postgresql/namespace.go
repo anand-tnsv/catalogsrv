@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (h *hatchCatalogDb) CreateNamespace(ctx context.Context, ns *models.Namespace) (err apperrors.Error) {
+func (mm *metadataManager) CreateNamespace(ctx context.Context, ns *models.Namespace) (err apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -22,7 +22,7 @@ func (h *hatchCatalogDb) CreateNamespace(ctx context.Context, ns *models.Namespa
 
 	ns.TenantID = tenantID
 
-	tx, errStd := h.conn().BeginTx(ctx, nil)
+	tx, errStd := mm.conn().BeginTx(ctx, nil)
 	if errStd != nil {
 		log.Ctx(ctx).Error().Err(errStd).Msg("failed to begin transaction")
 		return dberror.ErrDatabase.Err(errStd)
@@ -35,7 +35,7 @@ func (h *hatchCatalogDb) CreateNamespace(ctx context.Context, ns *models.Namespa
 		}
 	}()
 
-	err = h.createNamespaceWithTransaction(ctx, ns, tx)
+	err = mm.createNamespaceWithTransaction(ctx, ns, tx)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to create namespace")
 		return err
@@ -49,7 +49,7 @@ func (h *hatchCatalogDb) CreateNamespace(ctx context.Context, ns *models.Namespa
 	return nil
 }
 
-func (h *hatchCatalogDb) createNamespaceWithTransaction(ctx context.Context, ns *models.Namespace, tx *sql.Tx) apperrors.Error {
+func (mm *metadataManager) createNamespaceWithTransaction(ctx context.Context, ns *models.Namespace, tx *sql.Tx) apperrors.Error {
 	if ns.Name == "" {
 		ns.Name = types.DefaultNamespace
 	}
@@ -85,7 +85,7 @@ func (h *hatchCatalogDb) createNamespaceWithTransaction(ctx context.Context, ns 
 	return nil
 }
 
-func (h *hatchCatalogDb) GetNamespace(ctx context.Context, name string, variantID uuid.UUID) (*models.Namespace, apperrors.Error) {
+func (mm *metadataManager) GetNamespace(ctx context.Context, name string, variantID uuid.UUID) (*models.Namespace, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -101,7 +101,7 @@ func (h *hatchCatalogDb) GetNamespace(ctx context.Context, name string, variantI
 	`
 
 	var ns models.Namespace
-	err := h.conn().QueryRowContext(ctx, query, name, variantID, tenantID).
+	err := mm.conn().QueryRowContext(ctx, query, name, variantID, tenantID).
 		Scan(&ns.Name, &ns.VariantID, &ns.TenantID, &ns.Description, &ns.Info)
 
 	if err != nil {
@@ -114,7 +114,7 @@ func (h *hatchCatalogDb) GetNamespace(ctx context.Context, name string, variantI
 	return &ns, nil
 }
 
-func (h *hatchCatalogDb) UpdateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error {
+func (mm *metadataManager) UpdateNamespace(ctx context.Context, ns *models.Namespace) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -131,7 +131,7 @@ func (h *hatchCatalogDb) UpdateNamespace(ctx context.Context, ns *models.Namespa
 		WHERE name = $1 AND variant_id = $2 AND tenant_id = $3
 	`
 
-	result, err := h.conn().ExecContext(ctx, query, ns.Name, ns.VariantID, tenantID, ns.Description, ns.Info)
+	result, err := mm.conn().ExecContext(ctx, query, ns.Name, ns.VariantID, tenantID, ns.Description, ns.Info)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("failed to update namespace")
 		return dberror.ErrDatabase.Err(err)
@@ -148,7 +148,7 @@ func (h *hatchCatalogDb) UpdateNamespace(ctx context.Context, ns *models.Namespa
 	return nil
 }
 
-func (h *hatchCatalogDb) DeleteNamespace(ctx context.Context, name string, variantID uuid.UUID) apperrors.Error {
+func (mm *metadataManager) DeleteNamespace(ctx context.Context, name string, variantID uuid.UUID) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -162,7 +162,7 @@ func (h *hatchCatalogDb) DeleteNamespace(ctx context.Context, name string, varia
 		WHERE name = $1 AND variant_id = $2 AND tenant_id = $3
 	`
 
-	result, err := h.conn().ExecContext(ctx, query, name, variantID, tenantID)
+	result, err := mm.conn().ExecContext(ctx, query, name, variantID, tenantID)
 	if err != nil {
 		return dberror.ErrDatabase.Err(err)
 	}
@@ -178,7 +178,7 @@ func (h *hatchCatalogDb) DeleteNamespace(ctx context.Context, name string, varia
 	return nil
 }
 
-func (h *hatchCatalogDb) ListNamespacesByVariant(ctx context.Context, variantID uuid.UUID) ([]*models.Namespace, apperrors.Error) {
+func (mm *metadataManager) ListNamespacesByVariant(ctx context.Context, variantID uuid.UUID) ([]*models.Namespace, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -191,7 +191,7 @@ func (h *hatchCatalogDb) ListNamespacesByVariant(ctx context.Context, variantID 
 		ORDER BY name ASC
 	`
 
-	rows, err := h.conn().QueryContext(ctx, query, variantID, tenantID)
+	rows, err := mm.conn().QueryContext(ctx, query, variantID, tenantID)
 	if err != nil {
 		return nil, dberror.ErrDatabase.Err(err)
 	}

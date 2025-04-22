@@ -3,7 +3,6 @@ package postgresql
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/mugiliam/common/apperrors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
@@ -15,48 +14,18 @@ import (
 
 type hatchCatalogDb struct {
 	c  dbmanager.ScopedConn
-	tp *tenantProject
-	cm *catalog
+	mm *metadataManager
+	om *objectManager
+	cm *connectionManager
 }
 
-func NewHatchCatalogDb(c dbmanager.ScopedConn) *hatchCatalogDb {
+func NewHatchCatalogDb(c dbmanager.ScopedConn) (*metadataManager, *objectManager, *connectionManager) {
 	h := &hatchCatalogDb{c: c}
-	h.tp = NewTenantProjectManager(c)
-	h.cm = newCatalogManager(h)
-	return h
-}
-
-func NewHatchCatalogDbWithManagers(c dbmanager.ScopedConn) {
-	c.SetTenantProjectManager(NewTenantProjectManager(c))
-	c.SetCatalogManager(newCatalogManager(c))
-}
-
-func (h *hatchCatalogDb) conn() *sql.Conn {
-	return h.c.Conn()
-}
-
-func (h *hatchCatalogDb) AddScopes(ctx context.Context, scopes map[string]string) {
-	h.c.AddScopes(ctx, scopes)
-}
-
-func (h *hatchCatalogDb) DropScopes(ctx context.Context, scopes []string) error {
-	return h.c.DropScopes(ctx, scopes)
-}
-
-func (h *hatchCatalogDb) AddScope(ctx context.Context, scope, value string) {
-	h.c.AddScope(ctx, scope, value)
-}
-
-func (h *hatchCatalogDb) DropScope(ctx context.Context, scope string) error {
-	return h.c.DropScope(ctx, scope)
-}
-
-func (h *hatchCatalogDb) DropAllScopes(ctx context.Context) error {
-	return h.c.DropAllScopes(ctx)
-}
-
-func (h *hatchCatalogDb) Close(ctx context.Context) {
-	h.c.Close(ctx)
+	h.mm = newMetadataManager(c)
+	h.om = newObjectManager(c)
+	h.cm = newConnectionManager(c)
+	h.om.m = h.mm
+	return h.mm, h.om, h.cm
 }
 
 func getTenantAndProjectFromContext(ctx context.Context) (tenantID types.TenantId, projectID types.ProjectId, err apperrors.Error) {

@@ -20,9 +20,9 @@ import (
 // If a variant with the same name and catalog ID already exists, the insertion is skipped.
 // Returns an error if the variant already exists, the variant name format is invalid,
 // the catalog ID is invalid, or there is a database error.
-func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Variant) (err apperrors.Error) {
+func (mm *metadataManager) CreateVariant(ctx context.Context, variant *models.Variant) (err apperrors.Error) {
 	// Start a transaction
-	tx, errdb := h.conn().BeginTx(ctx, &sql.TxOptions{})
+	tx, errdb := mm.conn().BeginTx(ctx, &sql.TxOptions{})
 	if errdb != nil {
 		log.Ctx(ctx).Error().Err(errdb).Msg("failed to start transaction")
 		return dberror.ErrDatabase.Err(errdb)
@@ -34,7 +34,7 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 		}
 	}()
 
-	err = h.createVariantWithTransaction(ctx, variant, tx)
+	err = mm.createVariantWithTransaction(ctx, variant, tx)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -50,7 +50,7 @@ func (h *hatchCatalogDb) CreateVariant(ctx context.Context, variant *models.Vari
 	return nil
 }
 
-func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, variant *models.Variant, tx *sql.Tx) apperrors.Error {
+func (mm *metadataManager) createVariantWithTransaction(ctx context.Context, variant *models.Variant, tx *sql.Tx) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -107,7 +107,7 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 	}
 
-	errDb := h.createVersionWithTransaction(ctx, &version, tx)
+	errDb := mm.createVersionWithTransaction(ctx, &version, tx)
 	if errDb != nil {
 		return errDb
 	}
@@ -120,7 +120,7 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 		Description: "Default namespace for the variant",
 		Info:        nil, // Default info as null
 	}
-	errDb = h.createNamespaceWithTransaction(ctx, &namespace, tx)
+	errDb = mm.createNamespaceWithTransaction(ctx, &namespace, tx)
 	if errDb != nil {
 		log.Ctx(ctx).Error().Err(errDb).Str("variant_id", variant.VariantID.String()).Msg("failed to create default namespace for variant")
 		return errDb
@@ -133,7 +133,7 @@ func (h *hatchCatalogDb) createVariantWithTransaction(ctx context.Context, varia
 // If both variantID and name are provided, variantID takes precedence.
 // Returns the variant if found, or an error if the variant is not found or there is a database error.
 
-func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, apperrors.Error) {
+func (mm *metadataManager) GetVariant(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (*models.Variant, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return nil, dberror.ErrMissingTenantID
@@ -148,14 +148,14 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, va
 			FROM variants
 			WHERE variant_id = $1 AND tenant_id = $2;
 		`
-		row = h.conn().QueryRowContext(ctx, query, variantID, tenantID)
+		row = mm.conn().QueryRowContext(ctx, query, variantID, tenantID)
 	} else if name != "" {
 		query = `
 			SELECT variant_id, name, description, info, catalog_id
 			FROM variants
 			WHERE name = $1 AND catalog_id = $2 AND tenant_id = $3;
 		`
-		row = h.conn().QueryRowContext(ctx, query, name, catalogID, tenantID)
+		row = mm.conn().QueryRowContext(ctx, query, name, catalogID, tenantID)
 	} else {
 		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
 		return nil, dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")
@@ -175,7 +175,7 @@ func (h *hatchCatalogDb) GetVariant(ctx context.Context, catalogID uuid.UUID, va
 	return variant, nil
 }
 
-func (h *hatchCatalogDb) GetVariantIDFromName(ctx context.Context, catalogID uuid.UUID, name string) (uuid.UUID, apperrors.Error) {
+func (mm *metadataManager) GetVariantIDFromName(ctx context.Context, catalogID uuid.UUID, name string) (uuid.UUID, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return uuid.Nil, dberror.ErrMissingTenantID
@@ -188,7 +188,7 @@ func (h *hatchCatalogDb) GetVariantIDFromName(ctx context.Context, catalogID uui
 	`
 
 	var variantID uuid.UUID
-	err := h.conn().QueryRowContext(ctx, query, name, catalogID, tenantID).Scan(&variantID)
+	err := mm.conn().QueryRowContext(ctx, query, name, catalogID, tenantID).Scan(&variantID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Msg("variant not found")
@@ -206,7 +206,7 @@ func (h *hatchCatalogDb) GetVariantIDFromName(ctx context.Context, catalogID uui
 // The VariantID and CatalogID fields cannot be updated.
 // Returns an error if the variant is not found, the variant name already exists for the given catalog ID,
 // the variant name format is invalid, or there is a database error.
-func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) apperrors.Error {
+func (mm *metadataManager) UpdateVariant(ctx context.Context, variantID uuid.UUID, name string, updatedVariant *models.Variant) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -222,7 +222,7 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 			WHERE variant_id = $4 AND catalog_id = $5 AND tenant_id = $6
 			RETURNING variant_id;
 		`
-		row = h.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, variantID, updatedVariant.CatalogID, tenantID)
+		row = mm.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, variantID, updatedVariant.CatalogID, tenantID)
 	} else if name != "" {
 		query = `
 			UPDATE variants
@@ -230,7 +230,7 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 			WHERE name = $4 AND catalog_id = $5 AND tenant_id = $6
 			RETURNING variant_id;
 		`
-		row = h.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, name, updatedVariant.CatalogID, tenantID)
+		row = mm.conn().QueryRowContext(ctx, query, updatedVariant.Name, updatedVariant.Description, updatedVariant.Info, name, updatedVariant.CatalogID, tenantID)
 	} else {
 		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
 		return dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")
@@ -263,7 +263,7 @@ func (h *hatchCatalogDb) UpdateVariant(ctx context.Context, variantID uuid.UUID,
 // DeleteVariant deletes a variant from the database based on the variant ID or name.
 // If both variantID and name are provided, variantID takes precedence.
 // Returns an error if the variant is not found or there is a database error.
-func (h *hatchCatalogDb) DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name string) apperrors.Error {
+func (mm *metadataManager) DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name string) apperrors.Error {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {
 		return dberror.ErrMissingTenantID
@@ -288,13 +288,13 @@ func (h *hatchCatalogDb) DeleteVariant(ctx context.Context, catalogID, variantID
 			DELETE FROM variants
 			WHERE variant_id = $1 AND catalog_id = $2 AND tenant_id = $3;
 		`
-		result, err = h.conn().ExecContext(ctx, query, variantID, catalogID, tenantID)
+		result, err = mm.conn().ExecContext(ctx, query, variantID, catalogID, tenantID)
 	} else {
 		query = `
 			DELETE FROM variants
 			WHERE name = $1 AND catalog_id = $2 AND tenant_id = $3;
 		`
-		result, err = h.conn().ExecContext(ctx, query, name, catalogID, tenantID)
+		result, err = mm.conn().ExecContext(ctx, query, name, catalogID, tenantID)
 	}
 
 	if err != nil {

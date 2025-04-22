@@ -584,12 +584,8 @@ func deleteCollectionSchema(ctx context.Context, t types.CatalogObjectType, m *s
 			return err
 		}
 	}
-	repoId := m.IDS.VariantID
-	if !dir.IsNil() && dir.WorkspaceID != uuid.Nil {
-		repoId = dir.WorkspaceID
-	}
 
-	exists, err := db.DB(ctx).HasReferencesToCollectionSchema(ctx, pathWithName, repoId, m.IDS.VariantID)
+	exists, err := db.DB(ctx).HasReferencesToCollectionSchema(ctx, pathWithName, dir.ValuesDir)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to check if collection schema has references")
 		return ErrCatalogError
@@ -948,9 +944,9 @@ func getDirectoriesForWorkspace(ctx context.Context, workspaceId uuid.UUID) (Dir
 		return dir, ErrInvalidWorkspace.Msg("workspace does not have a collections directory")
 	}
 
-	// if dir.ValuesDir = wm.ValuesDir(); dir.ValuesDir == uuid.Nil {
-	// 	return dir, ErrInvalidWorkspace.Msg("workspace does not have a values directory")
-	// }
+	if dir.ValuesDir = wm.ValuesDir(); dir.ValuesDir == uuid.Nil {
+		return dir, ErrInvalidWorkspace.Msg("workspace does not have a values directory")
+	}
 
 	dir.WorkspaceID = workspaceId
 

@@ -13,21 +13,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type catalog struct {
-	h *hatchCatalogDb
-}
-
-func (c *catalog) conn() *sql.Conn {
-	return c.h.conn()
-}
-
-func newCatalogManager(h *hatchCatalogDb) *catalog {
-	return &catalog{h: h}
-}
-
 // CreateCatalog inserts a new catalog into the database.
 // If the catalog name already exists for the project and tenant, it returns an error.
-func (cm *catalog) CreateCatalog(ctx context.Context, catalog *models.Catalog) (err apperrors.Error) {
+func (mm *metadataManager) CreateCatalog(ctx context.Context, catalog *models.Catalog) (err apperrors.Error) {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
 		return err
@@ -39,7 +27,7 @@ func (cm *catalog) CreateCatalog(ctx context.Context, catalog *models.Catalog) (
 	}
 
 	// create a transaction
-	tx, errdb := cm.conn().BeginTx(ctx, &sql.TxOptions{})
+	tx, errdb := mm.conn().BeginTx(ctx, &sql.TxOptions{})
 	if errdb != nil {
 		log.Ctx(ctx).Error().Err(errdb).Msg("failed to start transaction")
 		return dberror.ErrDatabase.Err(errdb)
@@ -59,7 +47,7 @@ func (cm *catalog) CreateCatalog(ctx context.Context, catalog *models.Catalog) (
 		RETURNING catalog_id, name;
 	`
 
-	// Execute the query directly using cm.conn().QueryRowContext
+	// Execute the query directly using mm.conn().QueryRowContext
 	row := tx.QueryRowContext(ctx, query, catalogID, catalog.Name, catalog.Description, catalog.Info, tenantID, projectID)
 	var insertedCatalogID uuid.UUID
 	var insertedName string
@@ -82,7 +70,7 @@ func (cm *catalog) CreateCatalog(ctx context.Context, catalog *models.Catalog) (
 		Info:        pgtype.JSONB{Status: pgtype.Null},
 		Description: "default variant",
 	}
-	err = cm.h.createVariantWithTransaction(ctx, &variant, tx)
+	err = mm.createVariantWithTransaction(ctx, &variant, tx)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -98,7 +86,7 @@ func (cm *catalog) CreateCatalog(ctx context.Context, catalog *models.Catalog) (
 }
 
 // GetCatalogIDByName retrieves the catalog ID associated with a given catalog name and tenant ID.
-func (cm *catalog) GetCatalogIDByName(ctx context.Context, catalogName string) (uuid.UUID, apperrors.Error) {
+func (mm *metadataManager) GetCatalogIDByName(ctx context.Context, catalogName string) (uuid.UUID, apperrors.Error) {
 	var catalogID uuid.UUID
 
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
@@ -111,7 +99,7 @@ func (cm *catalog) GetCatalogIDByName(ctx context.Context, catalogName string) (
 		SELECT catalog_id FROM catalogs 
 		WHERE name = $1 AND tenant_id = $2 AND project_id = $3;
 	`
-	errDb := cm.conn().QueryRowContext(ctx, query, catalogName, tenantID, projectID).Scan(&catalogID)
+	errDb := mm.conn().QueryRowContext(ctx, query, catalogName, tenantID, projectID).Scan(&catalogID)
 	if errDb != nil {
 		if errDb == sql.ErrNoRows {
 			log.Ctx(ctx).Info().Str("catalog_name", catalogName).Msg("catalog not found")
@@ -126,7 +114,7 @@ func (cm *catalog) GetCatalogIDByName(ctx context.Context, catalogName string) (
 
 // GetCatalog retrieves a catalog from the database.
 // If both catalogID and name are provided, catalogID takes precedence.
-func (cm *catalog) GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, apperrors.Error) {
+func (mm *metadataManager) GetCatalog(ctx context.Context, catalogID uuid.UUID, name string) (*models.Catalog, apperrors.Error) {
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -141,10 +129,10 @@ func (cm *catalog) GetCatalog(ctx context.Context, catalogID uuid.UUID, name str
 	var row *sql.Row
 	if catalogID != uuid.Nil {
 		query += "catalog_id = $1;"
-		row = cm.conn().QueryRowContext(ctx, query, catalogID, tenantID, projectID)
+		row = mm.conn().QueryRowContext(ctx, query, catalogID, tenantID, projectID)
 	} else {
 		query += "name = $1;"
-		row = cm.conn().QueryRowContext(ctx, query, name, tenantID, projectID)
+		row = mm.conn().QueryRowContext(ctx, query, name, tenantID, projectID)
 	}
 
 	// Scan the result into the catalog model
@@ -164,7 +152,7 @@ func (cm *catalog) GetCatalog(ctx context.Context, catalogID uuid.UUID, name str
 
 // UpdateCatalog updates an existing catalog in the database.
 // If both catalogID and name are provided, catalogID takes precedence.
-func (cm *catalog) UpdateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error {
+func (mm *metadataManager) UpdateCatalog(ctx context.Context, catalog *models.Catalog) apperrors.Error {
 	// Retrieve tenant and project IDs from context
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
@@ -186,10 +174,10 @@ func (cm *catalog) UpdateCatalog(ctx context.Context, catalog *models.Catalog) a
 	var row *sql.Row
 	if catalog.CatalogID != uuid.Nil {
 		query += "catalog_id = $1 RETURNING catalog_id, name;"
-		row = cm.conn().QueryRowContext(ctx, query, catalog.CatalogID, tenantID, projectID, catalog.Description, catalog.Info)
+		row = mm.conn().QueryRowContext(ctx, query, catalog.CatalogID, tenantID, projectID, catalog.Description, catalog.Info)
 	} else {
 		query += "name = $1 RETURNING catalog_id, name;"
-		row = cm.conn().QueryRowContext(ctx, query, catalog.Name, tenantID, projectID, catalog.Description, catalog.Info)
+		row = mm.conn().QueryRowContext(ctx, query, catalog.Name, tenantID, projectID, catalog.Description, catalog.Info)
 	}
 
 	// Scan the updated values
@@ -209,7 +197,7 @@ func (cm *catalog) UpdateCatalog(ctx context.Context, catalog *models.Catalog) a
 
 // DeleteCatalog deletes a catalog from the database.
 // If both catalogID and name are provided, catalogID takes precedence.
-func (cm *catalog) DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) apperrors.Error {
+func (mm *metadataManager) DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name string) apperrors.Error {
 	// Retrieve tenant and project IDs from context
 	tenantID, projectID, err := getTenantAndProjectFromContext(ctx)
 	if err != nil {
@@ -228,14 +216,14 @@ func (cm *catalog) DeleteCatalog(ctx context.Context, catalogID uuid.UUID, name 
 
 	if catalogID != uuid.Nil {
 		query += "catalog_id = $1;"
-		_, err := cm.conn().ExecContext(ctx, query, catalogID, tenantID, projectID)
+		_, err := mm.conn().ExecContext(ctx, query, catalogID, tenantID, projectID)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Str("catalog_id", catalogID.String()).Msg("failed to delete catalog")
 			return dberror.ErrDatabase.Err(err)
 		}
 	} else {
 		query += "name = $1;"
-		_, err := cm.conn().ExecContext(ctx, query, name, tenantID, projectID)
+		_, err := mm.conn().ExecContext(ctx, query, name, tenantID, projectID)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Str("name", name).Msg("failed to delete catalog")
 			return dberror.ErrDatabase.Err(err)
