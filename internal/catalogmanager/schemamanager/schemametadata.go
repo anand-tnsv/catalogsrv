@@ -102,6 +102,6 @@ func (m SchemaMetadata) GetStoragePath(t types.CatalogObjectType) string {
 }
 
 func (m SchemaMetadata) GetEntropyBytes(t types.CatalogObjectType) []byte {
-	entropy := m.Catalog + ":" + m.Variant.String() + ":" + m.GetStoragePath(t) + ":" + m.Name + ":" + string(t)
+	entropy := m.Catalog + ":" + string(t)
 	return []byte(entropy)
 }
