@@ -20,6 +20,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
+	"github.com/tidwall/gjson"
 )
 
 type variantSchema struct {
@@ -115,14 +116,24 @@ func NewVariantManager(ctx context.Context, rsrcJson []byte, name string, catalo
 		vs.Metadata.Catalog = catalog
 	}
 
+	// validate the schema
+	ves := vs.Validate()
+	if ves != nil {
+		return nil, ErrInvalidSchema.Err(ves)
+	}
+
 	// retrieve the catalogID
-	catalogID, err := db.DB(ctx).GetCatalogIDByName(ctx, vs.Metadata.Catalog)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			return nil, ErrCatalogNotFound
+	var catalogID uuid.UUID = common.GetCatalogIdFromContext(ctx)
+	var err apperrors.Error
+	if catalogID == uuid.Nil || vs.Metadata.Catalog != common.GetCatalogFromContext(ctx) {
+		catalogID, err = db.DB(ctx).GetCatalogIDByName(ctx, vs.Metadata.Catalog)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return nil, ErrCatalogNotFound
+			}
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+			return nil, err
 		}
-		log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-		return nil, err
 	}
 
 	v := models.Variant{
@@ -153,11 +164,11 @@ func (vm *variantManager) CatalogID() uuid.UUID {
 	return vm.v.CatalogID
 }
 
-func LoadVariantManagerByName(ctx context.Context, catalogID uuid.UUID, name string) (schemamanager.VariantManager, apperrors.Error) {
-	if catalogID == uuid.Nil {
-		return nil, ErrInvalidCatalog
+func LoadVariantManager(ctx context.Context, catalogID uuid.UUID, variantID uuid.UUID, name string) (schemamanager.VariantManager, apperrors.Error) {
+	if variantID == uuid.Nil && (catalogID == uuid.Nil || name == "") {
+		return nil, ErrInvalidVariant
 	}
-	v, err := db.DB(ctx).GetVariant(ctx, catalogID, uuid.Nil, name)
+	v, err := db.DB(ctx).GetVariant(ctx, catalogID, variantID, name)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			return nil, ErrVariantNotFound
@@ -227,18 +238,17 @@ func DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name str
 // TODO Handle base variant and copy of data
 
 type variantResource struct {
-	name      ResourceName
-	catalogID uuid.UUID
-	rsrcJson  []byte
-	vm        schemamanager.VariantManager
+	name     ResourceName
+	rsrcJson []byte
+	vm       schemamanager.VariantManager
 }
 
 func (vr *variantResource) Name() string {
-	return vr.name.Catalog
+	return vr.name.Variant
 }
 
 func (vr *variantResource) Location() string {
-	return vr.name.Catalog + "/variants/" + vr.name.Variant
+	return "/variants/" + vr.vm.ID().String()
 }
 
 func (vr *variantResource) ResourceJson() []byte {
@@ -259,16 +269,15 @@ func (vr *variantResource) Create(ctx context.Context) (string, apperrors.Error)
 		return "", err
 	}
 	vr.name.Variant = variant.Name()
-	vs := &variantSchema{}
-	json.Unmarshal(vr.rsrcJson, vs)
-	if vr.name.Catalog == "" {
-		vr.name.Catalog = vs.Metadata.Catalog
-	}
+	vr.name.VariantID = variant.ID()
+	vr.name.CatalogID = variant.CatalogID()
+	vr.vm = variant
+	vr.name.Catalog = gjson.GetBytes(vr.rsrcJson, "metadata.catalog").String()
 	return vr.Location(), nil
 }
 
 func (vr *variantResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
-	variant, err := LoadVariantManagerByName(ctx, vr.catalogID, vr.name.Variant)
+	variant, err := LoadVariantManager(ctx, vr.name.CatalogID, vr.name.VariantID, vr.name.Variant)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +285,7 @@ func (vr *variantResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
 }
 
 func (vr *variantResource) Delete(ctx context.Context) apperrors.Error {
-	err := DeleteVariant(ctx, vr.catalogID, uuid.Nil, vr.name.Variant)
+	err := DeleteVariant(ctx, vr.name.CatalogID, vr.name.VariantID, vr.name.Variant)
 	if err != nil {
 		return err
 	}
@@ -294,19 +303,7 @@ func (vr *variantResource) Update(ctx context.Context, rsrcJson []byte) apperror
 		return ErrInvalidSchema.Err(ves)
 	}
 
-	if vr.catalogID == uuid.Nil {
-		cid, err := db.DB(ctx).GetCatalogIDByName(ctx, vs.Metadata.Catalog)
-		if err != nil {
-			if errors.Is(err, dberror.ErrNotFound) {
-				return ErrCatalogNotFound
-			}
-			log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-			return err
-		}
-		vr.catalogID = cid
-	}
-
-	v, err := db.DB(ctx).GetVariant(ctx, vr.catalogID, uuid.Nil, vs.Metadata.Name)
+	v, err := db.DB(ctx).GetVariant(ctx, vr.name.CatalogID, vr.name.VariantID, vs.Metadata.Name)
 	if err != nil {
 		if errors.Is(err, dberror.ErrNotFound) {
 			return ErrCatalogNotFound
@@ -326,25 +323,20 @@ func (vr *variantResource) Update(ctx context.Context, rsrcJson []byte) apperror
 }
 
 func NewVariantResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	cid := uuid.Nil
-	if len(rsrcJson) == 0 || len(name.Catalog) > 0 {
-		if len(name.Catalog) > 0 && schemavalidator.ValidateSchemaName(name.Catalog) {
-			var err apperrors.Error
-			cid, err = db.DB(ctx).GetCatalogIDByName(ctx, name.Catalog)
-			if err != nil {
-				if errors.Is(err, dberror.ErrNotFound) {
-					return nil, ErrCatalogNotFound
-				}
-				log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-				return nil, ErrUnableToLoadObject.Msg("failed to load catalog")
-			}
-		} else {
-			return nil, ErrInvalidCatalog.Msg("invalid catalog name")
-		}
-	}
+	name.Variant, name.VariantID = getUUIDOrName(name.Variant)
 	return &variantResource{
-		name:      name,
-		catalogID: cid,
-		rsrcJson:  rsrcJson,
+		name:     name,
+		rsrcJson: rsrcJson,
 	}, nil
+}
+
+func getUUIDOrName(ref string) (string, uuid.UUID) {
+	if ref == "" {
+		return "", uuid.Nil
+	}
+	u, err := uuid.Parse(ref)
+	if err != nil {
+		return ref, uuid.Nil
+	}
+	return "", u
 }

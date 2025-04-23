@@ -143,6 +143,42 @@ func (mm *metadataManager) DeleteWorkspace(ctx context.Context, workspaceID uuid
 	return nil
 }
 
+func (mm *metadataManager) DeleteWorkspaceByLabel(ctx context.Context, variantID uuid.UUID, label string) apperrors.Error {
+	tenantID := common.TenantIdFromContext(ctx)
+	if tenantID == "" {
+		return dberror.ErrMissingTenantID
+	}
+	if variantID == uuid.Nil {
+		return dberror.ErrInvalidVariant
+	}
+	if label == "" {
+		return dberror.ErrInvalidInput.Msg("label cannot be empty")
+	}
+
+	query := `
+		DELETE FROM workspaces
+		WHERE label = $1 AND variant_id = $2 AND tenant_id = $3;
+	`
+
+	result, err := mm.conn().ExecContext(ctx, query, label, variantID, tenantID)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to delete workspace")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to retrieve result information")
+		return dberror.ErrDatabase.Err(err)
+	}
+
+	if rowsAffected == 0 {
+		log.Ctx(ctx).Info().Str("label", label).Str("variant_id", variantID.String()).Str("tenant_id", string(tenantID)).Msg("workspace not found")
+	}
+
+	return nil
+}
+
 func (mm *metadataManager) GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*models.Workspace, apperrors.Error) {
 	tenantID := common.TenantIdFromContext(ctx)
 	if tenantID == "" {

@@ -187,7 +187,7 @@ func (cr *catalogResource) Name() string {
 }
 
 func (cr *catalogResource) Location() string {
-	return cr.name.Catalog
+	return "/catalogs/" + cr.cm.Name()
 }
 
 func (cr *catalogResource) ResourceJson() []byte {
@@ -207,8 +207,8 @@ func (cr *catalogResource) Create(ctx context.Context) (string, apperrors.Error)
 	if err != nil {
 		return "", err
 	}
-	cr.name.Catalog = catalog.Name()
-	return cr.name.Catalog, nil
+	cr.cm = catalog
+	return cr.Location(), nil
 }
 
 func (cr *catalogResource) Get(ctx context.Context) ([]byte, apperrors.Error) {

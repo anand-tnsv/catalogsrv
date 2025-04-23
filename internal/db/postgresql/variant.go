@@ -269,13 +269,7 @@ func (mm *metadataManager) DeleteVariant(ctx context.Context, catalogID, variant
 		return dberror.ErrMissingTenantID
 	}
 
-	if catalogID == uuid.Nil {
-		log.Ctx(ctx).Error().Msg("catalog ID is required")
-		return dberror.ErrInvalidInput.Msg("catalog ID is required")
-	}
-
-	if variantID == uuid.Nil && name == "" {
-		log.Ctx(ctx).Error().Msg("either variant ID or name must be provided")
+	if variantID == uuid.Nil && (catalogID == uuid.Nil || name == "") {
 		return dberror.ErrInvalidInput.Msg("either variant ID or name must be provided")
 	}
 

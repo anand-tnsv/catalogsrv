@@ -131,13 +131,19 @@ func TestNewVariantManager(t *testing.T) {
 				assert.ErrorIs(t, err, ErrAlreadyExists)
 
 				// Load the variant
-				loadedVariant, loadErr := LoadVariantManagerByName(ctx, vm.CatalogID(), vm.Name())
+				loadedVariant, loadErr := LoadVariantManager(ctx, vm.CatalogID(), uuid.Nil, vm.Name())
+				assert.NoError(t, loadErr)
+				assert.Equal(t, vm.Name(), loadedVariant.Name())
+				assert.Equal(t, vm.Description(), loadedVariant.Description())
+
+				// Load the variant with ID
+				loadedVariant, loadErr = LoadVariantManager(ctx, uuid.Nil, vm.ID(), vm.Name())
 				assert.NoError(t, loadErr)
 				assert.Equal(t, vm.Name(), loadedVariant.Name())
 				assert.Equal(t, vm.Description(), loadedVariant.Description())
 
 				// Load the variant with an invalid name
-				_, loadErr = LoadVariantManagerByName(ctx, vm.CatalogID(), "InvalidVariant")
+				_, loadErr = LoadVariantManager(ctx, vm.CatalogID(), uuid.Nil, "InvalidVariant")
 				assert.Error(t, loadErr)
 				assert.ErrorIs(t, loadErr, ErrVariantNotFound)
 
@@ -146,7 +152,7 @@ func TestNewVariantManager(t *testing.T) {
 				assert.NoError(t, err)
 
 				// Try loading the deleted variant
-				_, loadErr = LoadVariantManagerByName(ctx, vm.CatalogID(), vm.Name())
+				_, loadErr = LoadVariantManager(ctx, vm.CatalogID(), vm.ID(), vm.Name())
 				assert.Error(t, loadErr)
 				assert.ErrorIs(t, loadErr, ErrVariantNotFound)
 

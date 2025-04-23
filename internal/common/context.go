@@ -60,7 +60,7 @@ type CatalogContext struct {
 
 // SetCatalogContext sets the catalog context in the provided context.
 func SetCatalogContext(ctx context.Context, catalogContext *CatalogContext) context.Context {
-	return context.WithValue(ctx, ctxCatalogContextKey, &catalogContext)
+	return context.WithValue(ctx, ctxCatalogContextKey, catalogContext)
 }
 
 // CatalogContextFromContext retrieves the catalog context from the provided context.
@@ -120,10 +120,60 @@ func SetVariantInContext(ctx context.Context, variant string) context.Context {
 	return SetCatalogContext(ctx, currContext)
 }
 
-type TestContext struct {
-	TenantId  types.TenantId
-	ProjectId types.ProjectId
-	CatalogContext
+// GetCatalogIdFromContext retrieves the catalog ID from the provided context.
+func GetCatalogIdFromContext(ctx context.Context) uuid.UUID {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext.CatalogId
+	}
+	return uuid.Nil
+}
+
+// GetVariantIdFromContext retrieves the variant ID from the provided context.
+func GetVariantIdFromContext(ctx context.Context) uuid.UUID {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext.VariantId
+	}
+	return uuid.Nil
+}
+
+// GetWorkspaceIdFromContext retrieves the workspace ID from the provided context.
+func GetWorkspaceIdFromContext(ctx context.Context) uuid.UUID {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext.WorkspaceId
+	}
+	return uuid.Nil
+}
+
+// GetWorkspaceLabelFromContext retrieves the workspace label from the provided context.
+func GetWorkspaceLabelFromContext(ctx context.Context) string {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext.WorkspaceLabel
+	}
+	return ""
+}
+
+// GetNamespaceFromContext retrieves the namespace from the provided context.
+func GetNamespaceFromContext(ctx context.Context) string {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext.Namespace
+	}
+	return ""
+}
+
+// GetCatalogFromContext retrieves the catalog from the provided context.
+func GetCatalogFromContext(ctx context.Context) string {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext.Catalog
+	}
+	return ""
+}
+
+// GetVariantFromContext retrieves the variant from the provided context.
+func GetVariantFromContext(ctx context.Context) string {
+	if catalogContext, ok := ctx.Value(ctxCatalogContextKey).(*CatalogContext); ok {
+		return catalogContext.Variant
+	}
+	return ""
 }
 
 type ctxTestContextKeyType string
@@ -131,17 +181,15 @@ type ctxTestContextKeyType string
 const ctxTestContextKey ctxTestContextKeyType = "HatchTestContext"
 
 // SetTestContext sets the test context in the provided context.
-func SetTestContext(ctx context.Context, testContext *TestContext) context.Context {
-	ctx = SetTenantIdInContext(ctx, testContext.TenantId)
-	ctx = SetProjectIdInContext(ctx, testContext.ProjectId)
-	ctx = context.WithValue(ctx, ctxTestContextKey, testContext)
-	return ctx
+func SetTestContext(ctx context.Context, b bool) context.Context {
+
+	return context.WithValue(ctx, ctxTestContextKey, b)
 }
 
 // TestContextFromContext retrieves the test context from the provided context.
-func TestContextFromContext(ctx context.Context) *TestContext {
-	if testContext, ok := ctx.Value(ctxTestContextKey).(*TestContext); ok {
+func TestContextFromContext(ctx context.Context) bool {
+	if testContext, ok := ctx.Value(ctxTestContextKey).(bool); ok {
 		return testContext
 	}
-	return nil
+	return false
 }

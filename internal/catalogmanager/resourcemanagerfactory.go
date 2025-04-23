@@ -13,7 +13,9 @@ import (
 
 type ResourceName struct {
 	Catalog        string
+	CatalogID      uuid.UUID
 	Variant        string
+	VariantID      uuid.UUID
 	WorkspaceID    uuid.UUID
 	WorkspaceLabel string
 	Workspace      string

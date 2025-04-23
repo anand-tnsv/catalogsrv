@@ -19,20 +19,21 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
 	"github.com/rs/zerolog/log"
+	"github.com/tidwall/gjson"
 )
 
 type workspaceSchema struct {
 	Version  string            `json:"version" validate:"requireVersionV1"`
 	Kind     string            `json:"kind" validate:"required,kindValidator"`
-	Metadata workspaceMetadata `json:"metadata" validate:"required"`
+	Metadata workspaceMetadata `json:"metadata" validate:""`
 }
 
 type workspaceMetadata struct {
-	Catalog     string `json:"catalog" validate:"required,resourceNameValidator"`
-	Variant     string `json:"variant" validate:"required,resourceNameValidator"`
-	BaseVersion int    `json:"base_version"`
+	Catalog     string `json:"catalog" validate:"omitempty,resourceNameValidator"`
+	Variant     string `json:"variant" validate:"omitempty,resourceNameValidator"`
+	BaseVersion int    `json:"-"`
 	Description string `json:"description"`
-	Label       string `json:"label"`
+	Label       string `json:"label" validate:"omitempty,resourceNameValidator"`
 }
 
 type workspaceManager struct {
@@ -75,24 +76,33 @@ func NewWorkspaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 		ws.Metadata.Variant = variant
 	}
 
-	// retrieve the catalogID
-	catalogID, err := db.DB(ctx).GetCatalogIDByName(ctx, ws.Metadata.Catalog)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			return nil, ErrCatalogNotFound
+	catalogID := common.GetCatalogIdFromContext(ctx)
+	variantID := common.GetVariantIdFromContext(ctx)
+
+	if catalogID == uuid.Nil || ws.Metadata.Catalog != common.GetCatalogFromContext(ctx) {
+		var err apperrors.Error
+		// retrieve the catalogID
+		catalogID, err = db.DB(ctx).GetCatalogIDByName(ctx, ws.Metadata.Catalog)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return nil, ErrCatalogNotFound
+			}
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+			return nil, err
 		}
-		log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-		return nil, err
 	}
 
 	// retrieve the variantID
-	variantID, err := db.DB(ctx).GetVariantIDFromName(ctx, catalogID, ws.Metadata.Variant)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			return nil, ErrVariantNotFound
+	if variantID == uuid.Nil || ws.Metadata.Variant != common.GetVariantFromContext(ctx) {
+		var err apperrors.Error
+		variantID, err = db.DB(ctx).GetVariantIDFromName(ctx, catalogID, ws.Metadata.Variant)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return nil, ErrVariantNotFound
+			}
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load variant")
+			return nil, err
 		}
-		log.Ctx(ctx).Error().Err(err).Msg("failed to load variant")
-		return nil, err
 	}
 
 	// We don't support multiple versions of a variant. But we'll keep the version construct.
@@ -132,7 +142,7 @@ func (ws *workspaceSchema) Validate() schemaerr.ValidationErrors {
 		switch e.Tag() {
 		case "required":
 			ves = append(ves, schemaerr.ErrMissingRequiredAttribute(jsonFieldName))
-		case "nameFormatValidator":
+		case "nameFormatValidator", "resourceNameValidator":
 			val, _ := e.Value().(string)
 			ves = append(ves, schemaerr.ErrInvalidNameFormat(jsonFieldName, val))
 		case "kindValidator":
@@ -279,11 +289,9 @@ func DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) apperrors.Error
 }
 
 type workspaceResource struct {
-	name      ResourceName
-	catalogID uuid.UUID
-	variantID uuid.UUID
-	rsrcJson  []byte
-	vm        schemamanager.WorkspaceManager
+	name     ResourceName
+	rsrcJson []byte
+	vm       schemamanager.WorkspaceManager
 }
 
 func (wr *workspaceResource) Name() string {
@@ -295,7 +303,7 @@ func (wr *workspaceResource) ID() uuid.UUID {
 }
 
 func (wr *workspaceResource) Location() string {
-	return wr.name.Catalog + "/variants/" + wr.name.Variant + "/workspaces/" + wr.name.WorkspaceID.String()
+	return "/workspaces/" + wr.name.WorkspaceID.String()
 }
 
 func (wr *workspaceResource) ResourceJson() []byte {
@@ -317,13 +325,12 @@ func (wr *workspaceResource) Create(ctx context.Context) (string, apperrors.Erro
 	}
 	wr.name.WorkspaceID = workspace.ID()
 	wr.name.WorkspaceLabel = workspace.Label()
-	ws := &workspaceSchema{}
-	json.Unmarshal(wr.rsrcJson, ws)
+	wr.vm = workspace
 	if wr.name.Catalog == "" {
-		wr.name.Catalog = ws.Metadata.Catalog
+		wr.name.Catalog = gjson.GetBytes(wr.rsrcJson, "metadata.catalog").String()
 	}
 	if wr.name.Variant == "" {
-		wr.name.Variant = ws.Metadata.Variant
+		wr.name.Variant = gjson.GetBytes(wr.rsrcJson, "metadata.variant").String()
 	}
 	return wr.Location(), nil
 }
@@ -336,7 +343,7 @@ func (wr *workspaceResource) Get(ctx context.Context) ([]byte, apperrors.Error) 
 		}
 		return workspace.ToJson(ctx)
 	} else if wr.name.WorkspaceLabel != "" {
-		workspace, err := LoadWorkspaceManagerByLabel(ctx, wr.variantID, wr.name.WorkspaceLabel)
+		workspace, err := LoadWorkspaceManagerByLabel(ctx, wr.name.VariantID, wr.name.WorkspaceLabel)
 		if err != nil {
 			return nil, err
 		}
@@ -348,16 +355,14 @@ func (wr *workspaceResource) Get(ctx context.Context) ([]byte, apperrors.Error) 
 func (wr *workspaceResource) Delete(ctx context.Context) apperrors.Error {
 	id := wr.name.WorkspaceID
 	if id == uuid.Nil {
-		// try to load the workspace by label
-		w, err := LoadWorkspaceManagerByLabel(ctx, wr.variantID, wr.name.WorkspaceLabel)
+		err := db.DB(ctx).DeleteWorkspaceByLabel(ctx, wr.name.VariantID, wr.name.WorkspaceLabel)
 		if err != nil {
-			if errors.Is(err, ErrWorkspaceNotFound) {
-				return nil
+			if !errors.Is(err, dberror.ErrNotFound) {
+				log.Ctx(ctx).Error().Err(err).Msg("failed to delete workspace")
+				return ErrUnableToDeleteObject.Msg("unable to delete workspace")
 			}
-			log.Ctx(ctx).Error().Err(err).Msg("failed to delete workspace")
-			return ErrUnableToDeleteObject.Msg("unable to delete workspace")
 		}
-		id = w.ID()
+		return nil
 	}
 	err := DeleteWorkspace(ctx, id)
 	if err != nil {
@@ -378,28 +383,6 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 		return ErrInvalidSchema.Err(ves)
 	}
 
-	if wr.catalogID == uuid.Nil {
-		cid, err := db.DB(ctx).GetCatalogIDByName(ctx, ws.Metadata.Catalog)
-		if err != nil {
-			if errors.Is(err, dberror.ErrNotFound) {
-				return ErrCatalogNotFound
-			}
-			log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-			return err
-		}
-		wr.catalogID = cid
-	}
-	if wr.variantID == uuid.Nil {
-		vid, err := db.DB(ctx).GetVariantIDFromName(ctx, wr.catalogID, ws.Metadata.Variant)
-		if err != nil {
-			if errors.Is(err, dberror.ErrNotFound) {
-				return ErrVariantNotFound
-			}
-			log.Ctx(ctx).Error().Err(err).Msg("failed to load variant")
-			return err
-		}
-		wr.variantID = vid
-	}
 	var w *models.Workspace
 	var err apperrors.Error
 	if wr.name.WorkspaceID != uuid.Nil {
@@ -412,7 +395,7 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 			return ErrUnableToLoadObject.Msg("unable to load workspace")
 		}
 	} else if wr.name.WorkspaceLabel != "" {
-		w, err = db.DB(ctx).GetWorkspaceByLabel(ctx, wr.variantID, wr.name.WorkspaceLabel)
+		w, err = db.DB(ctx).GetWorkspaceByLabel(ctx, wr.name.VariantID, wr.name.WorkspaceLabel)
 		if err != nil {
 			if errors.Is(err, dberror.ErrNotFound) {
 				return ErrWorkspaceNotFound
@@ -437,45 +420,9 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 }
 
 func NewWorkspaceResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	catalogID, variantID := uuid.Nil, uuid.Nil
-	if len(rsrcJson) == 0 || (len(name.Catalog) > 0 && len(name.Variant) > 0) {
-		if len(name.Catalog) > 0 && schemavalidator.ValidateSchemaName(name.Catalog) {
-			var err apperrors.Error
-			catalogID, err = db.DB(ctx).GetCatalogIDByName(ctx, name.Catalog)
-			if err != nil {
-				if errors.Is(err, dberror.ErrNotFound) {
-					return nil, ErrCatalogNotFound
-				}
-				log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-				return nil, ErrUnableToLoadObject.Msg("failed to load catalog")
-			}
-		} else {
-			return nil, ErrInvalidCatalog.Msg("invalid catalog name")
-		}
-		if len(name.Variant) > 0 && schemavalidator.ValidateSchemaName(name.Variant) {
-			var err apperrors.Error
-			variantID, err = db.DB(ctx).GetVariantIDFromName(ctx, catalogID, name.Variant)
-			if err != nil {
-				if errors.Is(err, dberror.ErrNotFound) {
-					return nil, ErrVariantNotFound
-				}
-				log.Ctx(ctx).Error().Err(err).Msg("failed to load variant")
-				return nil, ErrUnableToLoadObject.Msg("failed to load variant")
-			}
-		} else {
-			return nil, validationerrors.ErrInvalidNameFormat
-		}
-	}
-	id, err := uuid.Parse(name.Workspace)
-	if err != nil {
-		name.WorkspaceLabel = name.Workspace
-	} else {
-		name.WorkspaceID = id
-	}
+	name.WorkspaceLabel, name.WorkspaceID = getUUIDOrName(name.Workspace)
 	return &workspaceResource{
-		name:      name,
-		catalogID: catalogID,
-		variantID: variantID,
-		rsrcJson:  rsrcJson,
+		name:     name,
+		rsrcJson: rsrcJson,
 	}, nil
 }

@@ -10,10 +10,13 @@ import (
 
 func TestGetVersion(t *testing.T) {
 	// Create a New Request
-	req, _ := http.NewRequest("GET", "/tenant/TABCDE/project/PABCDE/catalogs/version", nil)
-
+	req, _ := http.NewRequest("GET", "/version", nil)
+	testContext := TestContext{
+		TenantId:  "tenant1",
+		ProjectId: "project1",
+	}
 	// Execute Request
-	response := executeTestRequest(t, req, nil)
+	response := executeTestRequest(t, req, nil, testContext)
 
 	// Check the response code
 	require.Equal(t, http.StatusOK, response.Code)

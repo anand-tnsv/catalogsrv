@@ -28,8 +28,8 @@ type namespaceSchema struct {
 }
 
 type namespaceMetadata struct {
-	Catalog     string `json:"catalog" validate:"required,resourceNameValidator"`
-	Variant     string `json:"variant" validate:"required,resourceNameValidator"`
+	Catalog     string `json:"catalog" validate:"omitempty,resourceNameValidator"`
+	Variant     string `json:"variant" validate:"omitempty,resourceNameValidator"`
 	Name        string `json:"name" validate:"required,resourceNameValidator"`
 	Description string `json:"description"`
 }
@@ -74,24 +74,33 @@ func NewNamespaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 		ns.Metadata.Variant = variant
 	}
 
-	// retrieve the catalogID
-	catalogID, err := db.DB(ctx).GetCatalogIDByName(ctx, ns.Metadata.Catalog)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			return nil, ErrCatalogNotFound
+	catalogID := common.GetCatalogIdFromContext(ctx)
+	variantID := common.GetVariantIdFromContext(ctx)
+
+	if catalogID == uuid.Nil || ns.Metadata.Catalog != common.GetCatalogFromContext(ctx) {
+		var err apperrors.Error
+		// retrieve the catalogID
+		catalogID, err = db.DB(ctx).GetCatalogIDByName(ctx, ns.Metadata.Catalog)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return nil, ErrCatalogNotFound
+			}
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
+			return nil, err
 		}
-		log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-		return nil, err
 	}
 
 	// retrieve the variantID
-	variantID, err := db.DB(ctx).GetVariantIDFromName(ctx, catalogID, ns.Metadata.Variant)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			return nil, ErrVariantNotFound
+	if variantID == uuid.Nil || ns.Metadata.Variant != common.GetVariantFromContext(ctx) {
+		var err apperrors.Error
+		variantID, err = db.DB(ctx).GetVariantIDFromName(ctx, catalogID, ns.Metadata.Variant)
+		if err != nil {
+			if errors.Is(err, dberror.ErrNotFound) {
+				return nil, ErrVariantNotFound
+			}
+			log.Ctx(ctx).Error().Err(err).Msg("failed to load variant")
+			return nil, err
 		}
-		log.Ctx(ctx).Error().Err(err).Msg("failed to load variant")
-		return nil, err
 	}
 
 	n := models.Namespace{
@@ -234,11 +243,9 @@ func DeleteNamespace(ctx context.Context, name string, variantID uuid.UUID) appe
 }
 
 type namespaceResource struct {
-	name      ResourceName
-	catalogID uuid.UUID
-	variantID uuid.UUID
-	rsrcJson  []byte
-	nm        schemamanager.NamespaceManager
+	name     ResourceName
+	rsrcJson []byte
+	nm       schemamanager.NamespaceManager
 }
 
 func (nr *namespaceResource) Name() string {
@@ -250,7 +257,7 @@ func (nr *namespaceResource) ID() uuid.UUID {
 }
 
 func (nr *namespaceResource) Location() string {
-	return nr.name.Catalog + "/variants/" + nr.name.Variant + "/namespaces/" + nr.name.Namespace
+	return "/namespaces/" + nr.name.Namespace
 }
 
 func (nr *namespaceResource) ResourceJson() []byte {
@@ -281,10 +288,10 @@ func (nr *namespaceResource) Create(ctx context.Context) (string, apperrors.Erro
 }
 
 func (nr *namespaceResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
-	if nr.variantID == uuid.Nil || nr.name.Namespace == "" {
+	if nr.name.VariantID == uuid.Nil || nr.name.Namespace == "" {
 		return nil, ErrInvalidNamespace
 	}
-	namespace, err := LoadNamespaceManagerByName(ctx, nr.variantID, nr.name.Namespace)
+	namespace, err := LoadNamespaceManagerByName(ctx, nr.name.VariantID, nr.name.Namespace)
 	if err != nil {
 		if errors.Is(err, ErrNamespaceNotFound) {
 			return nil, nil
@@ -302,10 +309,10 @@ func (nr *namespaceResource) Get(ctx context.Context) ([]byte, apperrors.Error) 
 }
 
 func (nr *namespaceResource) Delete(ctx context.Context) apperrors.Error {
-	if nr.variantID == uuid.Nil || nr.name.Namespace == "" {
+	if nr.name.VariantID == uuid.Nil || nr.name.Namespace == "" {
 		return ErrInvalidNamespace
 	}
-	err := DeleteNamespace(ctx, nr.name.Namespace, nr.variantID)
+	err := DeleteNamespace(ctx, nr.name.Namespace, nr.name.VariantID)
 	if err != nil {
 		if errors.Is(err, ErrNamespaceNotFound) {
 			return nil
@@ -317,9 +324,6 @@ func (nr *namespaceResource) Delete(ctx context.Context) apperrors.Error {
 }
 
 func (nr *namespaceResource) Update(ctx context.Context, rsrcJson []byte) apperrors.Error {
-	if nr.nm == nil {
-		return ErrInvalidNamespace
-	}
 	ns := &namespaceSchema{}
 	if err := json.Unmarshal(rsrcJson, ns); err != nil {
 		return ErrInvalidSchema.Err(err)
@@ -351,42 +355,8 @@ func (nr *namespaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 }
 
 func NewNamespaceResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	if len(rsrcJson) == 0 {
-		return nil, ErrInvalidSchema
-	}
-	catalogID, variantID := uuid.Nil, uuid.Nil
-	if len(rsrcJson) == 0 || (len(name.Catalog) > 0 && len(name.Variant) > 0) {
-		if len(name.Catalog) > 0 && schemavalidator.ValidateSchemaName(name.Catalog) {
-			var err apperrors.Error
-			catalogID, err = db.DB(ctx).GetCatalogIDByName(ctx, name.Catalog)
-			if err != nil {
-				if errors.Is(err, dberror.ErrNotFound) {
-					return nil, ErrCatalogNotFound
-				}
-				log.Ctx(ctx).Error().Err(err).Msg("failed to load catalog")
-				return nil, ErrUnableToLoadObject.Msg("failed to load catalog")
-			}
-		} else {
-			return nil, ErrInvalidCatalog.Msg("invalid catalog name")
-		}
-		if len(name.Variant) > 0 && schemavalidator.ValidateSchemaName(name.Variant) {
-			var err apperrors.Error
-			variantID, err = db.DB(ctx).GetVariantIDFromName(ctx, catalogID, name.Variant)
-			if err != nil {
-				if errors.Is(err, dberror.ErrNotFound) {
-					return nil, ErrVariantNotFound
-				}
-				log.Ctx(ctx).Error().Err(err).Msg("failed to load variant")
-				return nil, ErrUnableToLoadObject.Msg("failed to load variant")
-			}
-		} else {
-			return nil, validationerrors.ErrInvalidNameFormat
-		}
-	}
 	return &namespaceResource{
-		name:      name,
-		catalogID: catalogID,
-		variantID: variantID,
-		rsrcJson:  rsrcJson,
+		name:     name,
+		rsrcJson: rsrcJson,
 	}, nil
 }

@@ -13,10 +13,17 @@ import (
 
 	"github.com/mugiliam/hatchcatalogsrv/internal/common"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func executeTestRequest(t *testing.T, req *http.Request, apiKey *string, testContext ...common.TestContext) *httptest.ResponseRecorder {
+type TestContext struct {
+	TenantId  types.TenantId
+	ProjectId types.ProjectId
+	common.CatalogContext
+}
+
+func executeTestRequest(t *testing.T, req *http.Request, apiKey *string, testContext ...TestContext) *httptest.ResponseRecorder {
 	s, err := CreateNewServer()
 	assert.NoError(t, err, "create new server")
 
@@ -31,7 +38,11 @@ func executeTestRequest(t *testing.T, req *http.Request, apiKey *string, testCon
 	rr := httptest.NewRecorder()
 	if len(testContext) > 0 {
 		ctx := req.Context()
-		ctx = common.SetTestContext(ctx, &testContext[0])
+		ctx = common.SetTenantIdInContext(ctx, testContext[0].TenantId)
+		ctx = common.SetProjectIdInContext(ctx, testContext[0].ProjectId)
+		catalogContext := &testContext[0].CatalogContext
+		ctx = common.SetCatalogContext(ctx, catalogContext)
+		ctx = common.SetTestContext(ctx, true)
 		req = req.WithContext(ctx)
 	}
 	s.Router.ServeHTTP(rr, req)

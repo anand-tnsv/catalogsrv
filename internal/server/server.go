@@ -30,7 +30,7 @@ func (s *HatchCatalogServer) MountHandlers() {
 	if config.Config().HandleCORS {
 		s.Router.Use(s.HandleCORS)
 	}
-	s.Router.Route("/tenant/{tenantId}/project/{projectId}/catalogs", s.mountResourceHandlers)
+	s.Router.Route("/", s.mountResourceHandlers)
 	if logtrace.IsTraceEnabled() {
 		//print all the routes in the router by transversing the tree and printing the patterns
 		fmt.Println("Routes in tenant router")

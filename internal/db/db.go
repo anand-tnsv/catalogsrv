@@ -52,6 +52,7 @@ type MetadataManager interface {
 	// Workspace
 	CreateWorkspace(ctx context.Context, workspace *models.Workspace) apperrors.Error
 	DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) apperrors.Error
+	DeleteWorkspaceByLabel(ctx context.Context, variantID uuid.UUID, label string) apperrors.Error
 	GetWorkspace(ctx context.Context, workspaceID uuid.UUID) (*models.Workspace, apperrors.Error)
 	GetWorkspaceByLabel(ctx context.Context, variantID uuid.UUID, label string) (*models.Workspace, apperrors.Error)
 	UpdateWorkspaceLabel(ctx context.Context, workspaceID uuid.UUID, newLabel string) apperrors.Error
