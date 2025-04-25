@@ -246,7 +246,7 @@ func DeleteNamespace(ctx context.Context, name string, variantID uuid.UUID) appe
 }
 
 type namespaceResource struct {
-	name ResourceName
+	name RequestContext
 	nm   schemamanager.NamespaceManager
 }
 
@@ -352,7 +352,7 @@ func (nr *namespaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 	return nil
 }
 
-func NewNamespaceResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func NewNamespaceResource(ctx context.Context, name RequestContext) (schemamanager.ResourceManager, apperrors.Error) {
 	if name.Catalog == "" || name.CatalogID == uuid.Nil {
 		return nil, ErrInvalidCatalog
 	}

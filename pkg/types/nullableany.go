@@ -117,6 +117,13 @@ func NullableAnyFrom(value any) (NullableAny, error) {
 	return na, nil
 }
 
+func NullableAnySetRaw(value json.RawMessage) NullableAny {
+	return NullableAny{
+		value: value,
+		valid: true,
+	}
+}
+
 func NilAny() NullableAny {
 	// Return a NullableAny that is nil
 	return NullableAny{

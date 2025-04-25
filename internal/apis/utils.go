@@ -14,7 +14,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func getResourceName(r *http.Request) (catalogmanager.ResourceName, error) {
+func getResourceName(r *http.Request) (catalogmanager.RequestContext, error) {
 	ctx := r.Context()
 
 	catalogName := chi.URLParam(r, "catalogName")
@@ -22,7 +22,7 @@ func getResourceName(r *http.Request) (catalogmanager.ResourceName, error) {
 	namespace := chi.URLParam(r, "namespaceName")
 	workspace := chi.URLParam(r, "workspaceRef")
 
-	n := catalogmanager.ResourceName{}
+	n := catalogmanager.RequestContext{}
 	catalogContext := common.CatalogContextFromContext(ctx)
 	if workspace != "" {
 		n.Workspace = workspace
@@ -54,8 +54,8 @@ func getResourceName(r *http.Request) (catalogmanager.ResourceName, error) {
 	resourceFqn := chi.URLParam(r, "*")
 	var objectName, objectPath string
 
-	if resourceName != "" && !types.InValidObjectTypes(resourceName) {
-		return n, httpx.ErrInvalidRequest()
+	if resourceName != "" && !types.IsValidResourceNameAndMethod(resourceName, r.Method) {
+		return n, httpx.ErrInvalidRequest("unsupported resource and/or method")
 	}
 
 	if resourceFqn != "" {
@@ -85,6 +85,8 @@ func getResourceName(r *http.Request) (catalogmanager.ResourceName, error) {
 	n.ObjectPath = objectPath
 	n.ObjectType = catObjType
 
+	n.QueryParams = r.URL.Query()
+
 	return n, nil
 }
 
@@ -113,6 +115,12 @@ func getUUIDOrName(ref string) (string, uuid.UUID) {
 func validateRequest(reqJson []byte, kind string) error {
 	if !gjson.ValidBytes(reqJson) {
 		return httpx.ErrInvalidRequest("unable to parse request")
+	}
+	if kind == types.AttributeKind {
+		if !gjson.GetBytes(reqJson, "value").Exists() && !gjson.GetBytes(reqJson, "values").Exists() {
+			return httpx.ErrInvalidRequest("invalid request")
+		}
+		return nil
 	}
 	result := gjson.GetBytes(reqJson, "kind")
 	if !result.Exists() {

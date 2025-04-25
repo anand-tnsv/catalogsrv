@@ -237,7 +237,7 @@ func DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name str
 // TODO Handle base variant and copy of data
 
 type variantResource struct {
-	name ResourceName
+	name RequestContext
 	vm   schemamanager.VariantManager
 }
 
@@ -316,7 +316,7 @@ func (vr *variantResource) Update(ctx context.Context, rsrcJson []byte) apperror
 	return nil
 }
 
-func NewVariantResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func NewVariantResource(ctx context.Context, name RequestContext) (schemamanager.ResourceManager, apperrors.Error) {
 	if name.Catalog == "" || name.CatalogID == uuid.Nil {
 		return nil, ErrInvalidVariant
 	}

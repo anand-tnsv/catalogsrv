@@ -28,13 +28,11 @@ type CollectionSpec struct {
 }
 
 type Parameter struct {
-	Schema      string            `json:"schema" validate:"required_without=DataType,omitempty,nameFormatValidator"`
-	DataType    string            `json:"dataType" validate:"required_without=Schema,excluded_unless=Schema '',omitempty,nameFormatValidator"`
-	Default     types.NullableAny `json:"default"`
-	Annotations Annotations       `json:"annotations" validate:"omitempty,dive,keys,noSpaces,endkeys,noSpaces"`
+	Schema      string                    `json:"schema" validate:"required_without=DataType,omitempty,nameFormatValidator"`
+	DataType    string                    `json:"dataType" validate:"required_without=Schema,excluded_unless=Schema '',omitempty,nameFormatValidator"`
+	Default     types.NullableAny         `json:"default"`
+	Annotations schemamanager.Annotations `json:"annotations" validate:"omitempty,dive,keys,noSpaces,endkeys"`
 }
-
-type Annotations map[string]string
 
 type Collection struct {
 	Schema string `json:"schema" validate:"required,nameFormatValidator"`
@@ -119,9 +117,11 @@ func (cs *CollectionSchema) ValidateDependencies(ctx context.Context, loaders sc
 		}
 		if dataType.Type != "" {
 			cs.Values[n] = schemamanager.ParamValue{
-				DataType: dataType,
+				DataType:    dataType,
+				Annotations: p.Annotations,
 			}
 		}
+		cs.Spec.Parameters[n] = p
 	}
 	for _, ref := range refMap {
 		refs = append(refs, ref)
@@ -261,6 +261,10 @@ func validateParameterSchemaDependency(ctx context.Context, loaders schemamanage
 		if !p.Default.IsNil() {
 			if err := pm.ValidateValue(p.Default); err != nil {
 				ves = append(ves, schemaerr.ErrInvalidValue(name, err.Error()))
+			}
+		} else {
+			if pm.Default() != nil {
+				p.Default, _ = types.NullableAnyFrom(pm.Default())
 			}
 		}
 	}

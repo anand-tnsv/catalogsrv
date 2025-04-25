@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"path"
 	"strings"
 
@@ -988,7 +989,7 @@ func getSchemaReferences(ctx context.Context, t types.CatalogObjectType, dir uui
 }
 
 type objectResource struct {
-	name ResourceName
+	name RequestContext
 	om   schemamanager.SchemaManager
 }
 
@@ -999,12 +1000,16 @@ func (or *objectResource) Name() string {
 func (or *objectResource) Location() string {
 	objName := types.ResourceNameFromObjectType(or.name.ObjectType)
 	loc := path.Clean("/" + objName + or.om.FullyQualifiedName())
-	namespace := or.om.Metadata().Namespace.String()
-	if namespace != "" {
-		loc = loc + "?" + "namespace=" + namespace
+	q := url.Values{}
+	if workspace := or.name.WorkspaceLabel; workspace != "" {
+		q.Set("workspace", workspace)
 	}
-	if or.name.WorkspaceLabel != "" {
-		loc = loc + "&" + "workspace=" + or.name.WorkspaceLabel
+	if namespace := or.om.Metadata().Namespace.String(); namespace != "" {
+		q.Set("namespace", namespace)
+	}
+	qStr := q.Encode()
+	if qStr != "" {
+		loc += "?" + qStr
 	}
 	return loc
 }
@@ -1155,7 +1160,7 @@ func (or *objectResource) Delete(ctx context.Context) apperrors.Error {
 	return nil
 }
 
-func NewSchemaResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func NewSchemaResource(ctx context.Context, name RequestContext) (schemamanager.ResourceManager, apperrors.Error) {
 	if name.Catalog == "" || name.CatalogID == uuid.Nil {
 		return nil, ErrInvalidCatalog
 	}

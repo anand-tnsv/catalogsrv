@@ -124,12 +124,21 @@ func (cm *collectionManager) Values() schemamanager.ParamValues {
 	return cm.schema.Values
 }
 
-func (cm *collectionManager) SetDefaultValues() apperrors.Error {
+func (cm *collectionManager) SetDefaultValues(param ...string) apperrors.Error {
 	if cm.csm == nil {
 		return ErrInvalidCollectionSchema
 	}
 	// set default values for the collection as defined in the schema
-	cm.schema.Values = cm.csm.GetDefaultValues()
+	values := cm.csm.GetDefaultValues()
+	if len(param) > 0 {
+		if v, ok := values[param[0]]; ok {
+			cm.schema.Values[param[0]] = v
+		} else {
+			return ErrInvalidParameter.Msg("invalid parameter: " + param[0])
+		}
+	} else {
+		cm.schema.Values = values
+	}
 	return nil
 }
 
@@ -138,6 +147,27 @@ func (cm *collectionManager) GetValue(ctx context.Context, param string) (types.
 		return v.Value, nil
 	}
 	return types.NilAny(), ErrInvalidParameter.Msg("invalid parameter: " + param)
+}
+
+func (cm *collectionManager) GetValueJSON(ctx context.Context, param string) ([]byte, apperrors.Error) {
+	if v, ok := cm.schema.Values[param]; ok {
+		if j, err := json.Marshal(v); err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to marshal object schema")
+			return nil, errors.ErrUnableToLoadObject
+		} else {
+			return j, nil
+		}
+	}
+	return nil, ErrInvalidParameter.Msg("invalid parameter: " + param)
+}
+
+func (cm *collectionManager) GetAllValuesJSON(ctx context.Context) ([]byte, apperrors.Error) {
+	j, err := json.Marshal(cm.schema.Values)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to marshal object schema")
+		return nil, errors.ErrUnableToLoadObject
+	}
+	return j, nil
 }
 
 func (cm *collectionManager) SetValue(ctx context.Context, schemaLoaders schemamanager.SchemaLoaders, param string, value types.NullableAny) apperrors.Error {

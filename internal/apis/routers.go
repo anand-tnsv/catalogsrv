@@ -113,6 +113,12 @@ var resourceObjectHandlers = []httpx.RoleAuthorizedHandlerParam{
 		Op:      hatchrbac.Create,
 	},
 	{
+		Method:  http.MethodPost,
+		Path:    "/{objectType}/*",
+		Handler: updateObject,
+		Op:      hatchrbac.Create,
+	},
+	{
 		Method:  http.MethodGet,
 		Path:    "/{objectType}/*",
 		Handler: getObject,

@@ -40,4 +40,5 @@ var (
 	ErrInvalidParameter                       apperrors.Error = ErrCatalogError.New("invalid parameter").SetStatusCode(http.StatusBadRequest)
 	ErrUnableToSaveSchema                     apperrors.Error = ErrCatalogError.New("unable to save schema").SetStatusCode(http.StatusInternalServerError)
 	ErrSchemaConflict                         apperrors.Error = ErrCatalogError.New("schema conflicts with existing schema").SetStatusCode(http.StatusConflict) // when trying to save a schema that conflicts with an existing one
+	ErrInvalidRequest                         apperrors.Error = ErrCatalogError.New("invalid request").SetStatusCode(http.StatusBadRequest)
 )

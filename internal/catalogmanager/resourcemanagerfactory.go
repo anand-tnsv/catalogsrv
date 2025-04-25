@@ -2,6 +2,7 @@ package catalogmanager
 
 import (
 	"context"
+	"net/url"
 
 	"github.com/google/uuid"
 	"github.com/mugiliam/common/apperrors"
@@ -11,7 +12,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-type ResourceName struct {
+type RequestContext struct {
 	Catalog        string
 	CatalogID      uuid.UUID
 	Variant        string
@@ -23,6 +24,7 @@ type ResourceName struct {
 	ObjectName     string
 	ObjectType     types.CatalogObjectType
 	ObjectPath     string
+	QueryParams    url.Values
 }
 
 func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
@@ -45,7 +47,7 @@ func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
 	return "", ErrInvalidSchema.Msg("invalid kind or version")
 }
 
-type ResourceManagerFactory func(context.Context, ResourceName) (schemamanager.ResourceManager, apperrors.Error)
+type ResourceManagerFactory func(context.Context, RequestContext) (schemamanager.ResourceManager, apperrors.Error)
 
 var resourceFactories = map[string]ResourceManagerFactory{
 	types.CatalogKind:          NewCatalogResource,
@@ -55,9 +57,10 @@ var resourceFactories = map[string]ResourceManagerFactory{
 	types.CollectionSchemaKind: NewSchemaResource,
 	types.ParameterSchemaKind:  NewSchemaResource,
 	types.CollectionKind:       NewCollectionResource,
+	types.AttributeKind:        NewAttributeResource,
 }
 
-func ResourceManagerForKind(ctx context.Context, kind string, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func ResourceManagerForKind(ctx context.Context, kind string, name RequestContext) (schemamanager.ResourceManager, apperrors.Error) {
 	if factory, ok := resourceFactories[kind]; ok {
 		return factory(ctx, name)
 	}

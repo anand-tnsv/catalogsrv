@@ -98,7 +98,7 @@ func ErrInvalidAnnotation(attr string, value ...string) ValidationError {
 	return ValidationError{
 		Field:  attr,
 		Value:  value,
-		ErrStr: "annotation keys and values cannot contain spaces",
+		ErrStr: "annotation keys cannot contain spaces",
 	}
 }
 

@@ -293,7 +293,7 @@ func DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) apperrors.Error
 }
 
 type workspaceResource struct {
-	name ResourceName
+	name RequestContext
 	vm   schemamanager.WorkspaceManager
 }
 
@@ -418,7 +418,7 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 	return nil
 }
 
-func NewWorkspaceResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func NewWorkspaceResource(ctx context.Context, name RequestContext) (schemamanager.ResourceManager, apperrors.Error) {
 	if name.Catalog == "" || name.CatalogID == uuid.Nil {
 		return nil, ErrInvalidCatalog
 	}

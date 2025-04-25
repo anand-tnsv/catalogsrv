@@ -1,6 +1,10 @@
 package types
 
-import "github.com/google/uuid"
+import (
+	"slices"
+
+	"github.com/google/uuid"
+)
 
 type TenantId string
 type ProjectId string
@@ -27,7 +31,7 @@ const (
 	ParameterSchemaKind  = "ParameterSchema"
 	CollectionSchemaKind = "CollectionSchema"
 	CollectionKind       = "Collection"
-	ValueKind            = "Value"
+	AttributeKind        = "Attribute"
 	InvalidKind          = "InvalidKind"
 )
 
@@ -39,7 +43,7 @@ const (
 	ResourceNameParameterSchemas  = "parameterschemas"
 	ResourceNameCollectionSchemas = "collectionschemas"
 	ResourceNameCollections       = "collections"
-	ResourceNameValues            = "values"
+	ResourceNameAttributes        = "attributes"
 )
 
 func Kind(t CatalogObjectType) string {
@@ -71,6 +75,8 @@ func KindFromResourceName(uri string) string {
 		return CollectionSchemaKind
 	case ResourceNameCollections:
 		return CollectionKind
+	case ResourceNameAttributes:
+		return AttributeKind
 	default:
 		return InvalidKind
 	}
@@ -89,11 +95,16 @@ func ResourceNameFromObjectType(t CatalogObjectType) string {
 	}
 }
 
-var validObjTypes = []string{ResourceNameCollections, ResourceNameParameterSchemas, ResourceNameCollectionSchemas, ResourceNameValues}
+var validResourceNameAndMethod = map[string][]string{
+	ResourceNameCollections:       {"POST", "GET", "PUT", "DELETE"},
+	ResourceNameParameterSchemas:  {"POST", "GET", "PUT", "DELETE"},
+	ResourceNameCollectionSchemas: {"POST", "GET", "PUT", "DELETE"},
+	ResourceNameAttributes:        {"GET", "POST", "DELETE"},
+}
 
-func InValidObjectTypes(s string) bool {
-	for _, v := range validObjTypes {
-		if s == v {
+func IsValidResourceNameAndMethod(r string, m string) bool {
+	if methods, ok := validResourceNameAndMethod[r]; ok {
+		if slices.Contains(methods, m) {
 			return true
 		}
 	}

@@ -176,7 +176,7 @@ func DeleteCatalogByName(ctx context.Context, name string) apperrors.Error {
 }
 
 type catalogResource struct {
-	name ResourceName
+	name RequestContext
 	cm   schemamanager.CatalogManager
 }
 
@@ -250,7 +250,7 @@ func (cr *catalogResource) Update(ctx context.Context, rsrcJson []byte) apperror
 	return nil
 }
 
-func NewCatalogResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func NewCatalogResource(ctx context.Context, name RequestContext) (schemamanager.ResourceManager, apperrors.Error) {
 	return &catalogResource{
 		name: name,
 	}, nil

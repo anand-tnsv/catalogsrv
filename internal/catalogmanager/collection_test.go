@@ -317,7 +317,8 @@ func TestCollection(t *testing.T) {
 	assert.Equal(t, 5, val) // default value from schema
 	assert.NoError(t, values["maxDelay"].Value.GetAs(&val))
 	assert.Equal(t, 1000, val)
-	assert.True(t, values["maxAttempts"].Value.IsNil())
+	assert.NoError(t, values["maxAttempts"].Value.GetAs(&val))
+	assert.Equal(t, 5, val) // default value from parameter schema
 
 	// create the collection with changed values
 	jsonData, err = yaml.YAMLToJSON([]byte(validCollectionWithChangedValueYaml))
@@ -428,7 +429,7 @@ func TestCollection(t *testing.T) {
 
 	// change single collection value
 	valAny, _ := types.NullableAnyFrom(7) // new value for maxRetries
-	err = UpdateCollectionValue(ctx, &m, "maxRetries", valAny, WithWorkspaceID(ws.WorkspaceID))
+	err = UpdateAttributes(ctx, &m, map[string]types.NullableAny{"maxRetries": valAny}, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 	collection, err = LoadCollectionByPath(ctx, &m, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
@@ -445,17 +446,17 @@ func TestCollection(t *testing.T) {
 	assert.Equal(t, 10, val) // unchanged value from the new collection
 
 	// Test invalid parameter name
-	err = UpdateCollectionValue(ctx, &m, "invalidParam", valAny, WithWorkspaceID(ws.WorkspaceID))
+	err = UpdateAttributes(ctx, &m, map[string]types.NullableAny{"invalidParam": valAny}, WithWorkspaceID(ws.WorkspaceID))
 	require.Error(t, err)
 
 	// Test invalid value type
 	valAny, _ = types.NullableAnyFrom("not-an-integer") // invalid value for maxRetries
-	err = UpdateCollectionValue(ctx, &m, "maxRetries", valAny, WithWorkspaceID(ws.WorkspaceID))
+	err = UpdateAttributes(ctx, &m, map[string]types.NullableAny{"maxRetries": valAny}, WithWorkspaceID(ws.WorkspaceID))
 	require.Error(t, err)
 
 	// set the same value
 	valAny, _ = types.NullableAnyFrom(7) // same value for maxRetries
-	err = UpdateCollectionValue(ctx, &m, "maxRetries", valAny, WithWorkspaceID(ws.WorkspaceID))
+	err = UpdateAttributes(ctx, &m, map[string]types.NullableAny{"maxRetries": valAny}, WithWorkspaceID(ws.WorkspaceID))
 	require.NoError(t, err)
 }
 

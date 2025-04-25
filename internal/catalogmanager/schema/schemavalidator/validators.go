@@ -20,7 +20,6 @@ var validKinds = []string{
 	types.ParameterSchemaKind,
 	types.CollectionSchemaKind,
 	types.CollectionKind,
-	types.ValueKind,
 }
 
 // kindValidator checks if the given kind is a valid resource kind.

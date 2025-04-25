@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"path"
 
 	"github.com/google/uuid"
@@ -17,102 +18,6 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 )
-
-func UpdateCollectionValue(ctx context.Context, m *schemamanager.SchemaMetadata, param string, value types.NullableAny, opts ...ObjectStoreOption) apperrors.Error {
-	if m == nil || param == "" {
-		return validationerrors.ErrEmptySchema
-	}
-
-	options := storeOptions{}
-	for _, opt := range opts {
-		opt(&options)
-	}
-
-	var dir Directories
-	t := types.CatalogObjectTypeCatalogCollection
-	pathWithName := path.Clean(m.GetStoragePath(t) + "/" + m.Name)
-
-	// get the directory
-	if !options.Dir.IsNil() {
-		dir = options.Dir
-	} else if options.WorkspaceID != uuid.Nil {
-		var err apperrors.Error
-		dir, err = getDirectoriesForWorkspace(ctx, options.WorkspaceID)
-		if err != nil {
-			return err
-		}
-	} else if m.IDS.VariantID != uuid.Nil {
-		var err apperrors.Error
-		dir, err = getDirectoriesForVariant(ctx, m.IDS.VariantID)
-		if err != nil {
-			return err
-		}
-	} else {
-		return ErrInvalidVersionOrWorkspace
-	}
-
-	existingCollection, err := loadCollectionObjectByPath(ctx, m, opts...)
-	if err != nil {
-		if errors.Is(err, dberror.ErrNotFound) {
-			existingCollection = nil
-		} else {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to get existing collection")
-			return err
-		}
-	}
-	var cm schemamanager.CollectionManager
-	if existingCollection != nil {
-		if options.ErrorIfExists {
-			return ErrAlreadyExists.Msg("collection already exists")
-		}
-		cm, err = collectionManagerFromObject(ctx, existingCollection, m)
-		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msg("failed to load existing collection")
-			return err
-		}
-	}
-
-	v, _ := cm.GetValue(ctx, param)
-	if v.Equals(value) {
-		log.Ctx(ctx).Info().Msg("value is the same, no update needed")
-		return nil
-	}
-
-	schemaPath, schemaLoaders, err := setCollectionSchemaManager(ctx, cm, dir)
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to set collection schema manager")
-		return err
-	}
-
-	err = cm.SetValue(ctx, schemaLoaders, param, value)
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("failed to set value in collection manager")
-		return err
-	}
-
-	s := cm.StorageRepresentation()
-	data, err := s.Serialize()
-	if err != nil {
-		return err
-	}
-	newHash := s.GetHash()
-	if existingCollection != nil && newHash == existingCollection.Hash {
-		if options.ErrorIfEqualToExisting {
-			return ErrEqualToExistingObject
-		}
-		return nil
-	}
-
-	// store this object and update the reference
-	obj := models.CatalogObject{
-		Type:    types.CatalogObjectTypeCatalogCollection,
-		Hash:    newHash,
-		Version: s.Version,
-		Data:    data,
-	}
-
-	return saveCollectionObject(ctx, m, &obj, dir, pathWithName, schemaPath)
-}
 
 func NewCollectionManager(ctx context.Context, rsrcJson []byte, m *schemamanager.SchemaMetadata) (schemamanager.CollectionManager, apperrors.Error) {
 	if len(rsrcJson) == 0 {
@@ -540,23 +445,27 @@ func collectionManagerFromObject(ctx context.Context, obj *models.CatalogObject,
 }
 
 type collectionResource struct {
-	name ResourceName
-	cm   schemamanager.CollectionManager
+	reqCtx RequestContext
+	cm     schemamanager.CollectionManager
 }
 
 func (cr *collectionResource) Name() string {
-	return cr.name.ObjectName
+	return cr.reqCtx.ObjectName
 }
 
 func (cr *collectionResource) Location() string {
-	objName := types.ResourceNameFromObjectType(cr.name.ObjectType)
+	objName := types.ResourceNameFromObjectType(cr.reqCtx.ObjectType)
 	loc := path.Clean("/" + objName + cr.cm.FullyQualifiedName())
-	namespace := cr.cm.Metadata().Namespace.String()
-	if namespace != "" {
-		loc = loc + "?" + "namespace=" + namespace
+	q := url.Values{}
+	if workspace := cr.reqCtx.WorkspaceLabel; workspace != "" {
+		q.Set("workspace", workspace)
 	}
-	if cr.name.WorkspaceLabel != "" {
-		loc = loc + "&" + "workspace=" + cr.name.WorkspaceLabel
+	if namespace := cr.cm.Metadata().Namespace.String(); namespace != "" {
+		q.Set("namespace", namespace)
+	}
+	qStr := q.Encode()
+	if qStr != "" {
+		loc += "?" + qStr
 	}
 	return loc
 }
@@ -567,33 +476,33 @@ func (cr *collectionResource) Manager() schemamanager.CollectionManager {
 
 func (cr *collectionResource) Create(ctx context.Context, rsrcJson []byte) (string, apperrors.Error) {
 	m := &schemamanager.SchemaMetadata{
-		Catalog:   cr.name.Catalog,
-		Variant:   types.NullableStringFrom(cr.name.Variant),
-		Namespace: types.NullableStringFrom(cr.name.Namespace),
+		Catalog:   cr.reqCtx.Catalog,
+		Variant:   types.NullableStringFrom(cr.reqCtx.Variant),
+		Namespace: types.NullableStringFrom(cr.reqCtx.Namespace),
 	}
 
 	collection, err := NewCollectionManager(ctx, rsrcJson, m)
 	if err != nil {
 		return "", err
 	}
-	err = SaveCollection(ctx, collection, WithWorkspaceID(cr.name.WorkspaceID), WithErrorIfExists())
+	err = SaveCollection(ctx, collection, WithWorkspaceID(cr.reqCtx.WorkspaceID), WithErrorIfExists())
 	if err != nil {
 		return "", err
 	}
 
-	cr.name.ObjectName = collection.Metadata().Name
-	cr.name.ObjectPath = collection.Metadata().Path
-	cr.name.ObjectType = types.CatalogObjectTypeCatalogCollection
+	cr.reqCtx.ObjectName = collection.Metadata().Name
+	cr.reqCtx.ObjectPath = collection.Metadata().Path
+	cr.reqCtx.ObjectType = types.CatalogObjectTypeCatalogCollection
 	cr.cm = collection
 
-	if cr.name.Catalog == "" {
-		cr.name.Catalog = collection.Metadata().Catalog
+	if cr.reqCtx.Catalog == "" {
+		cr.reqCtx.Catalog = collection.Metadata().Catalog
 	}
-	if cr.name.Variant == "" {
-		cr.name.Variant = collection.Metadata().Variant.String()
+	if cr.reqCtx.Variant == "" {
+		cr.reqCtx.Variant = collection.Metadata().Variant.String()
 	}
-	if cr.name.Namespace == "" {
-		cr.name.Namespace = collection.Metadata().Namespace.String()
+	if cr.reqCtx.Namespace == "" {
+		cr.reqCtx.Namespace = collection.Metadata().Namespace.String()
 	}
 
 	return cr.Location(), nil
@@ -601,20 +510,20 @@ func (cr *collectionResource) Create(ctx context.Context, rsrcJson []byte) (stri
 
 func (cr *collectionResource) Get(ctx context.Context) ([]byte, apperrors.Error) {
 	m := &schemamanager.SchemaMetadata{
-		Catalog:   cr.name.Catalog,
-		Variant:   types.NullableStringFrom(cr.name.Variant),
-		Namespace: types.NullableStringFrom(cr.name.Namespace),
-		Path:      cr.name.ObjectPath,
-		Name:      cr.name.ObjectName,
+		Catalog:   cr.reqCtx.Catalog,
+		Variant:   types.NullableStringFrom(cr.reqCtx.Variant),
+		Namespace: types.NullableStringFrom(cr.reqCtx.Namespace),
+		Path:      cr.reqCtx.ObjectPath,
+		Name:      cr.reqCtx.ObjectName,
 	}
 	ves := m.Validate()
 	if ves != nil {
 		return nil, validationerrors.ErrSchemaValidation.Msg(ves.Error())
 	}
-	m.IDS.CatalogID = cr.name.CatalogID
-	m.IDS.VariantID = cr.name.VariantID
+	m.IDS.CatalogID = cr.reqCtx.CatalogID
+	m.IDS.VariantID = cr.reqCtx.VariantID
 
-	object, err := LoadCollectionByPath(ctx, m, WithWorkspaceID(cr.name.WorkspaceID))
+	object, err := LoadCollectionByPath(ctx, m, WithWorkspaceID(cr.reqCtx.WorkspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -622,34 +531,34 @@ func (cr *collectionResource) Get(ctx context.Context) ([]byte, apperrors.Error)
 }
 
 func (cr *collectionResource) Update(ctx context.Context, rsrcJson []byte) apperrors.Error {
-	if cr.name.WorkspaceID == uuid.Nil && cr.name.VariantID == uuid.Nil {
+	if cr.reqCtx.WorkspaceID == uuid.Nil && cr.reqCtx.VariantID == uuid.Nil {
 		return ErrInvalidWorkspaceOrVariant
 	}
 	var dir Directories
 	var err apperrors.Error
-	if cr.name.WorkspaceID != uuid.Nil {
-		dir, err = getDirectoriesForWorkspace(ctx, cr.name.WorkspaceID)
+	if cr.reqCtx.WorkspaceID != uuid.Nil {
+		dir, err = getDirectoriesForWorkspace(ctx, cr.reqCtx.WorkspaceID)
 	} else {
-		dir, err = getDirectoriesForVariant(ctx, cr.name.VariantID)
+		dir, err = getDirectoriesForVariant(ctx, cr.reqCtx.VariantID)
 	}
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Str("workspace_id", cr.name.WorkspaceID.String()).Str("variant_id", cr.name.VariantID.String()).Msg("failed to get directories")
+		log.Ctx(ctx).Error().Err(err).Str("workspace_id", cr.reqCtx.WorkspaceID.String()).Str("variant_id", cr.reqCtx.VariantID.String()).Msg("failed to get directories")
 		return ErrInvalidWorkspaceOrVariant
 	}
 
 	m := &schemamanager.SchemaMetadata{
-		Catalog:   cr.name.Catalog,
-		Variant:   types.NullableStringFrom(cr.name.Variant),
-		Path:      cr.name.ObjectPath,
-		Name:      cr.name.ObjectName,
-		Namespace: types.NullableStringFrom(cr.name.Namespace),
+		Catalog:   cr.reqCtx.Catalog,
+		Variant:   types.NullableStringFrom(cr.reqCtx.Variant),
+		Path:      cr.reqCtx.ObjectPath,
+		Name:      cr.reqCtx.ObjectName,
+		Namespace: types.NullableStringFrom(cr.reqCtx.Namespace),
 	}
 	ves := m.Validate()
 	if ves != nil {
 		return validationerrors.ErrSchemaValidation.Msg(ves.Error())
 	}
-	m.IDS.CatalogID = cr.name.CatalogID
-	m.IDS.VariantID = cr.name.VariantID
+	m.IDS.CatalogID = cr.reqCtx.CatalogID
+	m.IDS.VariantID = cr.reqCtx.VariantID
 
 	// Load the existing object
 	existing, err := LoadCollectionByPath(ctx, m, WithDirectories(dir))
@@ -664,7 +573,7 @@ func (cr *collectionResource) Update(ctx context.Context, rsrcJson []byte) apper
 	if err != nil {
 		return err
 	}
-	err = SaveCollection(ctx, collection, WithWorkspaceID(cr.name.WorkspaceID))
+	err = SaveCollection(ctx, collection, WithWorkspaceID(cr.reqCtx.WorkspaceID))
 	if err != nil {
 		return err
 	}
@@ -673,28 +582,28 @@ func (cr *collectionResource) Update(ctx context.Context, rsrcJson []byte) apper
 }
 
 func (cr *collectionResource) Delete(ctx context.Context) apperrors.Error {
-	if cr.name.WorkspaceID == uuid.Nil && cr.name.VariantID == uuid.Nil {
+	if cr.reqCtx.WorkspaceID == uuid.Nil && cr.reqCtx.VariantID == uuid.Nil {
 		return ErrInvalidWorkspace
 	}
 	var dir Directories
 	var err apperrors.Error
-	if cr.name.WorkspaceID != uuid.Nil {
-		dir, err = getDirectoriesForWorkspace(ctx, cr.name.WorkspaceID)
+	if cr.reqCtx.WorkspaceID != uuid.Nil {
+		dir, err = getDirectoriesForWorkspace(ctx, cr.reqCtx.WorkspaceID)
 	} else {
-		dir, err = getDirectoriesForVariant(ctx, cr.name.VariantID)
+		dir, err = getDirectoriesForVariant(ctx, cr.reqCtx.VariantID)
 	}
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Str("workspace_id", cr.name.WorkspaceID.String()).Str("variant_id", cr.name.VariantID.String()).Msg("failed to get directories")
+		log.Ctx(ctx).Error().Err(err).Str("workspace_id", cr.reqCtx.WorkspaceID.String()).Str("variant_id", cr.reqCtx.VariantID.String()).Msg("failed to get directories")
 		return ErrInvalidWorkspace
 	}
 	m := &schemamanager.SchemaMetadata{
-		Catalog:   cr.name.Catalog,
-		Variant:   types.NullableStringFrom(cr.name.Variant),
-		Path:      cr.name.ObjectPath,
-		Name:      cr.name.ObjectName,
-		Namespace: types.NullableStringFrom(cr.name.Namespace),
+		Catalog:   cr.reqCtx.Catalog,
+		Variant:   types.NullableStringFrom(cr.reqCtx.Variant),
+		Path:      cr.reqCtx.ObjectPath,
+		Name:      cr.reqCtx.ObjectName,
+		Namespace: types.NullableStringFrom(cr.reqCtx.Namespace),
 	}
-	pathWithName := path.Clean(m.GetStoragePath(cr.name.ObjectType) + "/" + cr.name.ObjectName)
+	pathWithName := path.Clean(m.GetStoragePath(cr.reqCtx.ObjectType) + "/" + cr.reqCtx.ObjectName)
 	err = DeleteCollection(ctx, m, WithDirectories(dir))
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("path", pathWithName).Msg("failed to delete object")
@@ -703,14 +612,14 @@ func (cr *collectionResource) Delete(ctx context.Context) apperrors.Error {
 	return nil
 }
 
-func NewCollectionResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	if name.Catalog == "" || name.CatalogID == uuid.Nil {
+func NewCollectionResource(ctx context.Context, reqCtx RequestContext) (schemamanager.ResourceManager, apperrors.Error) {
+	if reqCtx.Catalog == "" || reqCtx.CatalogID == uuid.Nil {
 		return nil, ErrInvalidCatalog
 	}
-	if name.Variant == "" || name.VariantID == uuid.Nil {
+	if reqCtx.Variant == "" || reqCtx.VariantID == uuid.Nil {
 		return nil, ErrInvalidVariant
 	}
 	return &collectionResource{
-		name: name,
+		reqCtx: reqCtx,
 	}, nil
 }

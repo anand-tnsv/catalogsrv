@@ -17,8 +17,10 @@ type CollectionManager interface {
 	SetCollectionSchemaPath(string)
 	GetCollectionSchemaPath() string
 	SetCollectionSchemaManager(csm CollectionSchemaManager)
-	SetDefaultValues() apperrors.Error
+	SetDefaultValues(param ...string) apperrors.Error
 	GetValue(ctx context.Context, param string) (types.NullableAny, apperrors.Error)
+	GetValueJSON(ctx context.Context, param string) ([]byte, apperrors.Error)
+	GetAllValuesJSON(ctx context.Context) ([]byte, apperrors.Error)
 	SetValue(ctx context.Context, schemaLoaders SchemaLoaders, param string, value types.NullableAny) apperrors.Error
 	ValidateValues(ctx context.Context, schemaLoaders SchemaLoaders, currentValues ParamValues) apperrors.Error
 	Values() ParamValues

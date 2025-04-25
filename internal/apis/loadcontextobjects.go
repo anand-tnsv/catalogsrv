@@ -113,7 +113,9 @@ func loadWorkspaceObject(ctx context.Context, c *common.CatalogContext, urlValue
 
 func loadNamespaceObject(ctx context.Context, c *common.CatalogContext, urlValues url.Values) (*common.CatalogContext, error) {
 	var _ = ctx
-	c.Namespace = getUrlValue(urlValues, "namespace")
+	if c.Namespace == "" {
+		c.Namespace = getUrlValue(urlValues, "namespace")
+	}
 	return c, nil
 }
 
