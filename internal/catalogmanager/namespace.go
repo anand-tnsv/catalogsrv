@@ -120,9 +120,12 @@ func NewNamespaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 
 func (ns *namespaceSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
+	if ns.Kind != types.NamespaceKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
 	err := schemavalidator.V().Struct(ns)
 	if err == nil {
-		return nil
+		return ves
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {
@@ -243,9 +246,8 @@ func DeleteNamespace(ctx context.Context, name string, variantID uuid.UUID) appe
 }
 
 type namespaceResource struct {
-	name     ResourceName
-	rsrcJson []byte
-	nm       schemamanager.NamespaceManager
+	name ResourceName
+	nm   schemamanager.NamespaceManager
 }
 
 func (nr *namespaceResource) Name() string {
@@ -260,16 +262,12 @@ func (nr *namespaceResource) Location() string {
 	return "/namespaces/" + nr.name.Namespace
 }
 
-func (nr *namespaceResource) ResourceJson() []byte {
-	return nr.rsrcJson
-}
-
 func (nr *namespaceResource) Manager() schemamanager.NamespaceManager {
 	return nr.nm
 }
 
-func (nr *namespaceResource) Create(ctx context.Context) (string, apperrors.Error) {
-	namespace, err := NewNamespaceManager(ctx, nr.rsrcJson, nr.name.Catalog, nr.name.Variant)
+func (nr *namespaceResource) Create(ctx context.Context, rsrcJson []byte) (string, apperrors.Error) {
+	namespace, err := NewNamespaceManager(ctx, rsrcJson, nr.name.Catalog, nr.name.Variant)
 	if err != nil {
 		return "", err
 	}
@@ -354,9 +352,8 @@ func (nr *namespaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 	return nil
 }
 
-func NewNamespaceResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func NewNamespaceResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	return &namespaceResource{
-		name:     name,
-		rsrcJson: rsrcJson,
+		name: name,
 	}, nil
 }

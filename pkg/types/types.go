@@ -28,12 +28,18 @@ const (
 	CollectionSchemaKind = "CollectionSchema"
 	CollectionKind       = "Collection"
 	ValueKind            = "Value"
+	InvalidKind          = "InvalidKind"
 )
 
 const (
-	ObjectTypeParameter  = "parameterschema"
-	ObjectTypeCollection = "collectionschema"
-	ObjectTypeValue      = "value"
+	ResourceNameCatalogs          = "catalogs"
+	ResourceNameVariants          = "variants"
+	ResourceNameNamespaces        = "namespaces"
+	ResourceNameWorkspaces        = "workspaces"
+	ResourceNameParameterSchemas  = "parameterschemas"
+	ResourceNameCollectionSchemas = "collectionschemas"
+	ResourceNameCollections       = "collections"
+	ResourceNameValues            = "values"
 )
 
 func Kind(t CatalogObjectType) string {
@@ -49,7 +55,41 @@ func Kind(t CatalogObjectType) string {
 	}
 }
 
-var validObjTypes = []string{ObjectTypeCollection, ObjectTypeParameter, ObjectTypeValue}
+func KindFromResourceName(uri string) string {
+	switch uri {
+	case ResourceNameCatalogs:
+		return CatalogKind
+	case ResourceNameVariants:
+		return VariantKind
+	case ResourceNameNamespaces:
+		return NamespaceKind
+	case ResourceNameWorkspaces:
+		return WorkspaceKind
+	case ResourceNameParameterSchemas:
+		return ParameterSchemaKind
+	case ResourceNameCollectionSchemas:
+		return CollectionSchemaKind
+	case ResourceNameCollections:
+		return CollectionKind
+	default:
+		return InvalidKind
+	}
+}
+
+func ResourceNameFromObjectType(t CatalogObjectType) string {
+	switch t {
+	case CatalogObjectTypeParameterSchema:
+		return "parameterschemas"
+	case CatalogObjectTypeCollectionSchema:
+		return "collectionschemas"
+	case CatalogObjectTypeCatalogCollection:
+		return "collections"
+	default:
+		return ""
+	}
+}
+
+var validObjTypes = []string{ResourceNameCollections, ResourceNameParameterSchemas, ResourceNameCollectionSchemas, ResourceNameValues}
 
 func InValidObjectTypes(s string) bool {
 	for _, v := range validObjTypes {

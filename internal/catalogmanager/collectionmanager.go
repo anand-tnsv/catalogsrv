@@ -3,6 +3,7 @@ package catalogmanager
 import (
 	"context"
 	"encoding/json"
+	"path"
 	"reflect"
 
 	"github.com/go-playground/validator/v10"
@@ -10,8 +11,10 @@ import (
 	schemaerr "github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/errors"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
+	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/v1/errors"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/api/schemastore"
 	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
+	"github.com/rs/zerolog/log"
 )
 
 type collectionSchema struct {
@@ -30,9 +33,12 @@ type collectionSpec struct {
 
 func (cs *collectionSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
+	if cs.Kind != types.CollectionKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
 	err := schemavalidator.V().Struct(cs)
 	if err == nil {
-		return nil
+		return ves
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {
@@ -79,6 +85,11 @@ func (cm *collectionManager) CollectionSchema() []byte {
 
 func (cm *collectionManager) Metadata() schemamanager.SchemaMetadata {
 	return cm.schema.Metadata
+}
+
+func (cm *collectionManager) FullyQualifiedName() string {
+	m := cm.schema.Metadata
+	return path.Clean(m.Path + "/" + m.Name)
 }
 
 func (cm *collectionManager) CollectionSchemaManager() schemamanager.CollectionSchemaManager {
@@ -181,4 +192,13 @@ func (cm *collectionManager) ValidateValues(ctx context.Context, schemaLoaders s
 		}
 	}
 	return nil
+}
+
+func (cm *collectionManager) ToJson(ctx context.Context) ([]byte, apperrors.Error) {
+	j, err := json.Marshal(cm.schema)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("failed to marshal object schema")
+		return j, errors.ErrUnableToLoadObject
+	}
+	return j, nil
 }

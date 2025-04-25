@@ -26,7 +26,7 @@ type ResourceName struct {
 }
 
 func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
-	if !gjson.Valid(string(rsrcJson)) {
+	if !gjson.ValidBytes(rsrcJson) {
 		return "", ErrInvalidSchema.Msg("invalid message format")
 	}
 	result := gjson.GetBytes(rsrcJson, "kind")
@@ -45,7 +45,7 @@ func RequestType(rsrcJson []byte) (kind string, apperr apperrors.Error) {
 	return "", ErrInvalidSchema.Msg("invalid kind or version")
 }
 
-type ResourceManagerFactory func(context.Context, []byte, ResourceName) (schemamanager.ResourceManager, apperrors.Error)
+type ResourceManagerFactory func(context.Context, ResourceName) (schemamanager.ResourceManager, apperrors.Error)
 
 var resourceFactories = map[string]ResourceManagerFactory{
 	types.CatalogKind:          NewCatalogResource,
@@ -54,27 +54,31 @@ var resourceFactories = map[string]ResourceManagerFactory{
 	types.WorkspaceKind:        NewWorkspaceResource,
 	types.CollectionSchemaKind: NewSchemaResource,
 	types.ParameterSchemaKind:  NewSchemaResource,
+	types.CollectionKind:       NewCollectionResource,
 }
 
-func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	kind, err := RequestType(rsrcJson)
-	if err != nil {
-		return nil, err
+/*
+	func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+		kind, err := RequestType(rsrcJson)
+		if err != nil {
+			return nil, err
+		}
+		if kind == types.CollectionSchemaKind {
+			name.ObjectType = types.CatalogObjectTypeCollectionSchema
+		} else if kind == types.ParameterSchemaKind {
+			name.ObjectType = types.CatalogObjectTypeParameterSchema
+		} else if kind == types.CollectionKind {
+			name.ObjectType = types.CatalogObjectTypeCatalogCollection
+		}
+		if factory, ok := resourceFactories[kind]; ok {
+			return factory(ctx, rsrcJson, name)
+		}
+		return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 	}
-	if kind == types.CollectionSchemaKind {
-		name.ObjectType = types.CatalogObjectTypeCollectionSchema
-	} else if kind == types.ParameterSchemaKind {
-		name.ObjectType = types.CatalogObjectTypeParameterSchema
-	}
+*/
+func ResourceManagerForKind(ctx context.Context, kind string, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	if factory, ok := resourceFactories[kind]; ok {
-		return factory(ctx, rsrcJson, name)
-	}
-	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
-}
-
-func ResourceManagerFromName(ctx context.Context, kind string, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	if factory, ok := resourceFactories[kind]; ok {
-		return factory(ctx, nil, name)
+		return factory(ctx, name)
 	}
 	return nil, ErrInvalidSchema.Msg("unsupported resource kind")
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schema/schemavalidator"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/schemamanager"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager/validationerrors"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 /*
@@ -28,9 +29,12 @@ type SchemaResource struct {
 
 func (rs *SchemaResource) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
+	if rs.Kind != types.CollectionSchemaKind && rs.Kind != types.ParameterSchemaKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
 	err := schemavalidator.V().Struct(rs)
 	if err == nil {
-		return nil
+		return ves
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {

@@ -40,9 +40,12 @@ var _ schemamanager.CatalogManager = (*catalogManager)(nil)
 
 func (cs *catalogSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
+	if cs.Kind != types.CatalogKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
 	err := schemavalidator.V().Struct(cs)
 	if err == nil {
-		return nil
+		return ves
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {
@@ -68,10 +71,6 @@ func (cs *catalogSchema) Validate() schemaerr.ValidationErrors {
 		default:
 			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}
-	}
-
-	if cs.Kind != types.CatalogKind {
-		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
 	}
 
 	return ves
@@ -177,9 +176,8 @@ func DeleteCatalogByName(ctx context.Context, name string) apperrors.Error {
 }
 
 type catalogResource struct {
-	name     ResourceName
-	rsrcJson []byte
-	cm       schemamanager.CatalogManager
+	name ResourceName
+	cm   schemamanager.CatalogManager
 }
 
 func (cr *catalogResource) Name() string {
@@ -190,16 +188,12 @@ func (cr *catalogResource) Location() string {
 	return "/catalogs/" + cr.cm.Name()
 }
 
-func (cr *catalogResource) ResourceJson() []byte {
-	return cr.rsrcJson
-}
-
 func (cr *catalogResource) Manager() schemamanager.CatalogManager {
 	return cr.cm
 }
 
-func (cr *catalogResource) Create(ctx context.Context) (string, apperrors.Error) {
-	catalog, err := NewCatalogManager(ctx, cr.rsrcJson, "")
+func (cr *catalogResource) Create(ctx context.Context, rsrcJson []byte) (string, apperrors.Error) {
+	catalog, err := NewCatalogManager(ctx, rsrcJson, "")
 	if err != nil {
 		return "", err
 	}
@@ -256,9 +250,8 @@ func (cr *catalogResource) Update(ctx context.Context, rsrcJson []byte) apperror
 	return nil
 }
 
-func NewCatalogResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+func NewCatalogResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	return &catalogResource{
-		name:     name,
-		rsrcJson: rsrcJson,
+		name: name,
 	}, nil
 }

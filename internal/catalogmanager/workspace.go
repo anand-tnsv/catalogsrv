@@ -18,6 +18,7 @@ import (
 	"github.com/mugiliam/hatchcatalogsrv/internal/db"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/dberror"
 	"github.com/mugiliam/hatchcatalogsrv/internal/db/models"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/gjson"
 )
@@ -124,9 +125,12 @@ func NewWorkspaceManager(ctx context.Context, rsrcJson []byte, catalog string, v
 
 func (ws *workspaceSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
+	if ws.Kind != types.WorkspaceKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
 	err := schemavalidator.V().Struct(ws)
 	if err == nil {
-		return nil
+		return ves
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {
@@ -289,9 +293,8 @@ func DeleteWorkspace(ctx context.Context, workspaceID uuid.UUID) apperrors.Error
 }
 
 type workspaceResource struct {
-	name     ResourceName
-	rsrcJson []byte
-	vm       schemamanager.WorkspaceManager
+	name ResourceName
+	vm   schemamanager.WorkspaceManager
 }
 
 func (wr *workspaceResource) Name() string {
@@ -306,16 +309,12 @@ func (wr *workspaceResource) Location() string {
 	return "/workspaces/" + wr.name.WorkspaceID.String()
 }
 
-func (wr *workspaceResource) ResourceJson() []byte {
-	return wr.rsrcJson
-}
-
 func (wr *workspaceResource) Manager() schemamanager.WorkspaceManager {
 	return wr.vm
 }
 
-func (wr *workspaceResource) Create(ctx context.Context) (string, apperrors.Error) {
-	workspace, err := NewWorkspaceManager(ctx, wr.rsrcJson, wr.name.Catalog, wr.name.Variant)
+func (wr *workspaceResource) Create(ctx context.Context, rsrcJson []byte) (string, apperrors.Error) {
+	workspace, err := NewWorkspaceManager(ctx, rsrcJson, wr.name.Catalog, wr.name.Variant)
 	if err != nil {
 		return "", err
 	}
@@ -327,10 +326,10 @@ func (wr *workspaceResource) Create(ctx context.Context) (string, apperrors.Erro
 	wr.name.WorkspaceLabel = workspace.Label()
 	wr.vm = workspace
 	if wr.name.Catalog == "" {
-		wr.name.Catalog = gjson.GetBytes(wr.rsrcJson, "metadata.catalog").String()
+		wr.name.Catalog = gjson.GetBytes(rsrcJson, "metadata.catalog").String()
 	}
 	if wr.name.Variant == "" {
-		wr.name.Variant = gjson.GetBytes(wr.rsrcJson, "metadata.variant").String()
+		wr.name.Variant = gjson.GetBytes(rsrcJson, "metadata.variant").String()
 	}
 	return wr.Location(), nil
 }
@@ -419,10 +418,8 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 	return nil
 }
 
-func NewWorkspaceResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	name.WorkspaceLabel, name.WorkspaceID = getUUIDOrName(name.Workspace)
+func NewWorkspaceResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	return &workspaceResource{
-		name:     name,
-		rsrcJson: rsrcJson,
+		name: name,
 	}, nil
 }

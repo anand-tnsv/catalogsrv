@@ -43,9 +43,12 @@ var _ schemamanager.VariantManager = (*variantManager)(nil)
 
 func (vs *variantSchema) Validate() schemaerr.ValidationErrors {
 	var ves schemaerr.ValidationErrors
+	if vs.Kind != types.VariantKind {
+		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
+	}
 	err := schemavalidator.V().Struct(vs)
 	if err == nil {
-		return nil
+		return ves
 	}
 	ve, ok := err.(validator.ValidationErrors)
 	if !ok {
@@ -71,10 +74,6 @@ func (vs *variantSchema) Validate() schemaerr.ValidationErrors {
 		default:
 			ves = append(ves, schemaerr.ErrValidationFailed(jsonFieldName))
 		}
-	}
-
-	if vs.Kind != types.CatalogKind {
-		ves = append(ves, schemaerr.ErrUnsupportedKind("kind"))
 	}
 
 	return ves
@@ -238,9 +237,8 @@ func DeleteVariant(ctx context.Context, catalogID, variantID uuid.UUID, name str
 // TODO Handle base variant and copy of data
 
 type variantResource struct {
-	name     ResourceName
-	rsrcJson []byte
-	vm       schemamanager.VariantManager
+	name ResourceName
+	vm   schemamanager.VariantManager
 }
 
 func (vr *variantResource) Name() string {
@@ -251,16 +249,12 @@ func (vr *variantResource) Location() string {
 	return "/variants/" + vr.vm.ID().String()
 }
 
-func (vr *variantResource) ResourceJson() []byte {
-	return vr.rsrcJson
-}
-
 func (vr *variantResource) Manager() schemamanager.VariantManager {
 	return vr.vm
 }
 
-func (vr *variantResource) Create(ctx context.Context) (string, apperrors.Error) {
-	variant, err := NewVariantManager(ctx, vr.rsrcJson, "", vr.name.Catalog)
+func (vr *variantResource) Create(ctx context.Context, rsrcJson []byte) (string, apperrors.Error) {
+	variant, err := NewVariantManager(ctx, rsrcJson, "", vr.name.Catalog)
 	if err != nil {
 		return "", err
 	}
@@ -272,7 +266,7 @@ func (vr *variantResource) Create(ctx context.Context) (string, apperrors.Error)
 	vr.name.VariantID = variant.ID()
 	vr.name.CatalogID = variant.CatalogID()
 	vr.vm = variant
-	vr.name.Catalog = gjson.GetBytes(vr.rsrcJson, "metadata.catalog").String()
+	vr.name.Catalog = gjson.GetBytes(rsrcJson, "metadata.catalog").String()
 	return vr.Location(), nil
 }
 
@@ -322,21 +316,8 @@ func (vr *variantResource) Update(ctx context.Context, rsrcJson []byte) apperror
 	return nil
 }
 
-func NewVariantResource(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-	name.Variant, name.VariantID = getUUIDOrName(name.Variant)
+func NewVariantResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	return &variantResource{
-		name:     name,
-		rsrcJson: rsrcJson,
+		name: name,
 	}, nil
-}
-
-func getUUIDOrName(ref string) (string, uuid.UUID) {
-	if ref == "" {
-		return "", uuid.Nil
-	}
-	u, err := uuid.Parse(ref)
-	if err != nil {
-		return ref, uuid.Nil
-	}
-	return "", u
 }

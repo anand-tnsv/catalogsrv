@@ -72,6 +72,9 @@ func canonicalizeMetadata(rsrcJson []byte, kind string, metadata *schemamanager.
 		if metadata.Description != "" {
 			m.Description = metadata.Description
 		}
+		if !metadata.Namespace.IsNil() {
+			m.Namespace = metadata.Namespace
+		}
 	}
 
 	if m.Variant.IsNil() {

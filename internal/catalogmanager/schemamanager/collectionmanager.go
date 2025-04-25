@@ -11,6 +11,7 @@ import (
 type CollectionManager interface {
 	Schema() string
 	Metadata() SchemaMetadata
+	FullyQualifiedName() string
 	CollectionSchemaManager() CollectionSchemaManager
 	CollectionSchema() []byte
 	SetCollectionSchemaPath(string)
@@ -22,4 +23,5 @@ type CollectionManager interface {
 	ValidateValues(ctx context.Context, schemaLoaders SchemaLoaders, currentValues ParamValues) apperrors.Error
 	Values() ParamValues
 	StorageRepresentation() *schemastore.SchemaStorageRepresentation
+	ToJson(ctx context.Context) ([]byte, apperrors.Error)
 }

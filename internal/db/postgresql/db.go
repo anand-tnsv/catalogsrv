@@ -13,14 +13,13 @@ import (
 )
 
 type hatchCatalogDb struct {
-	c  dbmanager.ScopedConn
 	mm *metadataManager
 	om *objectManager
 	cm *connectionManager
 }
 
 func NewHatchCatalogDb(c dbmanager.ScopedConn) (*metadataManager, *objectManager, *connectionManager) {
-	h := &hatchCatalogDb{c: c}
+	h := &hatchCatalogDb{}
 	h.mm = newMetadataManager(c)
 	h.om = newObjectManager(c)
 	h.cm = newConnectionManager(c)

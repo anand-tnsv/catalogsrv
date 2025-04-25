@@ -4,10 +4,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/mugiliam/common/httpx"
 	"github.com/mugiliam/hatchcatalogsrv/internal/catalogmanager"
-	"github.com/mugiliam/hatchcatalogsrv/internal/common"
+	"github.com/mugiliam/hatchcatalogsrv/pkg/types"
 )
 
 // Create a new resource object
@@ -23,48 +22,32 @@ func createObject(r *http.Request) (*httpx.Response, error) {
 		return nil, httpx.ErrUnableToReadRequest()
 	}
 
-	catalogName := chi.URLParam(r, "catalogName")
-	variantName := chi.URLParam(r, "variantName")
-	namespace := chi.URLParam(r, "namespaceName")
-	workspace := chi.URLParam(r, "workspaceRef")
-
-	n := catalogmanager.ResourceName{}
-	catalogContext := common.CatalogContextFromContext(ctx)
-	if workspace != "" {
-		n.Workspace = workspace
-	} else if catalogContext != nil {
-		n.Workspace = catalogContext.WorkspaceLabel
-		n.WorkspaceID = catalogContext.WorkspaceId
-	}
-	if variantName != "" {
-		n.Variant = variantName
-	} else if catalogContext != nil {
-		n.Variant = catalogContext.Variant
-		n.VariantID = catalogContext.VariantId
-	}
-	if catalogName != "" {
-		n.Catalog = catalogName
-	} else if catalogContext != nil {
-		n.Catalog = catalogContext.Catalog
-		n.CatalogID = catalogContext.CatalogId
-	}
-	if namespace != "" {
-		n.Namespace = namespace
-	} else if catalogContext != nil {
-		n.Namespace = catalogContext.Namespace
-	}
-
-	rm, err := catalogmanager.ResourceManagerFromRequest(ctx, req, n)
+	n, err := getResourceName(r)
 	if err != nil {
 		return nil, err
 	}
-	resourceLoc, err := rm.Create(ctx)
+
+	kind := getResourceKind(r)
+	if kind == types.InvalidKind {
+		return nil, httpx.ErrInvalidRequest()
+	}
+
+	if err := validateRequest(req, kind); err != nil {
+		return nil, err
+	}
+
+	rm, err := catalogmanager.ResourceManagerForKind(ctx, kind, n)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceLoc, err := rm.Create(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	rsp := &httpx.Response{
 		StatusCode: http.StatusCreated,
-		Location:   resourceLoc, //TODO: Implement location
+		Location:   resourceLoc,
 		Response:   nil,
 	}
 

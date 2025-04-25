@@ -1,6 +1,8 @@
 package dberror
 
 import (
+	"net/http"
+
 	"github.com/mugiliam/common/apperrors"
 )
 
@@ -69,13 +71,13 @@ import (
 	}
 */
 var (
-	ErrDatabase                  apperrors.Error = apperrors.New("db error")
-	ErrAlreadyExists             apperrors.Error = ErrDatabase.New("already exists")
-	ErrNotFound                  apperrors.Error = ErrDatabase.New("not found")
-	ErrInvalidInput              apperrors.Error = ErrDatabase.New("invalid input")
-	ErrInvalidCatalog            apperrors.Error = ErrDatabase.New("invalid catalog")
-	ErrInvalidVariant            apperrors.Error = ErrDatabase.New("invalid variant")
-	ErrMissingTenantID           apperrors.Error = ErrInvalidInput.New("missing tenant ID")
-	ErrMissingProjecID           apperrors.Error = ErrInvalidInput.New("missing project ID")
-	ErrNoAncestorReferencesFound apperrors.Error = ErrDatabase.New("no ancestor references found")
+	ErrDatabase                  apperrors.Error = apperrors.New("db error").SetStatusCode(http.StatusInternalServerError)
+	ErrAlreadyExists             apperrors.Error = ErrDatabase.New("already exists").SetStatusCode(http.StatusConflict)
+	ErrNotFound                  apperrors.Error = ErrDatabase.New("not found").SetStatusCode(http.StatusNotFound)
+	ErrInvalidInput              apperrors.Error = ErrDatabase.New("invalid input").SetStatusCode(http.StatusBadRequest)
+	ErrInvalidCatalog            apperrors.Error = ErrDatabase.New("invalid catalog").SetStatusCode(http.StatusBadRequest)
+	ErrInvalidVariant            apperrors.Error = ErrDatabase.New("invalid variant").SetStatusCode(http.StatusBadRequest)
+	ErrMissingTenantID           apperrors.Error = ErrInvalidInput.New("missing tenant ID").SetStatusCode(http.StatusBadRequest)
+	ErrMissingProjecID           apperrors.Error = ErrInvalidInput.New("missing project ID").SetStatusCode(http.StatusBadRequest)
+	ErrNoAncestorReferencesFound apperrors.Error = ErrDatabase.New("no ancestor references found").SetStatusCode(http.StatusBadRequest)
 )
