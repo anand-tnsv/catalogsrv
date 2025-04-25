@@ -353,6 +353,12 @@ func (nr *namespaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 }
 
 func NewNamespaceResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	if name.Catalog == "" || name.CatalogID == uuid.Nil {
+		return nil, ErrInvalidCatalog
+	}
+	if name.Variant == "" || name.VariantID == uuid.Nil {
+		return nil, ErrInvalidVariant
+	}
 	return &namespaceResource{
 		name: name,
 	}, nil

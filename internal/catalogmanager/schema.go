@@ -1156,6 +1156,12 @@ func (or *objectResource) Delete(ctx context.Context) apperrors.Error {
 }
 
 func NewSchemaResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	if name.Catalog == "" || name.CatalogID == uuid.Nil {
+		return nil, ErrInvalidCatalog
+	}
+	if name.Variant == "" || name.VariantID == uuid.Nil {
+		return nil, ErrInvalidVariant
+	}
 	return &objectResource{
 		name: name,
 	}, nil

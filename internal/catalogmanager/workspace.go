@@ -419,6 +419,12 @@ func (wr *workspaceResource) Update(ctx context.Context, rsrcJson []byte) apperr
 }
 
 func NewWorkspaceResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	if name.Catalog == "" || name.CatalogID == uuid.Nil {
+		return nil, ErrInvalidCatalog
+	}
+	if name.Variant == "" || name.VariantID == uuid.Nil {
+		return nil, ErrInvalidVariant
+	}
 	return &workspaceResource{
 		name: name,
 	}, nil

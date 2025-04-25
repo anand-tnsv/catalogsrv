@@ -317,6 +317,9 @@ func (vr *variantResource) Update(ctx context.Context, rsrcJson []byte) apperror
 }
 
 func NewVariantResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	if name.Catalog == "" || name.CatalogID == uuid.Nil {
+		return nil, ErrInvalidVariant
+	}
 	return &variantResource{
 		name: name,
 	}, nil

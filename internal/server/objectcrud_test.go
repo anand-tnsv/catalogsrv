@@ -267,7 +267,7 @@ func TestVariantCrud(t *testing.T) {
 		t.Logf("Response: %v", response.Body.String())
 		t.FailNow()
 	}
-
+	testContext.CatalogContext.Catalog = "valid-catalog"
 	// Create a variant
 	httpReq, _ = http.NewRequest("POST", "/variants", nil)
 	req = `
@@ -478,7 +478,7 @@ func TestNamespaceCrud(t *testing.T) {
 		t.Logf("Response: %v", response.Body.String())
 		t.FailNow()
 	}
-
+	testContext.CatalogContext.Catalog = "valid-catalog"
 	// Create a variant
 	httpReq, _ = http.NewRequest("POST", "/variants", nil)
 	req = `
@@ -621,6 +621,8 @@ func TestWorkspaceCrud(t *testing.T) {
 	assert.Nil(t, err)
 
 	// get this workspace
+	testContext.CatalogContext.Catalog = "valid-catalog"
+	testContext.CatalogContext.Variant = "valid-variant"
 	httpReq, _ = http.NewRequest("GET", loc, nil)
 	response = executeTestRequest(t, httpReq, nil, testContext)
 	if !assert.Equal(t, http.StatusOK, response.Code) {
@@ -827,7 +829,6 @@ func TestObjectCrud(t *testing.T) {
 		t.Logf("Response: %v", response.Body.String())
 		t.FailNow()
 	}
-
 	// Create a variant
 	testContext.CatalogContext.Catalog = "valid-catalog"
 	httpReq, _ = http.NewRequest("POST", "/variants", nil)
@@ -849,7 +850,7 @@ func TestObjectCrud(t *testing.T) {
 	testContext.CatalogContext.Variant = "valid-variant"
 
 	// create a namespace
-	httpReq, _ = http.NewRequest("POST", "/namespaces?c=valid-catalog&v=valid-variant", nil)
+	httpReq, _ = http.NewRequest("POST", "/namespaces?c=valid-catalog", nil)
 	req = `
 		{
 			"version": "v1",

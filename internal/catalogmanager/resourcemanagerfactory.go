@@ -57,25 +57,6 @@ var resourceFactories = map[string]ResourceManagerFactory{
 	types.CollectionKind:       NewCollectionResource,
 }
 
-/*
-	func ResourceManagerFromRequest(ctx context.Context, rsrcJson []byte, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
-		kind, err := RequestType(rsrcJson)
-		if err != nil {
-			return nil, err
-		}
-		if kind == types.CollectionSchemaKind {
-			name.ObjectType = types.CatalogObjectTypeCollectionSchema
-		} else if kind == types.ParameterSchemaKind {
-			name.ObjectType = types.CatalogObjectTypeParameterSchema
-		} else if kind == types.CollectionKind {
-			name.ObjectType = types.CatalogObjectTypeCatalogCollection
-		}
-		if factory, ok := resourceFactories[kind]; ok {
-			return factory(ctx, rsrcJson, name)
-		}
-		return nil, ErrInvalidSchema.Msg("unsupported resource kind")
-	}
-*/
 func ResourceManagerForKind(ctx context.Context, kind string, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
 	if factory, ok := resourceFactories[kind]; ok {
 		return factory(ctx, name)

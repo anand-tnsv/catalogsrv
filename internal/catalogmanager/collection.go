@@ -704,6 +704,12 @@ func (cr *collectionResource) Delete(ctx context.Context) apperrors.Error {
 }
 
 func NewCollectionResource(ctx context.Context, name ResourceName) (schemamanager.ResourceManager, apperrors.Error) {
+	if name.Catalog == "" || name.CatalogID == uuid.Nil {
+		return nil, ErrInvalidCatalog
+	}
+	if name.Variant == "" || name.VariantID == uuid.Nil {
+		return nil, ErrInvalidVariant
+	}
 	return &collectionResource{
 		name: name,
 	}, nil
